@@ -3,14 +3,15 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Timeout:
-    """Total request deadline and optional per-hop connect/headers/read limits, in seconds."""
+    """Total deadline and per-hop connect/write/headers/read limits, in seconds."""
     total: float = 30
     connect: float | None = None
     headers: float | None = None
     read: float | None = None
+    write: float | None = None
 
     def __post_init__(self):
-        for name in ("total", "connect", "headers", "read"):
+        for name in ("total", "connect", "headers", "read", "write"):
             value = getattr(self, name)
             if value is None and name != "total":
                 continue
@@ -19,7 +20,7 @@ class Timeout:
 
     def native_fields(self):
         result = {"timeout_ms": max(1, int(self.total * 1000))}
-        for name in ("connect", "headers", "read"):
+        for name in ("connect", "headers", "read", "write"):
             value = getattr(self, name)
             if value is not None:
                 result[name + "_timeout_ms"] = max(1, int(value * 1000))

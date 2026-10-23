@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import threading
 import time
+from .upload import is_stream, chunks, async_chunks
 
 from ._native import Native, FastlsError, raise_response_error
 from .headers import Headers
@@ -136,6 +137,8 @@ class Session:
             raise TypeError("header values must be strings")
         limit = self.timeout if timeout is None else timeout
         limit = limit if isinstance(limit, Timeout) else Timeout(total=limit)
+        if limit.write is not None and "write_timeout" not in self._native.call("fastls_features"):
+            raise FastlsError("write timeout requires a newer Fastls native library")
         decode = self.decode_content if decode_content is None else decode_content
         maximum = self.max_decoded_bytes if max_decoded_bytes is None else max_decoded_bytes
         if not isinstance(decode, bool):
@@ -147,12 +150,18 @@ class Session:
                        decode_content=decode, max_decoded_bytes=maximum, **limit.native_fields())
         if self._ca_pem is not None:
             request["ca_pem"] = self._ca_pem
-        if isinstance(data, bytes):
+        streaming = is_stream(data)
+        if streaming:
+            if "stream_upload" not in self._native.call("fastls_features"):
+                raise FastlsError("stream upload requires a newer Fastls native library")
+            request["stream_body"] = True
+        elif isinstance(data, bytes):
             request["body_base64"] = base64.b64encode(data).decode("ascii")
         elif isinstance(data, str):
             request["body"] = data
         elif data is not None:
-            raise TypeError("data must be str or bytes; streaming upload is not implemented")
+            if not is_stream(data):
+                raise TypeError("data must be str, bytes, a binary file or an iterable of bytes")
         with self._lock:
             if self._closed:
                 raise FastlsError("session is closed")
@@ -173,16 +182,42 @@ class Session:
         return info
 
     def _open(self, method, url, **kwargs):
+        data = kwargs.get("data")
+        if hasattr(data, "__aiter__"):
+            raise TypeError("async upload iterators require AsyncSession")
         handle = self._begin(method, url, **kwargs)
+        source = chunks(data) if is_stream(data) else None
+        pending = None
+        ended = source is None
         try:
             while True:
                 info = self._info(handle)
                 if info["state"] != "pending":
+                    if not ended and info["status"] < 300:
+                        raise FastlsError("server responded before upload finished; duplex streaming is not supported")
                     return Response(self, handle, info)
+                if not ended:
+                    if pending is None:
+                        pending = next(source, None)
+                    code = self._native.write(handle, pending or b"", end=pending is None)
+                    if code == 2:
+                        ended = True
+                        continue
+                    if code == 0:
+                        ended = pending is None
+                        pending = None
+                        continue
                 time.sleep(POLL_INTERVAL)
         except BaseException:
             self._close_handle(handle)
             raise
+        finally:
+            if source is not None:
+                try:
+                    source.close()
+                except BaseException:
+                    self._close_handle(handle)
+                    raise
 
     @contextmanager
     def stream(self, method, url, **kwargs):
@@ -269,17 +304,53 @@ class AsyncResponse(Response):
 
 
 class AsyncSession(Session):
+    async def _upload(self, handle, data):
+        source = async_chunks(data)
+        try:
+            async for chunk in source:
+                while True:
+                    if self._info(handle)["state"] != "pending":
+                        return
+                    code = self._native.write(handle, chunk)
+                    if code == 2:
+                        return
+                    if code == 0:
+                        break
+                    await asyncio.sleep(POLL_INTERVAL)
+                await asyncio.sleep(0)
+            while self._info(handle)["state"] == "pending":
+                if self._native.write(handle, b"", end=True) == 0:
+                    return True
+                await asyncio.sleep(POLL_INTERVAL)
+        finally:
+            await source.aclose()
+
     async def _aopen(self, method, url, **kwargs):
         handle = self._begin(method, url, **kwargs)
+        producer = asyncio.create_task(self._upload(handle, kwargs["data"])) if is_stream(kwargs.get("data")) else None
         try:
             while True:
+                if producer is not None and producer.done():
+                    producer.result()
                 info = self._info(handle)
                 if info["state"] != "pending":
+                    if producer is not None and info["status"] < 300 and (not producer.done() or producer.result() is not True):
+                        raise FastlsError("server responded before upload finished; duplex streaming is not supported")
                     return AsyncResponse(self, handle, info)
                 await asyncio.sleep(POLL_INTERVAL)
         except BaseException:
             self._close_handle(handle)
             raise
+        finally:
+            if producer is not None:
+                producer.cancel()
+                try:
+                    outcome = (await asyncio.gather(producer, return_exceptions=True))[0]
+                    if isinstance(outcome, BaseException) and not isinstance(outcome, asyncio.CancelledError):
+                        raise outcome
+                except BaseException:
+                    self._close_handle(handle)
+                    raise
 
     @asynccontextmanager
     async def stream(self, method, url, **kwargs):

@@ -36,6 +36,8 @@ const (
 )
 
 type Input struct {
+	WriteTimeoutMS   int64             `json:"write_timeout_ms"`
+	StreamBody       bool              `json:"stream_body"`
 	ConnectTimeoutMS int64             `json:"connect_timeout_ms"`
 	HeadersTimeoutMS int64             `json:"headers_timeout_ms"`
 	ReadTimeoutMS    int64             `json:"read_timeout_ms"`
@@ -71,6 +73,7 @@ type chunk struct {
 	err  error
 }
 type request struct {
+	upload   *upload
 	owner    uint64
 	pool     *fastls.Session
 	ctx      context.Context
@@ -162,9 +165,14 @@ func (e *Engine) Stats() map[string]any {
 	for _, s := range e.sessions {
 		poolCount += len(s.pools)
 	}
-	var buffered int64
+	var buffered, uploads int64
 	for _, r := range e.requests {
 		buffered += r.buffered.Load()
+		if r.upload != nil {
+			r.upload.mu.Lock()
+			uploads += int64(len(r.upload.data))
+			r.upload.mu.Unlock()
+		}
 	}
 	e.mu.Unlock()
 	var mem runtime.MemStats
@@ -172,7 +180,8 @@ func (e *Engine) Stats() map[string]any {
 	return map[string]any{"open_requests": open, "workers": e.workers.Load(),
 		"open_sessions": openSessions, "session_pools": poolCount,
 		"buffered_body_bytes": buffered, "goroutines": runtime.NumGoroutine(),
-		"heap_alloc_bytes": mem.HeapAlloc, "heap_inuse_bytes": mem.HeapInuse}
+		"buffered_upload_bytes": uploads,
+		"heap_alloc_bytes":      mem.HeapAlloc, "heap_inuse_bytes": mem.HeapInuse}
 }
 
 func (e *Engine) Start(raw []byte) (uint64, error) {
@@ -204,7 +213,7 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 	if in.TimeoutMS < 1 || in.TimeoutMS > 86400000 {
 		return 0, errors.New("timeout_ms must be 1..86400000")
 	}
-	for _, value := range []int64{in.ConnectTimeoutMS, in.HeadersTimeoutMS, in.ReadTimeoutMS} {
+	for _, value := range []int64{in.ConnectTimeoutMS, in.HeadersTimeoutMS, in.ReadTimeoutMS, in.WriteTimeoutMS} {
 		if value < 0 || value > 86400000 {
 			return 0, errors.New("phase timeout_ms must be 0..86400000")
 		}
@@ -222,8 +231,18 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 		}
 		in.Body = string(b)
 	}
+	if in.StreamBody && (in.Body != "" || in.BodyBase64 != nil) {
+		return 0, errStreamBody
+	}
+	if in.StreamBody {
+		for name := range in.Headers {
+			if strings.EqualFold(name, "Content-Length") || strings.EqualFold(name, "Transfer-Encoding") {
+				return 0, errors.New("stream upload manages Content-Length and Transfer-Encoding")
+			}
+		}
+	}
 	if len(in.Body) > 512*1024 {
-		return 0, errors.New("upload exceeds 512KiB; streaming upload is not implemented")
+		return 0, errors.New("buffered upload exceeds 512KiB; use stream_body")
 	}
 	opts := fastls.Options{Headers: in.Headers, Body: in.Body, VerifyTLS: true,
 		Timeout: int((in.TimeoutMS + 999) / 1000), DisableRedirect: in.DisableRedirect}
@@ -240,6 +259,9 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(in.TimeoutMS)*time.Millisecond)
 	r := &request{ctx: ctx, cancel: cancel, info: Info{State: "pending", Match: match}, chunks: make(chan chunk, 1)}
+	if in.StreamBody {
+		r.upload = &upload{ctx: ctx, wake: make(chan struct{}, 1)}
+	}
 	e.mu.Lock()
 	if len(e.requests) >= MaxRequests {
 		e.mu.Unlock()
@@ -286,6 +308,9 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 }
 
 func (r *request) run(in Input, opts fastls.Options) {
+	if r.upload != nil {
+		defer r.upload.Close()
+	}
 	defer func() {
 		if p := recover(); p != nil {
 			r.setError(fmt.Errorf("internal request panic: %v", p))
@@ -294,7 +319,7 @@ func (r *request) run(in Input, opts fastls.Options) {
 	var resp fastls.Response
 	var err error
 	pool := r.pool
-	if pool == nil && (in.DecodeContent || in.ConnectTimeoutMS > 0 || in.HeadersTimeoutMS > 0 || in.ReadTimeoutMS > 0) {
+	if pool == nil && (in.StreamBody || in.DecodeContent || in.ConnectTimeoutMS > 0 || in.HeadersTimeoutMS > 0 || in.ReadTimeoutMS > 0 || in.WriteTimeoutMS > 0) {
 		pool, err = fastls.NewSession(opts)
 		if err != nil {
 			r.setError(err)
@@ -303,9 +328,13 @@ func (r *request) run(in Input, opts fastls.Options) {
 		defer pool.Close()
 	}
 	if pool != nil {
-		resp, err = pool.DoContext(r.ctx, in.URL, fastls.RequestOptions{Headers: in.Headers, Body: in.Body, DisableRedirect: in.DisableRedirect,
+		var body io.ReadCloser
+		if r.upload != nil {
+			body = r.upload
+		}
+		resp, err = pool.DoContext(r.ctx, in.URL, fastls.RequestOptions{Headers: in.Headers, Body: in.Body, BodyReader: body, DisableRedirect: in.DisableRedirect,
 			DecodeContent: in.DecodeContent, MaxDecodedBytes: in.MaxDecodedBytes,
-			Timeouts: fastls.Timeouts{Connect: time.Duration(in.ConnectTimeoutMS) * time.Millisecond, Headers: time.Duration(in.HeadersTimeoutMS) * time.Millisecond, Read: time.Duration(in.ReadTimeoutMS) * time.Millisecond}}, strings.ToUpper(in.Method))
+			Timeouts: fastls.Timeouts{Write: time.Duration(in.WriteTimeoutMS) * time.Millisecond, Connect: time.Duration(in.ConnectTimeoutMS) * time.Millisecond, Headers: time.Duration(in.HeadersTimeoutMS) * time.Millisecond, Read: time.Duration(in.ReadTimeoutMS) * time.Millisecond}}, strings.ToUpper(in.Method))
 	} else {
 		resp, err = fastls.NewClient().DoContext(r.ctx, in.URL, opts, strings.ToUpper(in.Method))
 	}

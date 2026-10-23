@@ -37,8 +37,8 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 
 2026-10-23经用户授权，已将相关实现推送到三个上游的v2开发分支，原main和旧标签不变。ci/dependencies.json固定以下审阅提交：
 
-- fastls：716f47ff492dcfa763ebafdfb45eea48289f1929。
-- fhttp：2cff95debfe8dfe9228aef198e886de139bbc005。
+- fastls：b906173c1f48fdde8ec411eae38471c6449ccace。
+- fhttp：98f4d35f1de6f93f3aa53cfaf33ae090407595b9。
 - imitate：28b32d452256e3acbdb2e904869e5c4331bf0177。
 
 Fastls依赖包含连接生命周期、隔离的私有CA根配置、可复用Session、多值头/CookieStore及流式解码/分层预算；Brotli固定v1.2.0以拒绝截断流。fhttp包含HTTP2接收窗口修复、可取消的共用建连及独立空闲超时。动态库须重新构建；核心包测试执行顺序请求、重定向、关闭后重连、活动响应体及并发回归，封装侧重新执行全部同步/异步与流式测试。
@@ -79,6 +79,8 @@ CI脚本核对Go目标与runner架构一致；跨平台二进制必须在相应r
 多值头和Cookie阶段在源码与wheel各增加13项真实库测试，额外执行fhttp/cookiejar完整单元测试，并将原生CookieStore并发清空回归纳入核心race。见[COOKIES_HEADERS.md](COOKIES_HEADERS.md)。
 
 流式解码与分层超时在源码与wheel各增加15项验收，包含独立压缩向量、64MiB解码及SHA256、截断/校验和、原始视图、大小边界、每跳超时及HTTP2流隔离。核心解码与定时器回归纳入race；见[STREAMING_TIMEOUTS.md](STREAMING_TIMEOUTS.md)。
+
+流式上传另增加源码/wheel各16项验收，覆盖64MiB H1/H2、异步生产者、背压、取消、提前响应及write停顿预算；见[STREAMING_UPLOAD.md](STREAMING_UPLOAD.md)。
 
 ## 上游完整测试的范围
 

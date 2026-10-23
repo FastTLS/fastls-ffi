@@ -9,6 +9,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -78,6 +79,35 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Test-Protocol", r.Proto)
 	w.Header().Set("X-Test-Connection", fmt.Sprint(r.Context().Value(connectionKey{})))
 	switch r.URL.Path {
+	case "/upload", "/upload-slow":
+		hash := sha256.New()
+		buffer := make([]byte, 16384)
+		var total int64
+		for {
+			n, err := r.Body.Read(buffer)
+			hash.Write(buffer[:n])
+			total += int64(n)
+			f.mu.Lock()
+			o.Bytes = total
+			f.mu.Unlock()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return
+			}
+			if r.URL.Path == "/upload-slow" {
+				time.Sleep(2 * time.Millisecond)
+			}
+		}
+		json.NewEncoder(w).Encode(map[string]any{"bytes": total, "sha256": fmt.Sprintf("%x", hash.Sum(nil)), "protocol": r.Proto, "length": r.ContentLength})
+	case "/upload-reject", "/upload-early-ok":
+		if r.URL.Path == "/upload-reject" {
+			w.WriteHeader(413)
+		} else {
+			w.WriteHeader(200)
+		}
+		w.(http.Flusher).Flush()
 	case "/delay-redirect":
 		count, _ := strconv.Atoi(r.URL.Query().Get("n"))
 		if count < 0 || count > 4 {

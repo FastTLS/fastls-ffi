@@ -51,6 +51,7 @@ def preflight(env):
         "fastls/timeouts.go": ("type Timeouts struct",),
         "fastls/decode.go": ("func decodeResponse",),
         "fhttp/http2/pooled_dial_context_test.go": ("func TestPooledDialCancellationIsolation",),
+        "fhttp/http2/streaming_upload_test.go": ("func TestStreamingUploadBlockedProducerStops",),
     }
     for relative, markers in capabilities.items():
         path = ROOT.parent / relative
@@ -112,15 +113,16 @@ def run():
         execute("pooling-source", [sys.executable, "tests/test_pooling.py"])
         execute("cookies-source", [sys.executable, "tests/test_cookies.py"])
         execute("decode-timeouts-source", [sys.executable, "tests/test_decode_timeouts.py"])
+        execute("upload-source", [sys.executable, "tests/test_upload.py"])
         execute("cookiejar", ["go", "test", "./cookiejar"], ROOT.parent / "fhttp")
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
-        execute("fhttp-contract", ["go", "test", "./http2", "-run", "^(TestExplicitZeroDoesNotSelectNavigatorDefaults|TestExplicitEmptySettings|TestConnectionSettings|TestReceiveWindow.*|TestPooledDial.*)$", "-v"], ROOT.parent / "fhttp")
+        execute("fhttp-contract", ["go", "test", "./http2", "-run", "^(TestExplicitZeroDoesNotSelectNavigatorDefaults|TestExplicitEmptySettings|TestConnectionSettings|TestReceiveWindow.*|TestPooledDial.*|TestStreamingUpload.*)$", "-v"], ROOT.parent / "fhttp")
         execute("fhttp-vet", ["go", "vet", "./http2"], ROOT.parent / "fhttp")
         if env.get("FASTLS_CI_RACE", "").lower() == "true":
             execute("race-bridge", ["go", "test", "-race", "./internal/bridge"])
             execute("race-core", ["go", "test", "-race", "./..."], ROOT.parent / "fastls")
-            execute("race-fhttp-window", ["go", "test", "-race", "./http2", "-run", "^(TestReceiveWindow|TestPooledDial)"], ROOT.parent / "fhttp")
+            execute("race-fhttp-window", ["go", "test", "-race", "./http2", "-run", "^(TestReceiveWindow|TestPooledDial|TestStreamingUpload)"], ROOT.parent / "fhttp")
         execute("wheel-build", [sys.executable, "-m", "pip", "wheel", "./python", "--no-deps", "-w", "dist"])
         execute("wheel-tests", [sys.executable, "scripts/test_wheel.py"])
         execute("stability-wheel", [sys.executable, "scripts/test_wheel.py", "--stability"])
@@ -128,6 +130,7 @@ def run():
         execute("pooling-wheel", [sys.executable, "scripts/test_wheel.py", "--pooling"])
         execute("cookies-wheel", [sys.executable, "scripts/test_wheel.py", "--cookies"])
         execute("decode-timeouts-wheel", [sys.executable, "scripts/test_wheel.py", "--decode-timeouts"])
+        execute("upload-wheel", [sys.executable, "scripts/test_wheel.py", "--upload"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")

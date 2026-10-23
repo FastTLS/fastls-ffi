@@ -20,7 +20,7 @@ var engine = bridge.New()
 //export fastls_features
 func fastls_features() *C.char {
 	return result(func() (any, error) {
-		return []string{"stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers"}, nil
+		return []string{"stream_upload", "write_timeout", "stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers"}, nil
 	})
 }
 
@@ -114,6 +114,20 @@ func fastls_read(handle C.uint64_t, buffer unsafe.Pointer, capacity C.size_t, le
 	n, code := engine.Read(uint64(handle), unsafe.Slice((*byte)(buffer), int(capacity)))
 	*length = C.size_t(n)
 	return C.int(code)
+}
+
+//export fastls_write
+func fastls_write(handle C.uint64_t, buffer unsafe.Pointer, length C.size_t, end C.int) (status C.int) {
+	status = bridge.Failed
+	defer func() {
+		if recover() != nil {
+			status = bridge.Failed
+		}
+	}()
+	if length > bridge.ChunkSize || (length > 0 && buffer == nil) || (end != 0 && end != 1) {
+		return bridge.Invalid
+	}
+	return C.int(engine.Write(uint64(handle), unsafe.Slice((*byte)(buffer), int(length)), end == 1))
 }
 
 //export fastls_cancel
