@@ -1,6 +1,7 @@
-from ._native import FastlsError
+from ._native import FastlsError, FastlsTimeoutError, FastlsDecodeError
 from .client import Session, AsyncSession, Response, AsyncResponse
 from .headers import Headers
 from .cookies import Cookies
+from .timeout import Timeout
 
-__all__ = ["Session", "AsyncSession", "Response", "AsyncResponse", "FastlsError", "Headers", "Cookies"]
+__all__ = ["Session", "AsyncSession", "Response", "AsyncResponse", "FastlsError", "Headers", "Cookies", "Timeout", "FastlsTimeoutError", "FastlsDecodeError"]

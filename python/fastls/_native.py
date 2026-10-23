@@ -11,6 +11,25 @@ class FastlsError(Exception):
     pass
 
 
+class FastlsTimeoutError(FastlsError):
+    def __init__(self, message, phase):
+        super().__init__(message)
+        self.phase = phase
+
+
+class FastlsDecodeError(FastlsError):
+    pass
+
+
+def raise_response_error(info):
+    message = info.get("error") or "native request failed"
+    if info.get("error_code") == "timeout":
+        raise FastlsTimeoutError(message, info.get("timeout_phase", "total"))
+    if info.get("error_code") == "decode_error":
+        raise FastlsDecodeError(message)
+    raise FastlsError(message)
+
+
 _libraries = {}
 _load_lock = threading.Lock()
 
@@ -36,6 +55,8 @@ class Native:
         }
         if hasattr(self.lib, "fastls_stats"):
             signatures["fastls_stats"] = []
+        if hasattr(self.lib, "fastls_features"):
+            signatures["fastls_features"] = []
         for name, args in {"fastls_session_create": [], "fastls_session_close": [C.c_uint64], "fastls_session_close_idle": [C.c_uint64]}.items():
             if hasattr(self.lib, name):
                 signatures[name] = args
@@ -70,5 +91,5 @@ class Native:
         code = self.lib.fastls_read(handle, buffer, len(buffer), C.byref(length))
         if code < 0:
             info = self.call("fastls_info", handle)
-            raise FastlsError(info.get("error") or "native read failed")
+            raise_response_error(info)
         return code, buffer.raw[:length.value]

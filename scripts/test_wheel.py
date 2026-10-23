@@ -9,6 +9,7 @@ stability = "--stability" in sys.argv[1:]
 network = "--network" in sys.argv[1:]
 pooling = "--pooling" in sys.argv[1:]
 cookies = "--cookies" in sys.argv[1:]
+decode_timeouts = "--decode-timeouts" in sys.argv[1:]
 wheels = list((ROOT / "dist").glob("*.whl"))
 if len(wheels) != 1:
     raise SystemExit("expected exactly one SDK wheel in dist/")
@@ -21,5 +22,5 @@ if str(wheels[0]) not in fastls.__file__:
 print("Packaged SDK:", fastls.__file__, flush=True)
 os.environ["FASTLS_TEST_LABEL"] = "wheel"
 sys.path.insert(0, str(ROOT / "tests"))
-sys.argv = [str(ROOT / ("tests/test_cookies.py" if cookies else "tests/test_pooling.py" if pooling else "tests/test_network.py" if network else "tests/test_stability.py" if stability else "tests/test_python.py"))]
+sys.argv = [str(ROOT / ("tests/test_decode_timeouts.py" if decode_timeouts else "tests/test_cookies.py" if cookies else "tests/test_pooling.py" if pooling else "tests/test_network.py" if network else "tests/test_stability.py" if stability else "tests/test_python.py"))]
 runpy.run_path(sys.argv[0], run_name="__main__")

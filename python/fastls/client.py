@@ -7,9 +7,10 @@ from pathlib import Path
 import threading
 import time
 
-from ._native import Native, FastlsError
+from ._native import Native, FastlsError, raise_response_error
 from .headers import Headers
 from .cookies import Cookies
+from .timeout import Timeout
 
 # Windows asyncio can dispatch timers up to one monotonic-clock tick early.
 # A delay shorter than that tick can repeatedly complete without yielding time.
@@ -22,6 +23,8 @@ class Response:
         self._owner, self._handle = owner, handle
         self.status_code = info["status"]
         self.headers = Headers(info.get("header_values"), fallback=info.get("headers", {}))
+        self.wire_headers = Headers(info.get("wire_header_values"), fallback=dict(self.headers)) if info.get("wire_header_values") else self.headers
+        self.decoded = info.get("decoded", False)
         self.match = info["match"]
         self._content = None
 
@@ -86,10 +89,12 @@ def _collect(chunks):
 
 class Session:
     """Configuration, request ownership and isolated reusable connection pools."""
-    def __init__(self, *, profile="chrome/156/windows", headers=None, timeout=30, library=None, ca_file=None, cookies=True):
+    def __init__(self, *, profile="chrome/156/windows", headers=None, timeout=30, library=None, ca_file=None, cookies=True,
+                 decode_content=True, max_decoded_bytes=256 * 1024 * 1024):
         if not isinstance(cookies, bool):
             raise TypeError("cookies must be a boolean")
         self.profile, self.headers, self.timeout = profile, dict(headers or {}), timeout
+        self.decode_content, self.max_decoded_bytes = decode_content, max_decoded_bytes
         self._ca_pem = Path(ca_file).read_text(encoding="utf-8") if ca_file is not None else None
         if self._ca_pem is not None and not self._ca_pem.strip():
             raise ValueError("ca_file is empty")
@@ -97,6 +102,8 @@ class Session:
         self._handles = set()
         self._lock = threading.Lock()
         self._closed = False
+        if not hasattr(self._native.lib, "fastls_features") or not {"stream_decode", "phase_timeouts"}.issubset(self._native.call("fastls_features")):
+            raise FastlsError("stream decoding and phase timeouts require a newer Fastls native library")
         if not hasattr(self._native.lib, "fastls_session_create"):
             raise FastlsError("connection pools require a newer Fastls native library")
         if not hasattr(self._native.lib, "fastls_session_cookies"):
@@ -120,17 +127,24 @@ class Session:
             raise FastlsError("runtime statistics require a newer Fastls library")
         return self._native.call("fastls_stats")
 
-    def _begin(self, method, url, *, profile=None, headers=None, data=None, timeout=None, allow_redirects=True):
+    def _begin(self, method, url, *, profile=None, headers=None, data=None, timeout=None, allow_redirects=True,
+               decode_content=None, max_decoded_bytes=None):
         # Merge headers case-insensitively so request overrides win.
         merged = {k.lower(): v for k, v in self.headers.items()}
         merged.update({k.lower(): v for k, v in (headers or {}).items()})
         if any(not isinstance(v, str) for v in merged.values()):
             raise TypeError("header values must be strings")
-        seconds = self.timeout if timeout is None else timeout
-        if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not 0 < seconds <= 86400:
-            raise ValueError("timeout must be 0..86400 seconds, excluding zero")
+        limit = self.timeout if timeout is None else timeout
+        limit = limit if isinstance(limit, Timeout) else Timeout(total=limit)
+        decode = self.decode_content if decode_content is None else decode_content
+        maximum = self.max_decoded_bytes if max_decoded_bytes is None else max_decoded_bytes
+        if not isinstance(decode, bool):
+            raise TypeError("decode_content must be a boolean")
+        if isinstance(maximum, bool) or not isinstance(maximum, int) or not 1 <= maximum <= 1 << 40:
+            raise ValueError("max_decoded_bytes must be 1..1099511627776")
         request = dict(url=url, method=method, profile=self.profile if profile is None else profile,
-                       session=self._session, headers=merged, timeout_ms=max(1, int(seconds * 1000)), disable_redirect=not allow_redirects)
+                       session=self._session, headers=merged, disable_redirect=not allow_redirects,
+                       decode_content=decode, max_decoded_bytes=maximum, **limit.native_fields())
         if self._ca_pem is not None:
             request["ca_pem"] = self._ca_pem
         if isinstance(data, bytes):
@@ -155,7 +169,7 @@ class Session:
     def _info(self, handle):
         info = self._native.call("fastls_info", handle)
         if info["state"] == "error":
-            raise FastlsError(info["error"])
+            raise_response_error(info)
         return info
 
     def _open(self, method, url, **kwargs):
