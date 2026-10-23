@@ -54,6 +54,9 @@ func connectionContext(ctx context.Context, conn net.Conn) context.Context {
 }
 
 func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if benchmarkRoute(w, r) {
+		return
+	}
 	id := r.URL.Query().Get("id")
 	f.mu.Lock()
 	o := f.entries[id]
