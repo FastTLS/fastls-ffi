@@ -41,7 +41,7 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 
 2026-10-23经用户授权，已将相关实现推送到三个上游的v2开发分支，原main和旧标签不变。ci/dependencies.json固定以下审阅提交：
 
-- fastls：632aa5fca49db2a7306eb99c2305151e808e4972。
+- fastls：4c8b6239292dacbfc39e5477a7a6361320622638。
 - fhttp：e027ce786984d3e7e831b0d10c54875dec746b35（修复已取消流DATA导致的连接接收额度膨胀）。
 - imitate：28b32d452256e3acbdb2e904869e5c4331bf0177。
 
