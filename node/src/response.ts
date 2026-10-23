@@ -2,6 +2,7 @@ import { AbortError, FastlsError, FastlsTimeoutError, responseError } from "./er
 import { Headers } from "./headers.js";
 import { Native, type NativeInfo } from "./native.js";
 import { scheduler } from "./scheduler.js";
+import type { Notifier } from "./notifications.js";
 
 export const MAX_BUFFERED_BODY = 32 * 1024 * 1024;
 // ABI reads are synchronous and main-thread-only. Copy each result before another
@@ -26,7 +27,11 @@ export class Transfer {
 
   constructor(private readonly native: Native, private readonly handle: bigint,
     private readonly release: () => void, private readonly external?: AbortSignal,
-    readonly duplex = false) {}
+    readonly duplex = false, private readonly notifier?: Notifier) {}
+
+  private wait<T>(probe: () => T | undefined, signal: AbortSignal): Promise<T> {
+    return this.notifier ? this.notifier.probe(this.handle, probe, signal) : scheduler.wait(probe, signal);
+  }
 
   attachSignal(total?: number, started = performance.now()): void {
     this.external?.addEventListener("abort", this.externalAbort, { once: true });
@@ -45,7 +50,7 @@ export class Transfer {
     return info;
   }
   write(buffer: Uint8Array, end: boolean, signal: AbortSignal): Promise<number> {
-    return scheduler.wait(() => {
+    return this.wait(() => {
       if (!this.canWrite()) return 2;
       const code = this.native.write(this.handle, buffer, end);
       return code === 1 ? undefined : code;
@@ -60,7 +65,7 @@ export class Transfer {
   throwFailure(): void { if (this.failure) throw this.failure; }
 
   async headers(): Promise<NativeInfo> {
-    return scheduler.wait(() => {
+    return this.wait(() => {
       this.ensureOpen();
       const info = this.info();
       return info.state === "pending" ? undefined : info;
@@ -70,7 +75,7 @@ export class Transfer {
   async next(): Promise<Buffer | null> {
     this.ensureOpen();
     const buffer = READ_BUFFER;
-    const result = await scheduler.wait(() => {
+    const result = await this.wait(() => {
       this.ensureOpen();
       const { code, length } = this.native.read(this.handle, buffer);
       if (code === 1) return undefined;

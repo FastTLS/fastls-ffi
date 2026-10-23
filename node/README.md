@@ -192,16 +192,37 @@ HTTP/2可组合 `{ duplex: true, body: signal => source(signal) }` 边上传边�
 `npm run test:sse:soak` 默认以32路并发重复运行60秒，验证正常结束、提前退出、错误头、解析超限和解码失败后的资源回收；可设置FASTLS_NODE_SSE_SOAK_SECONDS为1..300。Linux当前Go组合纳入CI。
 该独立长测固定V8年轻代参数以比较RSS增量，保留原有资源阈值，记录运行参数和堆空间快照；不会更改SDK用户进程的配置，说明见PARITY.md。
 
+## 原生就绪通知
+
+0.5默认使用`notifications: 'auto'`：新库带session_notifications能力且符号完整时启用，旧ABI-v1库继续轮询。`required`缺少能力时在创建原生会话前报错；`poll`显式使用原调度器。
+
+```js
+const session = await Session.open({ notifications: 'required' });
+try {
+  console.log(session.notificationMode); // async-events
+  const response = await session.get(url);
+} finally { await session.closeAsync(); }
+```
+
+普通`new Session()`仍是同步构造；首次请求自动初始化，也可先`await session.ready(signal)`。Session.open初始化失败会关闭新会话，ready失败允许重试。首次并发请求共享初始化；取消一个等待者不会取消其它等待者，全部退出时关闭未就绪的候选通道。HTTP总预算从创建原生请求开始，通道初始化另限3秒。
+
+每会话最多一条经32字节随机令牌认证的IPv4本机TCP连接，监听地址为127.0.0.1临时端口，认证后关闭监听器；候选连接最多两个。线上只有握手和唤醒字节，HTTP数据仍经原ABI读取。没有Go到JavaScript回调或JavaScript工作线程。
+
+`notificationMode`为async-events或poll。通道运行中断开会报错并唤醒等待者，不静默回退；关闭后可显式poll重建会话。关闭会话释放通道，closeAsync还等待候选socket关闭及上传清理。状态集合只含活动请求，溢出提示重查本会话全部请求。
+
+手动duplex仍同步返回交换对象，send/response在通道就绪后才创建请求；初始化期间关闭交换不会发送HTTP请求。上传、SSE、总超时及AbortSignal继续适用。验收记录包含空闲请求的ABI调用次数，不以单次套件运行时间证明性能优劣。
+
 ## 调度与边界
 
-网络由 Go goroutine 执行。SDK 通过共享约 10 ms 定时器轮询非阻塞 C 接口，
-每轮限制处理数量和时间，并限制连续立即调用，防止热循环长时间占用事件循环。
-这不是完成通知模型，不承诺固定吞吐量或延迟；初始化、原生控制调用及 JSON/Buffer 转换仍在主线程执行。
+网络由 Go goroutine 执行。新库默认通过每会话一条本机TCP连接接收就绪提示，Node事件循环随后重查非阻塞C接口，不定时查询空闲请求。
+通知是重查提示，不保证读写一定成功；通过代次快照防止漏唤醒，并独立取消双工的读写等待。
+立即调用会让出事件循环；不承诺固定吞吐量或延迟，原生控制调用及JSON/Buffer转换仍在主线程执行。
+显式poll或旧库回退使用共享约10ms定时器，保留每轮处理数量及时间上限。
 
 句柄使用 bigint，无损解析和序列化 ABI JSON 数字；返回的 C 字符串逐次由 fastls_free 释放。
 加载时检查ABI及所需能力，并使用系统级固定加载（Windows PIN / POSIX NODELETE），避免Node环境清理时卸载仍有Go后台线程的动态库。
 原生限制仍适用：最多 64 会话、256 未关闭请求，每会话最多 16 种传输配置。
-不提供代理、WebSocket或完成通知。
+不提供代理或WebSocket。
 
 ## 验证
 
@@ -215,7 +236,7 @@ npm run test:package
 测试使用真实动态库和本地靶场，覆盖 H1/H2、证书、连接池、Cookie、多值头、二进制、取消、超时、
 异常正文、64 MiB 下载、32 MiB 缓存限制和 128 路并发。安装包测试在临时项目安装 npm tarball，
 重新执行全部测试并检查包名导入和 TypeScript 声明。证据写入仓库 build/node-*.json。
-九组Python套件的115个场景已有对应项，包含13项双工和23项SSE验收，连同原有16项，共131项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
+十组Python套件的135个场景已有对应项，包含13项双工、23项SSE和20项通知验收，连同原有16项，共151项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
 持续测试默认30秒，检查RSS、操作系统句柄/描述符、Go堆和goroutine回收。Linux当前Go/Node组合另跑300秒；设置 `FASTLS_NODE_SOAK_SECONDS=300` 后执行 `npm run test:soak` 可复现。
 
 ## 与Python的语言差异

@@ -1,6 +1,13 @@
 import { Session, ServerSentEvent, type SSEOptions, type SSEStream, type RequestOptions, type Response, type StreamResponse } from '@fasttls/fastls';
 
 async function consume(session: Session): Promise<void> {
+  const initialized: Session = await Session.open({ notifications: 'required' });
+  await initialized.ready(AbortSignal.timeout(3000));
+  const mode: 'async-events' | 'poll' = initialized.notificationMode;
+  void mode;
+  await initialized.closeAsync();
+  // @ts-expect-error Notification modes are explicit strings.
+  new Session({ notifications: true });
   const options: RequestOptions = { body: Buffer.from([0, 255]), signal: AbortSignal.timeout(1000) };
   const response: Response = await session.post('https://example.com', options);
   const value: string = response.json<{ value: string }>().value;

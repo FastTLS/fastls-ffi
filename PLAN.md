@@ -7,9 +7,10 @@
 无损 JSON 和 bigint 保护 uint64 句柄精度；C 字符串逐次释放，动态库进程级持有。
 共享定时器和受限立即调用处理非阻塞轮询，正常 EOF、取消、异常与提前退出均回收句柄。
 Node 0.2默认流式解码，提供wireHeaders/decoded、结构化阶段超时、字节迭代器/Readable/AbortSignal工厂上传及大正文自动流式化。
-九组Python行为测试的115个场景已有对应Node用例，加原有16项共131项；持续测试及语言差异见node/PARITY.md。
+十组Python行为测试的135个场景已有对应Node用例，加原有16项共151项；持续测试及语言差异见node/PARITY.md。
 Node 0.3新增HTTP/2双工的生产者与手动交换、半关闭、waitUpload和异步清理。
-Node 0.4新增SSE事件流、事件大小限制和手动恢复；源码及隔离安装包使用相同131项套件和ESM/CommonJS类型检查，按提交保存逐项验收证据。
+Node 0.4新增SSE事件流、事件大小限制和手动恢复；源码及隔离安装包使用相同151项套件和ESM/CommonJS类型检查，按提交保存逐项验收证据。
+Node 0.5接入原生就绪通知，新增auto/required/poll、Session.open/ready及20项对应验收。
 已配置跨平台 Node 24 和最低 Node 22 CI；npm 预编译 Go 库分发与公开发布仍待实施。
 用法和范围见 [node/README.md](node/README.md)。
 
