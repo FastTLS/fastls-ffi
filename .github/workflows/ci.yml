@@ -1,0 +1,155 @@
+name: Native library and Python SDK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      fastls_ref:
+        description: Reviewed FastTLS/fastls commit SHA (optional override)
+        type: string
+      fhttp_ref:
+        description: Reviewed FastTLS/fhttp commit SHA (optional override)
+        type: string
+      imitate_ref:
+        description: Reviewed FastTLS/imitate commit SHA (optional override)
+        type: string
+      full_fhttp_tests:
+        description: Also run the full upstream HTTP2 suite (known legacy failures)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ffi-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependencies:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      fastls_ref: ${{ steps.refs.outputs.fastls_ref }}
+      fhttp_ref: ${{ steps.refs.outputs.fhttp_ref }}
+      imitate_ref: ${{ steps.refs.outputs.imitate_ref }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Require reviewed dependency commits
+        id: refs
+        env:
+          FASTLS_REF: ${{ inputs.fastls_ref || vars.FASTLS_REF }}
+          FHTTP_REF: ${{ inputs.fhttp_ref || vars.FHTTP_REF }}
+          IMITATE_REF: ${{ inputs.imitate_ref || vars.IMITATE_REF }}
+        run: python scripts/ci.py resolve
+
+  native:
+    needs: dependencies
+    name: ${{ matrix.target }} / Go ${{ matrix.go }} / Python ${{ matrix.python }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            target: windows-amd64
+            go: '1.26.10'
+            python: '3.11'
+            race: false
+          - runner: ubuntu-24.04
+            target: linux-amd64
+            go: '1.26.10'
+            python: '3.11'
+            race: true
+          - runner: ubuntu-24.04-arm
+            target: linux-arm64
+            go: '1.26.10'
+            python: '3.11'
+            race: false
+          - runner: macos-15-intel
+            target: darwin-amd64
+            go: '1.26.10'
+            python: '3.11'
+            race: false
+          - runner: macos-15
+            target: darwin-arm64
+            go: '1.26.10'
+            python: '3.11'
+            race: false
+          - runner: ubuntu-24.04
+            target: linux-amd64
+            go: '1.24.11'
+            python: '3.10'
+            race: false
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      CGO_ENABLED: '1'
+      FASTLS_CI_RACE: ${{ matrix.race }}
+      FASTLS_CI_TARGET: ${{ matrix.target }}
+      FASTLS_FULL_FHTTP_TESTS: ${{ inputs.full_fhttp_tests || false }}
+    defaults:
+      run:
+        working-directory: workspace/fastls-ffi
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: workspace/fastls-ffi
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FastTLS/fastls
+          ref: ${{ needs.dependencies.outputs.fastls_ref }}
+          path: workspace/fastls
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FastTLS/fhttp
+          ref: ${{ needs.dependencies.outputs.fhttp_ref }}
+          path: workspace/fhttp
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FastTLS/imitate
+          ref: ${{ needs.dependencies.outputs.imitate_ref }}
+          path: workspace/imitate
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Build and execute native, source SDK, wheel and C tests
+        run: python scripts/ci.py run
+      - name: Save binaries and evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: fastls-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}
+          path: |
+            workspace/fastls-ffi/dist/
+            workspace/fastls-ffi/build/
+          if-no-files-found: warn
+          retention-days: 14
+
+  required:
+    name: All native tests
+    if: always()
+    needs: [dependencies, native]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Reject failed, cancelled or skipped matrix jobs
+        env:
+          DEPENDENCIES_RESULT: ${{ needs.dependencies.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: |
+          test "$DEPENDENCIES_RESULT" = success
+          test "$NATIVE_RESULT" = success

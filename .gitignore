@@ -1,0 +1,9 @@
+/dist/
+/build/
+/python/build/
+/go.work
+/go.work.sum
+__pycache__/
+*.egg-info/
+.venv/
+*.log
