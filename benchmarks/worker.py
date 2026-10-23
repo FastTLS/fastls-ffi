@@ -79,8 +79,9 @@ class Client:
     def __init__(self, spec):
         self.spec = spec
         self.queued_sync=spec["client"]=="curl-stream"
-        self.name = "curl" if self.queued_sync else spec["client"]
-        self.case = spec["case"]
+        self.name = "curl" if self.queued_sync else "fastls" if spec["client"]=="fastls-poll" else spec["client"]
+        self.case = dict(spec["case"])
+        if spec["client"]=="fastls-poll":self.case["poll"]=True
         self.ca = spec["fixture"]["ca_file"]
         self.native_reference = None
         self.match = None
@@ -408,6 +409,7 @@ def main():
                   import_seconds=client.import_seconds,session_setup_including_tls_probe_seconds=client.session_setup_seconds,configuration=dict(profile=client.profile if client.name=="fastls" else None,impersonate=client.impersonate if client.name=="curl" else None,
                   resolved_browser=getattr(client,"resolved_browser",None),native_version=getattr(client,"native_version",None),match=client.match))
     result["configuration"]["curl_sync_api"]="queued iterator" if client.queued_sync else "content_callback" if client.name=="curl" and client.case["mode"]=="sync" else None
+    if client.name=="fastls":result["configuration"]["notification_mode"]="poll" if client.case["poll"] else "native"
     Path(spec["result_file"]).write_text(json.dumps(result,indent=2)+"\n")
     if not result["success"] or result["failed"] or warm["failed"] or contract_errors: return 1
     return 0

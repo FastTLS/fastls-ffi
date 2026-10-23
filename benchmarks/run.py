@@ -137,6 +137,8 @@ def main():
     p.add_argument("--rounds",type=int)
     p.add_argument("--shards",type=int,default=1);p.add_argument("--shard-index",type=int,default=0)
     args=p.parse_args()
+    if not args.case:
+        args.case=[name.strip() for name in os.environ.get("BENCH_CASES","").split(",") if name.strip()]
     if not 1<=args.shards<=32 or not 0<=args.shard_index<args.shards: p.error("invalid shard range")
     rounds=dict(smoke=1,quick=2,full=5)[args.profile] if args.rounds is None else args.rounds
     if rounds<1 or (args.profile=="full" and rounds<5): p.error("full requires at least five rounds")
@@ -154,7 +156,7 @@ def main():
     identifier=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")+"-"+platform.system()+"-"+str(args.shard_index)
     library=ROOT/"dist"/("fastls.dll" if os.name=="nt" else "libfastls.dylib" if sys.platform=="darwin" else "libfastls.so")
     report=dict(schema_version=2,resource_scope="recursive client process tree",environment_id=identifier,profile=args.profile,rounds=rounds,shard=args.shard_index,shards=args.shards,
-                created_at=datetime.now(timezone.utc).isoformat(),python=sys.version,platform=platform.platform(),
+                created_at=datetime.now(timezone.utc).isoformat(),python=sys.version,platform=platform.platform(),selected_case_names=[case["name"] for case in selected],
                 machine=platform.machine(),cpu=platform.processor(),logical_cpus=psutil.cpu_count(),memory_bytes=psutil.virtual_memory().total,python_ssl=ssl.OPENSSL_VERSION,
                 packages=deps,library_sha256=hashlib.sha256(library.read_bytes()).hexdigest(),
                 build_info=json.loads((ROOT/"dist/build-info.json").read_text()),

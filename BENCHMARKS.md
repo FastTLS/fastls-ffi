@@ -21,6 +21,8 @@ python benchmarks/run.py --profile full --output build/benchmark-full
 
 完整矩阵耗时较长。Actions将场景分为6组，同时在Windows/Linux运行；同一个场景的全部客户端及五轮始终留在同一台runner，避免跨硬件排名。每次push/PR在两个系统执行smoke；手动工作流可选择quick/full。原有六组功能回归保持独立。
 
+通知与轮询作为同一paired场景的两个候选执行，始终在同一台runner比较。手动工作流的cases输入可按逗号选择具体场景，非空时不分片。早期29f1f15主矩阵的单独native/poll空闲场景分属不同runner，不能互算倍率；这项对照用后续同机补测代替。
+
 多份产物可在本地合并成一份离线报告，仍按原始环境分组：
 
 ```shell
