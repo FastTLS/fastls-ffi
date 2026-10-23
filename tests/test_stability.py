@@ -224,8 +224,14 @@ class Stability(FixtureCase):
                 self.assertEqual(b"".join(r.iter_bytes(3)), "data: 第一条\n\ndata: second\n\n".encode())
             data = bytes([0, 255]) * (256 * 1024)
             self.assertEqual(s.post(self.fixture["https2"] + "/echo", data=data).content, data)
+            # Large Python bodies now use the upload channel automatically.
+            streamed = data + b"x"
+            result = s.post(self.fixture["https2"] + "/upload", data=streamed).json()
+            self.assertEqual(result["bytes"], len(streamed))
+            self.assertEqual(result["sha256"], hashlib.sha256(streamed).hexdigest())
+            # The original JSON-body limit remains enforced for C callers.
             with self.assertRaisesRegex(FastlsError, "512KiB"):
-                s.post(self.fixture["https2"] + "/echo", data=data + b"x")
+                s._native.start(dict(url=self.fixture["https2"] + "/upload", body="x" * (512 * 1024 + 1)))
 
     def test_concurrent_cancel_and_session_close(self):
         async def scenario():
