@@ -111,6 +111,18 @@ class Upload(FixtureCase):
                 task.cancel()
                 with self.assertRaises(asyncio.CancelledError): await task
                 self.assertTrue(finalized.is_set())
+                cleanup_started = asyncio.Event()
+                async def closing_source():
+                    try:
+                        yield SLAB
+                        await asyncio.Event().wait()
+                    finally:
+                        cleanup_started.set()
+                        await asyncio.Event().wait()
+                task = asyncio.create_task(session.post(self.fixture["https2"] + "/upload-reject", data=closing_source()))
+                await asyncio.wait_for(cleanup_started.wait(), 5)
+                task.cancel()  # Cancellation during producer cleanup must propagate.
+                with self.assertRaises(asyncio.CancelledError): await task
         asyncio.run(run())
 
     def test_total_timeout_includes_stalled_async_producer(self):
@@ -206,6 +218,14 @@ class Upload(FixtureCase):
                 response = await session.post(self.fixture["https2"] + "/upload-reject", data=source())
                 self.assertEqual(response.status_code, 413)
                 self.assertTrue(closed.is_set())
+                sync_closed = []
+                def sync_source():
+                    try:
+                        while True: yield SLAB
+                    finally: sync_closed.append(True)
+                response = await session.post(self.fixture["https2"] + "/upload-reject", data=sync_source())
+                self.assertEqual(response.status_code, 413)
+                self.assertTrue(sync_closed)
         asyncio.run(run())
 
 

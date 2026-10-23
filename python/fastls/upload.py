@@ -51,5 +51,9 @@ async def async_chunks(data):
             if hasattr(iterator, "aclose"):
                 await iterator.aclose()
     else:
-        for chunk in chunks(data):
-            yield chunk
+        iterator = chunks(data)
+        try:
+            for chunk in iterator:
+                yield chunk
+        finally:
+            iterator.close()

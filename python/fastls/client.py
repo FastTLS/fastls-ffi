@@ -341,9 +341,9 @@ class AsyncSession(Session):
             if producer is not None:
                 producer.cancel()
                 try:
-                    await producer
-                except asyncio.CancelledError:
-                    pass
+                    outcome = (await asyncio.gather(producer, return_exceptions=True))[0]
+                    if isinstance(outcome, BaseException) and not isinstance(outcome, asyncio.CancelledError):
+                        raise outcome
                 except BaseException:
                     self._close_handle(handle)
                     raise
