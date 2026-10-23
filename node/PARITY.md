@@ -28,7 +28,7 @@ TypeScript 的 ESM/CommonJS 类型检查及安装包内容/哈希检查独立于
 - test_upload.py::test_files_large_bytes_and_unicode：Node文件流按Readable生命周期关闭；区别于Python保留调用方文件对象。
 - test_upload.py::test_async_cancel_waiting_producer_and_h2_sibling：使用工厂信号中断生产者等待，保留同连接其它H2流；另验证生产者清理期间仍能取消请求。
 - test_upload.py::test_invalid_chunks_headers_and_async_in_sync：非法块和受管头仍拒绝；Node统一Promise API接受异步迭代器，没有Python同步API的拒绝分支。
-- test_upload.py::test_early_response_stops_async_producer：信号工厂及Readable支持及时清理；普通任意Promise不能被JavaScript强行中断，调用方需提供可取消的生产者。
+- test_upload.py::test_early_response_stops_async_producer：信号工厂及Readable支持及时清理；未启动迭代器也调用return，但生成器尚未进入的finally不会执行。普通任意Promise不能被JavaScript强行中断，调用方需提供可取消的生产者。
 
 这些适配不记为“与Python接口完全相同”。原生请求始终按取消/超时立即释放；未配合取消的自定义Promise不具备强制finalize保证。
 

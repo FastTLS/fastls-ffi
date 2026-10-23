@@ -47,10 +47,16 @@ p('test_invalid_chunks_headers_and_async_in_sync',async t=>{
   async function* body(){yield SLAB;}assert.equal((await s.post(fixture.https2+'/upload',{body:body()})).json().bytes,SLAB.length);
 },'Node has one Promise API, so async iterators are accepted rather than rejected by a nonexistent synchronous API.');
 p('test_early_response_stops_async_producer',async t=>{
-  const s=session(t);let closed=false;const body=signal=>(async function*(){try{yield SLAB;await delay(60000,null,{signal});}finally{closed=true;}})();
-  assert.equal((await s.post(fixture.https2+'/upload-reject',{body})).status,413);await eventually(()=>closed);
+  const s=session(t);let closed=false,started=false,returned=false,aborted=false;
+  const body=signal=>{signal.addEventListener('abort',()=>aborted=true,{once:true});const generator=(async function*(){started=true;try{yield SLAB;await delay(60000,null,{signal});}finally{closed=true;}})();return {[Symbol.asyncIterator](){return this;},next(){return generator.next();},return(){returned=true;return generator.return();}};};
+  assert.equal((await s.post(fixture.https2+'/upload-reject',{body})).status,413);assert.ok(returned&&aborted);if(started)await eventually(()=>closed);
   let syncClosed=false;function* sync(){try{while(true)yield SLAB;}finally{syncClosed=true;}}
-  assert.equal((await s.post(fixture.https2+'/upload-reject',{body:sync()})).status,413);assert.ok(syncClosed);
+  // A generator closed before its first next() never enters its try/finally.
+  // Prime this producer so the assertion always checks finalization of active work.
+  const active=sync();active.next();
+  assert.equal((await s.post(fixture.https2+'/upload-reject',{body:active})).status,413);assert.ok(syncClosed);
+  let stopped=false;const unstarted={next(){return {done:false,value:SLAB};},return(){stopped=true;return {done:true};},[Symbol.iterator](){return this;}};
+  assert.equal((await s.post(fixture.https2+'/upload-reject',{body:unstarted})).status,413);assert.ok(stopped);
   await assert.rejects(s.post(fixture.https2+'/upload-early-ok',{body:stalled}),/duplex/);
   const c=new AbortController(),readable=Readable.from(stalled(c.signal));const pending=assert.rejects(s.post(fixture.https2+'/upload',{body:readable,signal:c.signal}),sdk.AbortError);await delay(30);c.abort();await pending;assert.ok(readable.destroyed);
-},'Abort-aware factories allow deterministic generator finalization; uncooperative promises remain caller-owned.');
+},'Abort-aware factories support active generator finalization; return() is also called on unstarted iterators, whose finally has not begun. Uncooperative promises remain caller-owned.');
