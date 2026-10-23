@@ -92,8 +92,7 @@ async def download(url):
 
 `await session.get(url)` 返回已缓存的响应；流式响应使用 `await response.aread()`。
 任务取消或上下文退出会关闭请求；`response.cancel()` 也可以直接取消。
-SDK 定时轮询非阻塞状态/读取接口，间隔至少10ms，并大于平台时钟精度以避免短定时器忙等；不用逐请求 Python 线程，Go 网络工作在 goroutine 中执行。
-这是首版调度策略，高并发效率尚未做性能承诺，后续将评估完成通知。
+新动态库默认使用状态通知：同步等待原生就绪，asyncio每会话共用本机唤醒通道，不增加Python工作线程或Go→Python回调。可用notifications='required'要求新能力，或notifications='poll'保留轮询；旧库auto模式继续轮询。生命周期和C ABI见[NOTIFICATIONS.md](NOTIFICATIONS.md)。
 
 ## C ABI v1
 
@@ -102,6 +101,7 @@ SDK 定时轮询非阻塞状态/读取接口，间隔至少10ms，并大于平�
 - `fastls_abi_version()`：当前为1。
 - `fastls_profiles()`：返回规范ID数组的JSON结果。
 - `fastls_stats()`：返回只读诊断JSON结果，新增符号，不改变已有函数的ABI。
+- `fastls_wait()`与`fastls_session_watch/events/unwatch()`：原生就绪等待及会话通知，见[NOTIFICATIONS.md](NOTIFICATIONS.md)。
 - `fastls_start(data, length)`：输入UTF-8 JSON，立即返回请求句柄的JSON结果。
 - `fastls_info(handle)`：返回状态pending/headers/eof/error、状态码、头、Match或错误。
 - `fastls_read(handle, buffer, capacity, &length)`：非阻塞二进制读取。0=数据、1=等待、2=EOF、-1=请求失败、-2=非法参数或句柄。
@@ -120,7 +120,7 @@ start输入字段：url、method、profile、headers、body或body_base64、time
 Session 管理默认配置、活动请求及独立的连接池，支持HTTP1 keep-alive和HTTP2多路复用。不同Session、profile或CA配置相互隔离；可调用session.close_idle_connections()主动释放空闲连接。使用方法、限制和C ABI扩展见[POOLING.md](POOLING.md)。
 Session默认自动管理Cookie，提供session.cookies查询、设置、删除与清空；可用cookies=False禁用。response.headers支持大小写不敏感访问和get_list获取重复字段，详细规则见[COOKIES_HEADERS.md](COOKIES_HEADERS.md)。
 Python默认流式解码gzip、deflate、br及zstd，可通过decode_content=False取得原始正文。Timeout支持总时限及连接、响应头、正文读取预算；用法、原始头视图与解码上限见[STREAMING_TIMEOUTS.md](STREAMING_TIMEOUTS.md)。
-已支持同步/异步流式上传及write超时，见[STREAMING_UPLOAD.md](STREAMING_UPLOAD.md)。HTTP/2支持显式全双工：异步使用duplex=True，同步使用Session.duplex()手动交互，见[DUPLEX.md](DUPLEX.md)。当前不提供代理、自定义完整Spec或WebSocket；text按UTF-8解码，不提供完整requests/httpx兼容。
+已支持同步/异步流式上传及write超时，见[STREAMING_UPLOAD.md](STREAMING_UPLOAD.md)。HTTP/2支持显式全双工：异步使用duplex=True，同步使用Session.duplex()手动交互，见[DUPLEX.md](DUPLEX.md)。Python同步与asyncio新增session.sse()按事件消费SSE，支持id/retry、手动恢复及大小限制，见[SSE.md](SSE.md)。当前不提供代理、自定义完整Spec或WebSocket；text按UTF-8解码，不提供完整requests/httpx兼容。
 指纹TCP TLS请求始终启用证书校验；未提供关闭校验选项。
 本仓库尚未公开发布；许可证和上游发布门禁仍待处理，不能把本地构建当成远端候选已发布。
 

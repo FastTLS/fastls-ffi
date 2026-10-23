@@ -62,6 +62,10 @@ class Native:
                 signatures[name] = args
         if hasattr(self.lib, "fastls_session_cookies"):
             signatures["fastls_session_cookies"] = [C.c_uint64, C.c_char_p, C.c_size_t]
+        for name, args in {"fastls_session_watch": [C.c_uint64, C.c_uint16, C.c_void_p, C.c_size_t],
+                           "fastls_session_events": [C.c_uint64], "fastls_session_unwatch": [C.c_uint64]}.items():
+            if hasattr(self.lib, name):
+                signatures[name] = args
         for name, args in signatures.items():
             fn = getattr(self.lib, name)
             fn.argtypes, fn.restype = args, C.c_void_p
@@ -73,6 +77,16 @@ class Native:
         if hasattr(self.lib, "fastls_write"):
             self.lib.fastls_write.argtypes = [C.c_uint64, C.c_void_p, C.c_size_t, C.c_int]
             self.lib.fastls_write.restype = C.c_int
+
+        if hasattr(self.lib, "fastls_wait"):
+            self.lib.fastls_wait.argtypes = [C.c_uint64, C.c_uint32, C.c_uint32]
+            self.lib.fastls_wait.restype = C.c_int
+
+    def wait(self, handle, events, timeout_ms=1000):
+        code = self.lib.fastls_wait(handle, events, timeout_ms)
+        if code < 0:
+            raise FastlsError("native wait failed or request is closed")
+        return code
 
     def write(self, handle, data, end=False):
         code = self.lib.fastls_write(handle, data, len(data), int(end))

@@ -62,7 +62,7 @@ class Response:
             elif code == 2:
                 return
             else:
-                time.sleep(POLL_INTERVAL)
+                self._owner._wait(self._handle, 2)
 
     def read(self):
         if self._content is None:
@@ -108,7 +108,9 @@ def _collect(chunks):
 class Session:
     """Configuration, request ownership and isolated reusable connection pools."""
     def __init__(self, *, profile="chrome/156/windows", headers=None, timeout=30, library=None, ca_file=None, cookies=True,
-                 decode_content=True, max_decoded_bytes=256 * 1024 * 1024):
+                 decode_content=True, max_decoded_bytes=256 * 1024 * 1024, notifications="auto"):
+        if notifications not in ("auto", "required", "poll"):
+            raise ValueError("notifications must be auto, required or poll")
         if not isinstance(cookies, bool):
             raise TypeError("cookies must be a boolean")
         self.profile, self.headers, self.timeout = profile, dict(headers or {}), timeout
@@ -117,6 +119,14 @@ class Session:
         if self._ca_pem is not None and not self._ca_pem.strip():
             raise ValueError("ca_file is empty")
         self._native = Native(library)
+        self._notifier = None
+        self._notify_lock = None
+        self._notify_loop = None
+        features = self._native.call("fastls_features") if hasattr(self._native.lib, "fastls_features") else []
+        self._native_notifications = "session_notifications" in features and all(hasattr(self._native.lib, name) for name in ("fastls_wait", "fastls_session_watch", "fastls_session_events", "fastls_session_unwatch"))
+        if notifications == "required" and not self._native_notifications:
+            raise FastlsError("notifications require a newer Fastls native library")
+        self._native_notifications = self._native_notifications and notifications != "poll"
         self._handles = set()
         self._producers = {}
         self._lock = threading.Lock()
@@ -145,6 +155,16 @@ class Session:
         if not hasattr(self._native.lib, "fastls_stats"):
             raise FastlsError("runtime statistics require a newer Fastls library")
         return self._native.call("fastls_stats")
+
+    @property
+    def notification_mode(self):
+        return "native-wait" if self._native_notifications else "poll"
+
+    def _wait(self, handle, events):
+        if self._native_notifications:
+            self._native.wait(handle, events)
+        else:
+            time.sleep(POLL_INTERVAL)
 
     def _begin(self, method, url, *, profile=None, headers=None, data=None, timeout=None, allow_redirects=True,
                decode_content=None, max_decoded_bytes=None, duplex=False):
@@ -201,6 +221,8 @@ class Session:
             if handle in self._handles:
                 self._native.call("fastls_close", handle)
                 self._handles.remove(handle)
+            if self._notifier is not None:
+                self._notifier.forget(handle)
 
     def _info(self, handle):
         info = self._native.call("fastls_info", handle)
@@ -236,7 +258,7 @@ class Session:
                         ended = pending is None
                         pending = None
                         continue
-                time.sleep(POLL_INTERVAL)
+                self._wait(handle, 1 if ended else 5)
         except BaseException:
             self._close_handle(handle)
             raise
@@ -262,6 +284,17 @@ class Session:
             exchange.close()
 
     @contextmanager
+    def sse(self, method, url, *, max_event_bytes=1024 * 1024, last_event_id=None, **kwargs):
+        from .sse import SSEStream, _request_options
+        options = _request_options(kwargs, max_event_bytes, last_event_id)
+        with self.stream(method, url, **options) as response:
+            events = SSEStream(response, max_event_bytes=max_event_bytes, last_event_id=last_event_id)
+            try:
+                yield events
+            finally:
+                events.close()
+
+    @contextmanager
     def stream(self, method, url, **kwargs):
         response = self._open(method, url, **kwargs)
         try:
@@ -285,6 +318,8 @@ class Session:
             if self._closed:
                 return
             self._closed = True
+            if self._notifier is not None:
+                self._notifier.stop()
             for producer in self._producers.values():
                 _cancel_task(producer)
             self._producers.clear()
@@ -322,6 +357,7 @@ class AsyncResponse(Response):
         buffer = ctypes.create_string_buffer(chunk_size)
         try:
             while True:
+                generation = self._owner._generation(self._handle)
                 self._check_upload()
                 code, data = self._read(buffer)
                 if code == 0:
@@ -332,7 +368,7 @@ class AsyncResponse(Response):
                         await self.aclose()
                     return
                 else:
-                    await asyncio.sleep(POLL_INTERVAL)
+                    await self._owner._await_change(self._handle, generation)
         except BaseException:
             await self.aclose()
             raise
@@ -377,6 +413,39 @@ class AsyncResponse(Response):
 
 
 class AsyncSession(Session):
+    @property
+    def notification_mode(self):
+        return "async-events" if self._native_notifications else "poll"
+
+    async def _ensure_notifications(self):
+        if not self._native_notifications:
+            return
+        from .notifications import AsyncNotifier
+        loop = asyncio.get_running_loop()
+        if self._notify_loop is not None and self._notify_loop is not loop:
+            raise FastlsError("AsyncSession notifications cannot be shared across event loops")
+        if self._notify_lock is None:
+            self._notify_loop = loop
+            self._notify_lock = asyncio.Lock()
+        async with self._notify_lock:
+            if self._notifier is None:
+                notifier = self._notifier = AsyncNotifier(self)
+                try:
+                    await notifier.start()
+                except BaseException:
+                    self._notifier = None
+                    raise
+            self._notifier.check()
+
+    def _generation(self, handle):
+        return self._notifier.generation(handle) if self._notifier is not None and handle is not None else 0
+
+    async def _await_change(self, handle, generation):
+        if self._notifier is not None:
+            await self._notifier.wait(handle, generation)
+        else:
+            await asyncio.sleep(POLL_INTERVAL)
+
     def _upload_step(self, handle, chunk, *, end=False, duplex=False):
         with self._lock:
             if handle not in self._handles:
@@ -391,31 +460,37 @@ class AsyncSession(Session):
         try:
             async for chunk in source:
                 while True:
+                    generation = self._generation(handle)
                     code = self._upload_step(handle, chunk, duplex=duplex)
                     if code == 2:
                         return
                     if code == 0:
                         break
-                    await asyncio.sleep(POLL_INTERVAL)
+                    await self._await_change(handle, generation)
                 await asyncio.sleep(0)
             while True:
+                generation = self._generation(handle)
                 code = self._upload_step(handle, b"", end=True, duplex=duplex)
                 if code == 2:
                     return
                 if code == 0:
                     return True
-                await asyncio.sleep(POLL_INTERVAL)
+                await self._await_change(handle, generation)
         finally:
             await source.aclose()
 
     async def _aopen(self, method, url, **kwargs):
+        await self._ensure_notifications()
         duplex = kwargs.get("duplex", False)
         handle = self._begin(method, url, **kwargs)
         data = kwargs.get("data")
         producer = asyncio.create_task(self._upload(handle, b"" if data is None else data, duplex=duplex)) if duplex or is_stream(data) else None
         if duplex:
             self._producers[handle] = producer
+        if producer is not None:
             def completed(task):
+                if self._notifier is not None and handle in self._handles:
+                    self._notifier.pulse(handle)
                 if not task.cancelled() and task.exception() is not None:
                     # Wake a blocked native reader; retain the Python exception.
                     with self._lock:
@@ -425,6 +500,7 @@ class AsyncSession(Session):
         transferred = False
         try:
             while True:
+                generation = self._generation(handle)
                 if producer is not None and producer.done():
                     producer.result()
                 info = self._info(handle)
@@ -437,7 +513,7 @@ class AsyncSession(Session):
                         transferred = True
                         return AsyncResponse(self, handle, info, producer=producer)
                     return AsyncResponse(self, handle, info)
-                await asyncio.sleep(POLL_INTERVAL)
+                await self._await_change(handle, generation)
         except BaseException:
             self._close_handle(handle)
             raise
@@ -451,6 +527,17 @@ class AsyncSession(Session):
                 except BaseException:
                     self._close_handle(handle)
                     raise
+
+    @asynccontextmanager
+    async def sse(self, method, url, *, max_event_bytes=1024 * 1024, last_event_id=None, **kwargs):
+        from .sse import AsyncSSEStream, _request_options
+        options = _request_options(kwargs, max_event_bytes, last_event_id)
+        async with self.stream(method, url, **options) as response:
+            events = AsyncSSEStream(response, max_event_bytes=max_event_bytes, last_event_id=last_event_id)
+            try:
+                yield events
+            finally:
+                await events.aclose()
 
     @asynccontextmanager
     async def stream(self, method, url, **kwargs):
@@ -474,6 +561,8 @@ class AsyncSession(Session):
     async def aclose(self):
         producers = list(self._producers.values())
         self.close()
+        if self._notifier is not None:
+            await self._notifier.aclose()
         if producers:
             results = await asyncio.gather(*producers, return_exceptions=True)
             for result in results:
@@ -481,6 +570,11 @@ class AsyncSession(Session):
                     raise result
 
     async def __aenter__(self):
+        try:
+            await self._ensure_notifications()
+        except BaseException:
+            self.close()
+            raise
         return self
 
     async def __aexit__(self, *_):

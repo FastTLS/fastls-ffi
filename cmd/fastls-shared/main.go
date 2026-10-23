@@ -10,6 +10,7 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 	"unsafe"
 
 	"github.com/FastTLS/fastls-ffi/internal/bridge"
@@ -20,8 +21,39 @@ var engine = bridge.New()
 //export fastls_features
 func fastls_features() *C.char {
 	return result(func() (any, error) {
-		return []string{"duplex_h2", "stream_upload", "write_timeout", "stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers"}, nil
+		return []string{"session_notifications", "duplex_h2", "stream_upload", "write_timeout", "stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers"}, nil
 	})
+}
+
+//export fastls_wait
+func fastls_wait(handle C.uint64_t, events C.uint32_t, timeoutMS C.uint32_t) (status C.int) {
+	status = bridge.Failed
+	defer func() {
+		if recover() != nil {
+			status = bridge.Failed
+		}
+	}()
+	return C.int(engine.Wait(uint64(handle), uint32(events), time.Duration(timeoutMS)*time.Millisecond))
+}
+
+//export fastls_session_watch
+func fastls_session_watch(handle C.uint64_t, port C.uint16_t, token unsafe.Pointer, length C.size_t) *C.char {
+	return result(func() (any, error) {
+		if token == nil || length != 32 {
+			return nil, fmt.Errorf("notification token must contain 32 bytes")
+		}
+		return nil, engine.WatchSession(uint64(handle), uint16(port), C.GoBytes(token, 32))
+	})
+}
+
+//export fastls_session_events
+func fastls_session_events(handle C.uint64_t) *C.char {
+	return result(func() (any, error) { return engine.SessionEvents(uint64(handle)) })
+}
+
+//export fastls_session_unwatch
+func fastls_session_unwatch(handle C.uint64_t) *C.char {
+	return result(func() (any, error) { engine.UnwatchSession(uint64(handle)); return nil, nil })
 }
 
 //export fastls_session_cookies

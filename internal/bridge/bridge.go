@@ -75,6 +75,10 @@ type chunk struct {
 	err  error
 }
 type request struct {
+	id       uint64
+	eventMu  sync.Mutex
+	changed  chan struct{}
+	watch    *watcher
 	upload   *upload
 	owner    uint64
 	pool     *fastls.Session
@@ -103,6 +107,7 @@ func New() *Engine {
 }
 
 type session struct {
+	watch   *watcher
 	pools   map[string]*fastls.Session
 	cookies *fastls.CookieStore
 }
@@ -130,6 +135,9 @@ func (e *Engine) CloseSession(id uint64) {
 	}
 	e.mu.Unlock()
 	if s != nil {
+		if s.watch != nil {
+			s.watch.close()
+		}
 		s.cookies.SetEnabled(false)
 		for _, pool := range s.pools {
 			pool.Close()
@@ -164,8 +172,12 @@ func (e *Engine) Stats() map[string]any {
 	open := len(e.requests)
 	openSessions := len(e.sessions)
 	poolCount := 0
+	notifiers := 0
 	for _, s := range e.sessions {
 		poolCount += len(s.pools)
+		if s.watch != nil {
+			notifiers++
+		}
 	}
 	var buffered, uploads int64
 	for _, r := range e.requests {
@@ -181,6 +193,7 @@ func (e *Engine) Stats() map[string]any {
 	runtime.ReadMemStats(&mem)
 	return map[string]any{"open_requests": open, "workers": e.workers.Load(),
 		"open_sessions": openSessions, "session_pools": poolCount,
+		"notifiers":           notifiers,
 		"buffered_body_bytes": buffered, "goroutines": runtime.NumGoroutine(),
 		"buffered_upload_bytes": uploads,
 		"heap_alloc_bytes":      mem.HeapAlloc, "heap_inuse_bytes": mem.HeapInuse}
@@ -306,8 +319,14 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 			s.pools[key] = pool
 		}
 		r.pool, r.owner = pool, in.Session
+		r.watch = s.watch
 	}
 	id := e.next.Add(1)
+	r.id = id
+	if r.upload != nil {
+		r.upload.changed = r.signal
+	}
+	context.AfterFunc(ctx, r.signal)
 	e.requests[id] = r
 	e.workers.Add(1)
 	e.mu.Unlock()
@@ -363,6 +382,7 @@ func (r *request) run(in Input, opts fastls.Options) {
 	r.info.WireHeaderValues, r.info.Decoded = resp.WireHeaderValues, resp.Decoded
 	r.info.UploadDiscarded = in.StreamBody && !resp.RequestHasBody
 	r.mu.Unlock()
+	r.signal()
 	for {
 		b := make([]byte, ChunkSize)
 		n, err := resp.Body.Read(b)
@@ -372,6 +392,7 @@ func (r *request) run(in Input, opts fastls.Options) {
 		}
 		select {
 		case r.chunks <- chunk{data: b[:n], err: err}:
+			r.signal()
 		case <-r.ctx.Done():
 			r.setError(r.ctx.Err())
 			return
@@ -393,6 +414,7 @@ func (r *request) setErrorLocked(err error) {
 		return
 	}
 	r.info.State, r.info.Error = "error", err.Error()
+	defer r.signal()
 	r.info.ErrorCode, r.info.TimeoutPhase = "request_error", ""
 	var phase *fastls.TimeoutError
 	var decoding *fastls.DecodeError

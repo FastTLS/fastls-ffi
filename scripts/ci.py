@@ -76,6 +76,11 @@ def preflight(env):
 
 def run():
     env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
+    # Keep captured child logs and redirected Windows CI output in one encoding.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     env["CGO_ENABLED"] = "1"
     try:
         target = preflight(env)
@@ -116,6 +121,8 @@ def run():
         execute("decode-timeouts-source", [sys.executable, "tests/test_decode_timeouts.py"])
         execute("upload-source", [sys.executable, "tests/test_upload.py"])
         execute("duplex-source", [sys.executable, "tests/test_duplex.py"])
+        execute("sse-source", [sys.executable, "tests/test_sse.py"])
+        execute("notifications-source", [sys.executable, "tests/test_notifications.py"])
         execute("cookiejar", ["go", "test", "./cookiejar"], ROOT.parent / "fhttp")
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
@@ -134,6 +141,8 @@ def run():
         execute("decode-timeouts-wheel", [sys.executable, "scripts/test_wheel.py", "--decode-timeouts"])
         execute("upload-wheel", [sys.executable, "scripts/test_wheel.py", "--upload"])
         execute("duplex-wheel", [sys.executable, "scripts/test_wheel.py", "--duplex"])
+        execute("sse-wheel", [sys.executable, "scripts/test_wheel.py", "--sse"])
+        execute("notifications-wheel", [sys.executable, "scripts/test_wheel.py", "--notifications"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")
@@ -145,6 +154,9 @@ def run():
         catalog = json.loads(execute("c-execute", [str(executable)], command_env=runtime_env))
         if not catalog.get("ok") or "chrome/156/windows" not in catalog["result"]:
             raise RuntimeError("C consumer did not receive the expected profile catalog")
+        waiter = dist / ("c-wait.exe" if os.name == "nt" else "c-wait")
+        execute("c-wait-build", compiler + ["examples/c/wait.c", "-I", str(dist), str(dist / library), "-o", str(waiter)])
+        execute("c-wait-execute", [sys.executable, "tests/test_c_wait.py"], command_env=runtime_env)
         if env.get("FASTLS_CI_RACE", "").lower() == "true":
             soak_env = dict(env, FASTLS_STABILITY_SECONDS="300", FASTLS_TEST_LABEL="extended")
             execute("extended-soak", [sys.executable, "tests/test_stability.py", "Stability.test_soak_and_resource_recovery"], command_env=soak_env)

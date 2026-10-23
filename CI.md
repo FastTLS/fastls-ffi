@@ -88,6 +88,10 @@ CI脚本核对Go目标与runner架构一致；跨平台二进制必须在相应r
 
 HTTP/2全双工另增加源码/wheel各13项验收，覆盖上传前首条响应、64MiB双向校验、半关闭、独立读写预算、慢消费者、生产者异常及取消清理；核心生命周期回归纳入race，见[DUPLEX.md](DUPLEX.md)。
 
+SSE另增加源码/wheel各23项验收，覆盖逐字节与所有分割位置、H1/H2、id/retry、压缩异常、40MiB事件流、背压、心跳/超时及全双工组合，见[SSE.md](SSE.md)。
+
+状态通知另增加源码/wheel各20项验收，覆盖空闲无周期查询、并发初始化、取消竞态、通道失败、兼容模式和资源回收；Go通知回归纳入race，新增独立C等待程序的编译及64KiB正文校验。见[NOTIFICATIONS.md](NOTIFICATIONS.md)。
+
 ## 上游完整测试的范围
 
 本地试跑完整fhttp/http2测试已记录失败，包括依赖用户目录charles_cert.pem的用例、原版Accept-Encoding假设、TLS1.0/1.1默认版本变化及PushPromise的Host断言。
