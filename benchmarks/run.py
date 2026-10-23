@@ -10,6 +10,7 @@ from pathlib import Path
 import platform
 import queue
 import random
+import ssl
 import subprocess
 import sys
 import threading
@@ -25,10 +26,20 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 def snapshot(process):
-    with process.oneshot():
-        cpu=process.cpu_times()
-        return dict(at=time.perf_counter(),cpu_seconds=cpu.user+cpu.system,rss_bytes=process.memory_info().rss,
-                    threads=process.num_threads(),descriptors=process.num_handles() if os.name=="nt" else process.num_fds())
+    # Windows venv python.exe can be a launcher for the actual interpreter.
+    # Count the whole client process tree, including native runtimes and helpers.
+    members=[]
+    for member in [process,*process.children(recursive=True)]:
+        try:
+            with member.oneshot():
+                cpu=member.cpu_times()
+                members.append(dict(pid=member.pid,cpu_seconds=cpu.user+cpu.system,rss_bytes=member.memory_info().rss,
+                    threads=member.num_threads(),descriptors=member.num_handles() if os.name=="nt" else member.num_fds()))
+        except psutil.NoSuchProcess:
+            continue
+    if not members: raise psutil.NoSuchProcess(process.pid)
+    return dict(at=time.perf_counter(),processes=members,
+                **{key:sum(member[key] for member in members) for key in ("cpu_seconds","rss_bytes","threads","descriptors")})
 
 
 def revision(path):
@@ -55,6 +66,8 @@ def execute(spec,fixture_process,output):
     spec.update(result_file=str(resultfile))
     specfile.write_text(json.dumps(spec))
     env=os.environ.copy();env.update(PYTHONUTF8="1",PYTHONIOENCODING="utf-8")
+    library=ROOT/"dist"/("fastls.dll" if os.name=="nt" else "libfastls.dylib" if sys.platform=="darwin" else "libfastls.so")
+    env["FASTLS_LIBRARY"]=str(library)
     for key in list(env):
         if key.lower() in ("http_proxy","https_proxy","all_proxy","no_proxy"): env.pop(key)
     started=time.perf_counter()
@@ -140,9 +153,9 @@ def main():
     if not selected: p.error("empty shard")
     identifier=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")+"-"+platform.system()+"-"+str(args.shard_index)
     library=ROOT/"dist"/("fastls.dll" if os.name=="nt" else "libfastls.dylib" if sys.platform=="darwin" else "libfastls.so")
-    report=dict(schema_version=1,environment_id=identifier,profile=args.profile,rounds=rounds,shard=args.shard_index,shards=args.shards,
+    report=dict(schema_version=2,resource_scope="recursive client process tree",environment_id=identifier,profile=args.profile,rounds=rounds,shard=args.shard_index,shards=args.shards,
                 created_at=datetime.now(timezone.utc).isoformat(),python=sys.version,platform=platform.platform(),
-                machine=platform.machine(),cpu=platform.processor(),logical_cpus=psutil.cpu_count(),memory_bytes=psutil.virtual_memory().total,
+                machine=platform.machine(),cpu=platform.processor(),logical_cpus=psutil.cpu_count(),memory_bytes=psutil.virtual_memory().total,python_ssl=ssl.OPENSSL_VERSION,
                 packages=deps,library_sha256=hashlib.sha256(library.read_bytes()).hexdigest(),
                 build_info=json.loads((ROOT/"dist/build-info.json").read_text()),
                 sources={name:revision(path) for name,path in (("fastls-ffi",ROOT),("fastls",ROOT.parent/"fastls"),("fhttp",ROOT.parent/"fhttp"),("imitate",ROOT.parent/"imitate"))},
@@ -175,7 +188,8 @@ def main():
         except subprocess.TimeoutExpired: server.kill();server.wait(timeout=5)
         server.stdout.close();log.close()
     report["benchmark_sources_at_end"]={path.name:hashlib.sha256(path.read_bytes()).hexdigest() for path in (ROOT/"benchmarks").glob("*.py")}
-    report["source_changed_during_run"]=report["benchmark_sources_at_end"]!=report["benchmark_sources"]
+    report["library_sha256_at_end"]=hashlib.sha256(library.read_bytes()).hexdigest()
+    report["source_changed_during_run"]=report["benchmark_sources_at_end"]!=report["benchmark_sources"] or report["library_sha256_at_end"]!=report["library_sha256"]
     report["success"]=all(run["valid"] for run in report["runs"]) and not report["source_changed_during_run"]
     (output/"results.json").write_text(json.dumps(report,indent=2)+"\n",encoding="utf-8")
     render([report],output/"report.html")

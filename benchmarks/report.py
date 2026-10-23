@@ -10,6 +10,7 @@ def summaries(reports):
     for report in reports:
         for run in report["runs"]:
             key=(report["environment_id"],run["case"]["name"],run["client"])
+            run=dict(run,_expected_rounds=report.get("rounds"))
             if report.get("source_changed_during_run"):
                 run=dict(run,valid=False,error="benchmark source changed during this run")
             groups.setdefault(key,[]).append(run)
@@ -19,7 +20,9 @@ def summaries(reports):
         row=dict(environment=environment,case=case,client=client,rounds=len(runs),valid_rounds=len(good),
                  failed=sum(r.get("metrics",{}).get("failed",0) for r in runs),
                  errors=[r.get("error") for r in runs if r.get("error")])
-        if good:
+        expected_rounds=runs[0].get("_expected_rounds") or len(runs)
+        row["expected_rounds"]=expected_rounds
+        if good and len(good)==len(runs)==expected_rounds:
             for name in ("rps","mib_per_second","p50_seconds","p95_seconds","ttfb_p50_seconds","elapsed_seconds"):
                 values=[r["metrics"][name] for r in good if r["metrics"].get(name) is not None]
                 if values: row[name]=dict(median=median(values),minimum=min(values),maximum=max(values))
