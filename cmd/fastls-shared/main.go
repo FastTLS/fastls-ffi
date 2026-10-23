@@ -44,6 +44,11 @@ func fastls_profiles() *C.char {
 	return result(func() (any, error) { return engine.Profiles() })
 }
 
+//export fastls_stats
+func fastls_stats() *C.char {
+	return result(func() (any, error) { return engine.Stats(), nil })
+}
+
 //export fastls_start
 func fastls_start(data *C.char, length C.size_t) *C.char {
 	return result(func() (any, error) {

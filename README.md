@@ -1,6 +1,6 @@
 # fastls-ffi
 
-Fastls 的 C ABI 动态库和 Python SDK。当前是未发布的第一阶段开发版本。
+Fastls 的 C ABI 动态库和 Python SDK。当前是未发布的开发版本。
 指纹生成复用独立 `FastTLS/imitate`，请求侧复用 `FastTLS/fastls`；Python 无需手动接入 Provider。
 
 ## 本地构建
@@ -53,6 +53,9 @@ with Session(profile="chrome/156/windows") as session:
 用户头值优先，包含空值；未知规范 ID 报错。目录可通过 `session.list_profiles()` 获取。
 `chrome/156/windows` 的生成身份和协议基线不是同一概念，以 Match 与上游证据为准。
 
+私有CA可使用 `Session(ca_file="test-ca.pem")` 或 `AsyncSession(ca_file=...)`。该信任列表只作用于此Session的请求，替代系统根；证书链与主机名校验仍然开启，不修改系统证书。文件在创建Session时读取。
+`session.stats()` 返回当前Go运行时的只读诊断快照：未关闭句柄、网络worker、桥接缓冲字节、goroutine及Go堆；不是性能指标API，也不会主动触发GC。旧动态库可继续使用已有接口，新CA配置和统计需要本轮动态库。
+
 ## 流式下载
 
 ```python
@@ -90,6 +93,7 @@ SDK 定时轮询非阻塞状态/读取接口，间隔至少10ms，并大于平�
 
 - `fastls_abi_version()`：当前为1。
 - `fastls_profiles()`：返回规范ID数组的JSON结果。
+- `fastls_stats()`：返回只读诊断JSON结果，新增符号，不改变已有函数的ABI。
 - `fastls_start(data, length)`：输入UTF-8 JSON，立即返回请求句柄的JSON结果。
 - `fastls_info(handle)`：返回状态pending/headers/eof/error、状态码、头、Match或错误。
 - `fastls_read(handle, buffer, capacity, &length)`：非阻塞二进制读取。0=数据、1=等待、2=EOF、-1=请求失败、-2=非法参数或句柄。
@@ -99,7 +103,7 @@ SDK 定时轮询非阻塞状态/读取接口，间隔至少10ms，并大于平�
 
 JSON结果为 `{"ok":true,"result":...}` 或 `{"ok":false,"error":"..."}`。
 每次获取的JSON指针都必须释放。输入和读取缓冲仅在调用期间使用；不返回Go指针。
-start输入字段：url、method、profile、headers、body或body_base64、timeout_ms、disable_redirect。未知字段拒绝。
+start输入字段：url、method、profile、headers、body或body_base64、timeout_ms、disable_redirect、可选ca_pem。未知字段拒绝。
 输入上限1MiB，解码上传上限512KiB，未关闭请求上限256；单次读取1..1MiB。
 同一响应只支持单个读取者，控制接口可并发调用；完成后仍须close。库应随进程长期加载。
 
@@ -123,3 +127,5 @@ python scripts/check.py
 每次push或PR自动运行Windows x64、Linux x64/ARM64及macOS Intel/Apple Silicon的原生构建与测试，另有最低Go/Python版本组合。
 构建产物与日志作为artifact保存；依赖必须绑定已推送的审阅提交，不回退到旧main。
 上游v2开发源码已推送并固定到提交SHA，无需先发布Go模块标签，配置和启用步骤见 [CI.md](CI.md)。
+
+稳定性验收增加HTTPS H1/H2、128路混合请求/取消、64MiB流式下载、资源回收及持续运行测试；范围、阈值与时间上限见 [TESTING_STAGE2.md](TESTING_STAGE2.md)。这些检查不表示尚未实现的功能已交付。

@@ -56,3 +56,8 @@ Python 直接指定 `chrome/156/windows`，使用 Fastls 的 TLS/HTTP 配置；�
 公网检测请求返回HTTP200/HTTP2，确认规范ID和自定义UA传递；不是完整浏览器指纹等价性验收。
 Windows短定时器提前调度问题已处理，轮询间隔按平台时钟精度调整。
 详情及产物位置见 VALIDATION.md。第一阶段本地验收时尚未提交/推送；后续已获授权接入CI并推送开发分支，仍未发布模块或Release。Linux/macOS及后续阶段须以实际验收记录为准。
+
+## 稳定性测试扩展 T2
+
+按用户要求推进现有SDK的下一阶段测试，范围见TESTING_STAGE2.md。该测试阶段与前面的功能实施阶段独立，不将测试完成等同于连接池、Cookie jar、流式上传或WebSocket已实现。
+为验证加密请求，新增隔离的私有CA配置和只读运行统计；修复测试复现的HTTP2接收窗口及取消后残余数据问题。每平台源码/wheel各运行30秒，Linux当前Go再运行300秒，所有证据由Actions保存。

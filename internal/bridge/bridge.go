@@ -4,12 +4,14 @@ package bridge
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/url"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -41,6 +43,7 @@ type Input struct {
 	BodyBase64      *string           `json:"body_base64"`
 	TimeoutMS       int64             `json:"timeout_ms"`
 	DisableRedirect bool              `json:"disable_redirect"`
+	CAPEM           string            `json:"ca_pem"`
 }
 
 type Info struct {
@@ -64,6 +67,7 @@ type request struct {
 	rest     []byte
 	terminal int
 	chunks   chan chunk
+	buffered atomic.Int64
 }
 
 type Engine struct {
@@ -71,6 +75,7 @@ type Engine struct {
 	requests map[uint64]*request
 	next     atomic.Uint64
 	provider *generators.Provider
+	workers  atomic.Int64
 }
 
 func New() *Engine {
@@ -78,6 +83,23 @@ func New() *Engine {
 }
 
 func (e *Engine) Profiles() ([]string, error) { return e.provider.List() }
+
+// Stats is a read-only snapshot. Heap/goroutine counts cover this Go runtime;
+// protocol and OS buffers are not included in BufferedBodyBytes.
+func (e *Engine) Stats() map[string]any {
+	e.mu.Lock()
+	open := len(e.requests)
+	var buffered int64
+	for _, r := range e.requests {
+		buffered += r.buffered.Load()
+	}
+	e.mu.Unlock()
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	return map[string]any{"open_requests": open, "workers": e.workers.Load(),
+		"buffered_body_bytes": buffered, "goroutines": runtime.NumGoroutine(),
+		"heap_alloc_bytes": mem.HeapAlloc, "heap_inuse_bytes": mem.HeapInuse}
+}
 
 func (e *Engine) Start(raw []byte) (uint64, error) {
 	if len(raw) == 0 || len(raw) > MaxInput {
@@ -123,6 +145,13 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 	}
 	opts := fastls.Options{Headers: in.Headers, Body: in.Body, VerifyTLS: true,
 		Timeout: int((in.TimeoutMS + 999) / 1000), DisableRedirect: in.DisableRedirect}
+	if in.CAPEM != "" {
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM([]byte(in.CAPEM)) {
+			return 0, errors.New("ca_pem contains no valid CA certificates")
+		}
+		opts.TLSRootCAs = roots
+	}
 	match, err := use.Use(&opts, in.Profile, use.WithProvider(e.provider))
 	if err != nil {
 		return 0, err
@@ -137,8 +166,9 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 	}
 	id := e.next.Add(1)
 	e.requests[id] = r
+	e.workers.Add(1)
 	e.mu.Unlock()
-	go r.run(in, opts)
+	go func() { defer e.workers.Add(-1); r.run(in, opts) }()
 	return id, nil
 }
 
@@ -164,6 +194,7 @@ func (r *request) run(in Input, opts fastls.Options) {
 	for {
 		b := make([]byte, ChunkSize)
 		n, err := resp.Body.Read(b)
+		r.buffered.Add(int64(n))
 		if n == 0 && err == nil {
 			continue
 		}
@@ -220,12 +251,19 @@ func (e *Engine) Read(id uint64, dst []byte) (int, int) {
 	}
 	r.readMu.Lock()
 	defer r.readMu.Unlock()
-	if r.terminal != EOF && r.ctx.Err() != nil {
+	r.mu.Lock()
+	done := r.info.State == "eof"
+	r.mu.Unlock()
+	if done {
+		return 0, EOF
+	}
+	if r.ctx.Err() != nil {
 		r.setError(r.ctx.Err())
 		return 0, Failed
 	}
 	if len(r.rest) > 0 {
 		n := copy(dst, r.rest)
+		r.buffered.Add(-int64(n))
 		r.rest = r.rest[n:]
 		return n, Data
 	}
@@ -254,6 +292,7 @@ func (e *Engine) Read(id uint64, dst []byte) (int, int) {
 			}
 		}
 		n := copy(dst, c.data)
+		r.buffered.Add(-int64(n))
 		r.rest = c.data[n:]
 		if n > 0 {
 			return n, Data

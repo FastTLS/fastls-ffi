@@ -3,6 +3,7 @@ import base64
 from contextlib import contextmanager, asynccontextmanager
 import ctypes
 import json
+from pathlib import Path
 import threading
 import time
 
@@ -83,8 +84,11 @@ def _collect(chunks):
 
 class Session:
     """Default configuration and request ownership; no connection pool yet."""
-    def __init__(self, *, profile="chrome/156/windows", headers=None, timeout=30, library=None):
+    def __init__(self, *, profile="chrome/156/windows", headers=None, timeout=30, library=None, ca_file=None):
         self.profile, self.headers, self.timeout = profile, dict(headers or {}), timeout
+        self._ca_pem = Path(ca_file).read_text(encoding="utf-8") if ca_file is not None else None
+        if self._ca_pem is not None and not self._ca_pem.strip():
+            raise ValueError("ca_file is empty")
         self._native = Native(library)
         self._handles = set()
         self._lock = threading.Lock()
@@ -92,6 +96,11 @@ class Session:
 
     def list_profiles(self):
         return self._native.call("fastls_profiles")
+
+    def stats(self):
+        if not hasattr(self._native.lib, "fastls_stats"):
+            raise FastlsError("runtime statistics require a newer Fastls library")
+        return self._native.call("fastls_stats")
 
     def _begin(self, method, url, *, profile=None, headers=None, data=None, timeout=None, allow_redirects=True):
         # Merge headers case-insensitively so request overrides win.
@@ -104,6 +113,8 @@ class Session:
             raise ValueError("timeout must be 0..86400 seconds, excluding zero")
         request = dict(url=url, method=method, profile=self.profile if profile is None else profile,
                        headers=merged, timeout_ms=max(1, int(seconds * 1000)), disable_redirect=not allow_redirects)
+        if self._ca_pem is not None:
+            request["ca_pem"] = self._ca_pem
         if isinstance(data, bytes):
             request["body_base64"] = base64.b64encode(data).decode("ascii")
         elif isinstance(data, str):

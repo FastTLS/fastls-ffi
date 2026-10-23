@@ -93,6 +93,7 @@ jobs:
       FASTLS_CI_RACE: ${{ matrix.race }}
       FASTLS_CI_TARGET: ${{ matrix.target }}
       FASTLS_FULL_FHTTP_TESTS: ${{ inputs.full_fhttp_tests || false }}
+      FASTLS_STABILITY_SECONDS: '30'
     defaults:
       run:
         working-directory: workspace/fastls-ffi

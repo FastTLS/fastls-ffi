@@ -34,6 +34,8 @@ class Native:
             "fastls_cancel": [C.c_uint64],
             "fastls_close": [C.c_uint64],
         }
+        if hasattr(self.lib, "fastls_stats"):
+            signatures["fastls_stats"] = []
         for name, args in signatures.items():
             fn = getattr(self.lib, name)
             fn.argtypes, fn.restype = args, C.c_void_p

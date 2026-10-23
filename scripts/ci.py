@@ -40,11 +40,12 @@ def resolve():
 
 def preflight(env):
     capabilities = {
-        "fastls/index.go": ("DoContext(", "VerifyTLS"),
+        "fastls/index.go": ("DoContext(", "VerifyTLS", "TLSRootCAs"),
         "fastls/profile/go.mod": ("github.com/FastTLS/fastls/profile",),
         "imitate/go.mod": ("github.com/FastTLS/imitate",),
         "fhttp/go.mod": ("github.com/FastTLS/fhttp",),
         "fhttp/http2/explicit_settings_test.go": ("func TestExplicitZeroDoesNotSelectNavigatorDefaults", "func TestExplicitEmptySettings"),
+        "fhttp/http2/receive_window_test.go": ("func TestReceiveWindowMatchesWire",),
     }
     for relative, markers in capabilities.items():
         path = ROOT.parent / relative
@@ -98,17 +99,21 @@ def run():
     try:
         execute("build", [sys.executable, "scripts/build.py", "--local"])
         env["GOWORK"] = str(ROOT / "go.work")
+        execute("fixture-build", ["go", "build", "-o", "build/ffi-fixture.exe" if os.name == "nt" else "build/ffi-fixture", "./cmd/ffi-fixture"])
         execute("dependency-gate-tests", [sys.executable, "tests/test_ci.py"])
         execute("core-bridge-python", [sys.executable, "scripts/check.py"])
+        execute("stability-source", [sys.executable, "tests/test_stability.py"])
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
-        execute("fhttp-contract", ["go", "test", "./http2", "-run", "^(TestExplicitZeroDoesNotSelectNavigatorDefaults|TestExplicitEmptySettings|TestConnectionSettings)$", "-v"], ROOT.parent / "fhttp")
+        execute("fhttp-contract", ["go", "test", "./http2", "-run", "^(TestExplicitZeroDoesNotSelectNavigatorDefaults|TestExplicitEmptySettings|TestConnectionSettings|TestReceiveWindow.*)$", "-v"], ROOT.parent / "fhttp")
         execute("fhttp-vet", ["go", "vet", "./http2"], ROOT.parent / "fhttp")
         if env.get("FASTLS_CI_RACE", "").lower() == "true":
             execute("race-bridge", ["go", "test", "-race", "./internal/bridge"])
             execute("race-core", ["go", "test", "-race", "./..."], ROOT.parent / "fastls")
+            execute("race-fhttp-window", ["go", "test", "-race", "./http2", "-run", "^TestReceiveWindow"], ROOT.parent / "fhttp")
         execute("wheel-build", [sys.executable, "-m", "pip", "wheel", "./python", "--no-deps", "-w", "dist"])
         execute("wheel-tests", [sys.executable, "scripts/test_wheel.py"])
+        execute("stability-wheel", [sys.executable, "scripts/test_wheel.py", "--stability"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")
@@ -120,6 +125,9 @@ def run():
         catalog = json.loads(execute("c-execute", [str(executable)], command_env=runtime_env))
         if not catalog.get("ok") or "chrome/156/windows" not in catalog["result"]:
             raise RuntimeError("C consumer did not receive the expected profile catalog")
+        if env.get("FASTLS_CI_RACE", "").lower() == "true":
+            soak_env = dict(env, FASTLS_STABILITY_SECONDS="300", FASTLS_TEST_LABEL="extended")
+            execute("extended-soak", [sys.executable, "tests/test_stability.py", "Stability.test_soak_and_resource_recovery"], command_env=soak_env)
         if env.get("FASTLS_FULL_FHTTP_TESTS", "").lower() == "true":
             execute("fhttp-full-diagnostic", ["go", "test", "./http2", "-timeout", "5m"], ROOT.parent / "fhttp")
         success = True

@@ -74,6 +74,10 @@ func TestBinaryAndStableEOF(t *testing.T) {
 	if _, code := e.Read(id, b); code != EOF {
 		t.Fatalf("EOF not stable: %d", code)
 	}
+	e.Cancel(id)
+	if _, code := e.Read(id, b); code != EOF {
+		t.Fatalf("observed EOF changed after cancel: %d", code)
+	}
 	if info, _ := e.Info(id); info.State != "eof" {
 		t.Fatalf("EOF info: %+v", info)
 	}
