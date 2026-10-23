@@ -193,6 +193,13 @@ class Upload(FixtureCase):
             self.assertEqual(response.status_code, 307)
             response = session.post(self.fixture["https2"] + "/redirect-code?code=302", data=(SLAB for _ in range(128)))
             self.assertEqual(response.json()["method"], "GET")
+        async def run():
+            async def source():
+                while True: yield SLAB
+            async with self.session(async_=True) as session:
+                response = await session.post(self.fixture["https2"] + "/redirect-code?code=302", data=source())
+                self.assertEqual(response.json()["method"], "GET")
+        asyncio.run(run())
 
     def test_invalid_chunks_headers_and_async_in_sync(self):
         with self.session() as session:
