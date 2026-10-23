@@ -40,7 +40,7 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 
 2026-10-23经用户授权，已将相关实现推送到三个上游的v2开发分支，原main和旧标签不变。ci/dependencies.json固定以下审阅提交：
 
-- fastls：4e40ea6521d9b5c0d8cef721b770b4063b0ebde6。
+- fastls：632aa5fca49db2a7306eb99c2305151e808e4972。
 - fhttp：98f4d35f1de6f93f3aa53cfaf33ae090407595b9。
 - imitate：28b32d452256e3acbdb2e904869e5c4331bf0177。
 
@@ -84,6 +84,8 @@ CI脚本核对Go目标与runner架构一致；跨平台二进制必须在相应r
 流式解码与分层超时在源码与wheel各增加15项验收，包含独立压缩向量、64MiB解码及SHA256、截断/校验和、原始视图、大小边界、每跳超时及HTTP2流隔离。核心解码与定时器回归纳入race；见[STREAMING_TIMEOUTS.md](STREAMING_TIMEOUTS.md)。
 
 流式上传另增加源码/wheel各16项验收，覆盖64MiB H1/H2、异步生产者、背压、取消、提前响应及write停顿预算；见[STREAMING_UPLOAD.md](STREAMING_UPLOAD.md)。
+
+HTTP/2全双工另增加源码/wheel各13项验收，覆盖上传前首条响应、64MiB双向校验、半关闭、独立读写预算、慢消费者、生产者异常及取消清理；核心生命周期回归纳入race，见[DUPLEX.md](DUPLEX.md)。
 
 ## 上游完整测试的范围
 

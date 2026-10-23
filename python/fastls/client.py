@@ -19,6 +19,23 @@ POLL_INTERVAL = max(0.01, 2 * time.get_clock_info("monotonic").resolution)
 MAX_BUFFERED_BODY = 32 * 1024 * 1024
 
 
+def _cancel_task(task):
+    if task.done() or getattr(task, "_fastls_cancel_requested", False):
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is task.get_loop():
+        # Mark cancellation before closing the native handle. A queued producer
+        # must not get another turn and use a handle that was just released.
+        # Track our request explicitly for Python 3.10, before Task.cancelling().
+        task._fastls_cancel_requested = True
+        task.cancel()
+    else:
+        task.get_loop().call_soon_threadsafe(_cancel_task, task)
+
+
 class Response:
     def __init__(self, owner, handle, info):
         self._owner, self._handle = owner, handle
@@ -101,6 +118,7 @@ class Session:
             raise ValueError("ca_file is empty")
         self._native = Native(library)
         self._handles = set()
+        self._producers = {}
         self._lock = threading.Lock()
         self._closed = False
         if not hasattr(self._native.lib, "fastls_features") or not {"stream_decode", "phase_timeouts"}.issubset(self._native.call("fastls_features")):
@@ -129,7 +147,11 @@ class Session:
         return self._native.call("fastls_stats")
 
     def _begin(self, method, url, *, profile=None, headers=None, data=None, timeout=None, allow_redirects=True,
-               decode_content=None, max_decoded_bytes=None):
+               decode_content=None, max_decoded_bytes=None, duplex=False):
+        if not isinstance(duplex, bool):
+            raise TypeError("duplex must be a boolean")
+        if duplex and "duplex_h2" not in self._native.call("fastls_features"):
+            raise FastlsError("HTTP/2 duplex requires a newer Fastls native library")
         # Merge headers case-insensitively so request overrides win.
         merged = {k.lower(): v for k, v in self.headers.items()}
         merged.update({k.lower(): v for k, v in (headers or {}).items()})
@@ -146,15 +168,17 @@ class Session:
         if isinstance(maximum, bool) or not isinstance(maximum, int) or not 1 <= maximum <= 1 << 40:
             raise ValueError("max_decoded_bytes must be 1..1099511627776")
         request = dict(url=url, method=method, profile=self.profile if profile is None else profile,
-                       session=self._session, headers=merged, disable_redirect=not allow_redirects,
+                       session=self._session, headers=merged, disable_redirect=duplex or not allow_redirects,
                        decode_content=decode, max_decoded_bytes=maximum, **limit.native_fields())
         if self._ca_pem is not None:
             request["ca_pem"] = self._ca_pem
-        streaming = is_stream(data)
+        streaming = duplex or is_stream(data)
         if streaming:
             if "stream_upload" not in self._native.call("fastls_features"):
                 raise FastlsError("stream upload requires a newer Fastls native library")
             request["stream_body"] = True
+            if duplex:
+                request["duplex"] = True
         elif isinstance(data, bytes):
             request["body_base64"] = base64.b64encode(data).decode("ascii")
         elif isinstance(data, str):
@@ -171,6 +195,9 @@ class Session:
 
     def _close_handle(self, handle):
         with self._lock:
+            producer = self._producers.pop(handle, None)
+            if producer is not None:
+                _cancel_task(producer)
             if handle in self._handles:
                 self._native.call("fastls_close", handle)
                 self._handles.remove(handle)
@@ -182,6 +209,8 @@ class Session:
         return info
 
     def _open(self, method, url, **kwargs):
+        if kwargs.get("duplex"):
+            raise TypeError("use Session.duplex() for synchronous manual send/receive")
         data = kwargs.get("data")
         if hasattr(data, "__aiter__"):
             raise TypeError("async upload iterators require AsyncSession")
@@ -220,6 +249,19 @@ class Session:
                     raise
 
     @contextmanager
+    def duplex(self, method, url, **kwargs):
+        """Manual synchronous H2 exchange; the caller controls send/receive order."""
+        if "data" in kwargs or "duplex" in kwargs:
+            raise TypeError("Session.duplex uses send() and finish_upload(), not data")
+        from .duplex import DuplexExchange
+        handle = self._begin(method, url, duplex=True, **kwargs)
+        exchange = DuplexExchange(self, handle)
+        try:
+            yield exchange
+        finally:
+            exchange.close()
+
+    @contextmanager
     def stream(self, method, url, **kwargs):
         response = self._open(method, url, **kwargs)
         try:
@@ -243,6 +285,9 @@ class Session:
             if self._closed:
                 return
             self._closed = True
+            for producer in self._producers.values():
+                _cancel_task(producer)
+            self._producers.clear()
             for handle in list(self._handles):
                 self._native.call("fastls_close", handle)
                 self._handles.remove(handle)
@@ -256,22 +301,40 @@ class Session:
 
 
 class AsyncResponse(Response):
+    def __init__(self, owner, handle, info, producer=None):
+        super().__init__(owner, handle, info)
+        self._producer = producer
+
+    def _check_upload(self):
+        if self._producer is not None and self._producer.done():
+            if not self._producer.cancelled():
+                self._producer.result()
+
+    async def wait_upload(self):
+        """Wait for upload EOF acceptance; consume responses concurrently to avoid backpressure."""
+        if self._producer is not None:
+            if await asyncio.shield(self._producer) is not True:
+                raise FastlsError("upload ended before EOF was accepted")
+
     async def aiter_bytes(self, chunk_size=65536):
         if not 1 <= chunk_size <= 1024 * 1024:
             raise ValueError("chunk_size must be 1..1048576")
         buffer = ctypes.create_string_buffer(chunk_size)
         try:
             while True:
+                self._check_upload()
                 code, data = self._read(buffer)
                 if code == 0:
                     yield data
                     await asyncio.sleep(0)  # Fairness even when a fast stream is ready.
                 elif code == 2:
+                    if self._producer is not None:
+                        await self.aclose()
                     return
                 else:
                     await asyncio.sleep(POLL_INTERVAL)
         except BaseException:
-            self.close()
+            await self.aclose()
             raise
 
     async def aread(self):
@@ -295,6 +358,16 @@ class AsyncResponse(Response):
 
     async def aclose(self):
         self.close()
+        if self._producer is not None:
+            results = await asyncio.gather(self._producer, return_exceptions=True)
+            error = results[0]
+            if isinstance(error, BaseException) and not isinstance(error, asyncio.CancelledError):
+                raise error
+
+    def cancel(self):
+        super().cancel()
+        if self._producer is not None:
+            _cancel_task(self._producer)
 
     async def __aenter__(self):
         return self
@@ -304,46 +377,73 @@ class AsyncResponse(Response):
 
 
 class AsyncSession(Session):
-    async def _upload(self, handle, data):
+    def _upload_step(self, handle, chunk, *, end=False, duplex=False):
+        with self._lock:
+            if handle not in self._handles:
+                raise asyncio.CancelledError
+            info = self._info(handle)
+            if info["state"] != "pending" and not (duplex and info["state"] == "headers" and info["status"] < 300):
+                return 2
+            return self._native.write(handle, chunk, end=end)
+
+    async def _upload(self, handle, data, duplex=False):
         source = async_chunks(data)
         try:
             async for chunk in source:
                 while True:
-                    if self._info(handle)["state"] != "pending":
-                        return
-                    code = self._native.write(handle, chunk)
+                    code = self._upload_step(handle, chunk, duplex=duplex)
                     if code == 2:
                         return
                     if code == 0:
                         break
                     await asyncio.sleep(POLL_INTERVAL)
                 await asyncio.sleep(0)
-            while self._info(handle)["state"] == "pending":
-                if self._native.write(handle, b"", end=True) == 0:
+            while True:
+                code = self._upload_step(handle, b"", end=True, duplex=duplex)
+                if code == 2:
+                    return
+                if code == 0:
                     return True
                 await asyncio.sleep(POLL_INTERVAL)
         finally:
             await source.aclose()
 
     async def _aopen(self, method, url, **kwargs):
+        duplex = kwargs.get("duplex", False)
         handle = self._begin(method, url, **kwargs)
-        producer = asyncio.create_task(self._upload(handle, kwargs["data"])) if is_stream(kwargs.get("data")) else None
+        data = kwargs.get("data")
+        producer = asyncio.create_task(self._upload(handle, b"" if data is None else data, duplex=duplex)) if duplex or is_stream(data) else None
+        if duplex:
+            self._producers[handle] = producer
+            def completed(task):
+                if not task.cancelled() and task.exception() is not None:
+                    # Wake a blocked native reader; retain the Python exception.
+                    with self._lock:
+                        if handle in self._handles:
+                            self._native.call("fastls_cancel", handle)
+            producer.add_done_callback(completed)
+        transferred = False
         try:
             while True:
                 if producer is not None and producer.done():
                     producer.result()
                 info = self._info(handle)
                 if info["state"] != "pending":
-                    if producer is not None and info["status"] < 300 and not info.get("upload_discarded") and (not producer.done() or producer.result() is not True):
+                    if not duplex and producer is not None and info["status"] < 300 and not info.get("upload_discarded") and (not producer.done() or producer.result() is not True):
                         raise FastlsError("server responded before upload finished; duplex streaming is not supported")
+                    if duplex:
+                        if info["status"] >= 300:
+                            _cancel_task(producer)
+                        transferred = True
+                        return AsyncResponse(self, handle, info, producer=producer)
                     return AsyncResponse(self, handle, info)
                 await asyncio.sleep(POLL_INTERVAL)
         except BaseException:
             self._close_handle(handle)
             raise
         finally:
-            if producer is not None:
-                producer.cancel()
+            if producer is not None and not transferred:
+                _cancel_task(producer)
                 try:
                     outcome = (await asyncio.gather(producer, return_exceptions=True))[0]
                     if isinstance(outcome, BaseException) and not isinstance(outcome, asyncio.CancelledError):
@@ -372,7 +472,13 @@ class AsyncSession(Session):
         return await self.request("POST", url, **kwargs)
 
     async def aclose(self):
+        producers = list(self._producers.values())
         self.close()
+        if producers:
+            results = await asyncio.gather(*producers, return_exceptions=True)
+            for result in results:
+                if isinstance(result, BaseException) and not isinstance(result, asyncio.CancelledError):
+                    raise result
 
     async def __aenter__(self):
         return self
