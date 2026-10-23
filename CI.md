@@ -20,6 +20,8 @@ Node.js SDK 新增同一原生矩阵的检查：前五组使用 Node 24，最低
 在已有原生/Python/C 检查通过后执行 `npm ci --prefix node`、`npm test --prefix node` 和
 `npm run test:package --prefix node`。安装包检查在临时项目安装 tarball，重复真实动态库测试并验证 ESM/CJS 包名入口。
 Node 证据保存在 `build/node-*.json`，编译后的 SDK 同原生证据一起上传；失败会使现有汇总检查失败。
+隔离安装检查还会保留实际测试过的 npm tarball、SHA256 文件和 `dist/node-package-info.json`，
+清单记录 npm 包与配套动态库校验值、平台、Node版本和运行提交；Go 动态库仍作为独立产物提供。
 本地已验证 Windows x64 / Node 22.23.4 与 24.18.0；其它平台的远端执行结果以 Actions 为准，配置加入不代表已通过。
 
 构建c-shared动态库及头文件；运行依赖版本门禁测试、核心与桥接Go测试、Python源码SDK集成测试、profile和生成器测试，以及fhttp HTTP2的显式空/零设置与连接设置契约测试、vet检查。

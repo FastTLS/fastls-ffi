@@ -127,3 +127,8 @@ npm run test:package
 重新执行全部测试并检查包名导入和 TypeScript 声明。证据写入仓库 build/node-*.json。
 Windows x64 / Node 22.23.4 和 24.18.0 的源码与隔离安装包各 16 项测试已通过。
 已配置 Linux x64/ARM64、macOS Intel/ARM64 和 Windows x64 的原生 CI，远端结果以实际运行证据为准。
+
+安装包验证检查必需入口、类型声明及文件白名单，防止把开发文件或本机二进制混入通用 npm 包。
+通过后，实际测试过的 tarball、对应 `.sha256` 和 `node-package-info.json` 保存到仓库 `dist/`，
+并随平台 CI artifact 一起保留。清单记录 Node 版本、系统/架构、npm 包及所用动态库的 SHA256；
+CI 运行时还记录提交 SHA。测试前后会核对动态库未被替换。清单用于匹配测试产物，不代表数字签名或公开发布。
