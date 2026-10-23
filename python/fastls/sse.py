@@ -132,10 +132,10 @@ class SSEStream:
             if response.status_code != 200:
                 raise FastlsError(f"SSE requires HTTP 200, received {response.status_code}")
             types = response.headers.get_list("content-type")
-            if len(types) != 1 or types[0].split(";", 1)[0].strip().lower() != "text/event-stream":
+            if len(types) != 1 or types[0].split(";", 1)[0].strip(" \t").lower() != "text/event-stream":
                 raise FastlsError("SSE requires Content-Type text/event-stream")
-            encoding = response.wire_headers.get("content-encoding", "identity").strip().lower()
-            if encoding != "identity" and not response.decoded:
+            encodings = [part.strip().lower() for value in response.wire_headers.get_list("content-encoding") for part in value.split(",")]
+            if any(encoding not in ("", "identity") for encoding in encodings) and not response.decoded:
                 raise FastlsError("SSE requires decoded content; enable decode_content")
 
     @property

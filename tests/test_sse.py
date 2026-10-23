@@ -139,15 +139,20 @@ class SSE(FixtureCase):
 
     def test_gzip_decoding_and_raw_mode_rejection(self):
         with self.session() as session:
-            with session.sse("GET", self.fixture["https2"]+"/sse-vectors?gzip=1") as events:
-                self.assertTrue(events.response.decoded)
-                self.assertEqual(list(events), self.expected())
-            with self.assertRaisesRegex(FastlsError, "decoded"):
-                with session.sse("GET", self.fixture["https2"]+"/sse-vectors?gzip=1", decode_content=False): pass
+            for query in ("gzip=1", "gzip=1&encoding=mixed"):
+                with self.subTest(query=query):
+                    with session.sse("GET", self.fixture["https2"]+"/sse-vectors?"+query) as events:
+                        self.assertTrue(events.response.decoded)
+                        self.assertEqual(list(events), self.expected())
+                    with self.assertRaisesRegex(FastlsError, "decoded"):
+                        with session.sse("GET", self.fixture["https2"]+"/sse-vectors?"+query, decode_content=False): pass
+            for encoding in ("empty", "identity-list"):
+                with session.sse("GET", self.fixture["https2"]+"/sse-vectors?encoding="+encoding) as events:
+                    self.assertEqual(list(events), self.expected())
 
     def test_content_type_status_and_204(self):
         with self.session() as session:
-            for path in ("/sse-bad?type=application/json", "/sse-bad?type=text/event-streaming", "/sse-bad?duplicate=1&type=text/event-stream", "/status?code=503"):
+            for path in ("/sse-bad?type=application/json", "/sse-bad?type=text/event-streaming", "/sse-bad?type=%C2%A0text/event-stream", "/sse-bad?duplicate=1&type=text/event-stream", "/status?code=503"):
                 with self.subTest(path=path), self.assertRaises(FastlsError):
                     with session.sse("GET", self.fixture["https2"]+path): pass
             with session.sse("GET", self.fixture["https2"]+"/status?code=204") as events:

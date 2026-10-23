@@ -102,8 +102,17 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var output io.Writer = w
+		switch r.URL.Query().Get("encoding") {
+		case "empty":
+			w.Header().Set("Content-Encoding", "")
+		case "identity-list":
+			w.Header().Set("Content-Encoding", "identity, identity")
+		}
 		if r.URL.Query().Get("gzip") == "1" {
 			w.Header().Set("Content-Encoding", "gzip")
+			if r.URL.Query().Get("encoding") == "mixed" {
+				w.Header()["Content-Encoding"] = []string{"identity", "gzip"}
+			}
 			z := gzip.NewWriter(w)
 			defer z.Close()
 			output = z
