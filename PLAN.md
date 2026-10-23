@@ -1,6 +1,6 @@
 # Fastls 跨语言封装实施规划
 
-日期：2026-10-23。状态：第一阶段及三轮测试扩展已完成；第二阶段已实现会话/连接池、多值响应头及Cookie管理，解压、分层超时及发布阶段待实施。开发候选，未发布。
+日期：2026-10-23。状态：第一阶段及三轮测试扩展已完成；第二阶段已实现会话/连接池、多值响应头、Cookie、流式解码及分层超时。第三阶段功能和发布阶段待实施。开发候选，未发布。
 
 ## 目标与仓库边界
 
@@ -73,3 +73,7 @@ Windows短定时器提前调度问题已处理，轮询间隔按平台时钟精�
 ## 第二阶段交付：多值头与Cookie
 
 核心Response新增HeaderValues，封装保留旧headers并增加header_values。Python使用大小写不敏感的只读Headers映射，提供get_list与multi_items。每个原生Session共享一份带公共后缀检查的CookieStore，自动处理重定向与发送范围；Python增加URL范围的查询、写入、删除和清空，并可禁用。详见COOKIES_HEADERS.md；Cookie不持久化，也不实现浏览器SameSite上下文或配额淘汰。解压、分层超时及后续阶段仍待实施。
+
+## 第二阶段交付：流式解码与分层预算
+
+核心请求新增惰性流式解码及请求级阶段预算，不对共享连接设置deadline；Python默认解码并保留wire_headers，可关闭解码或指定输出上限。Timeout区分connect/headers/read/total，结构化超时可查询phase。Brotli升级修复截断误判，新增独立向量、64MiB解码、重定向预算与异步隔离验收。详见STREAMING_TIMEOUTS.md；独立上传写入预算、流式上传、完成通知及WebSocket仍属后续范围。

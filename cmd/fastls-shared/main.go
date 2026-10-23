@@ -17,6 +17,13 @@ import (
 
 var engine = bridge.New()
 
+//export fastls_features
+func fastls_features() *C.char {
+	return result(func() (any, error) {
+		return []string{"stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers"}, nil
+	})
+}
+
 //export fastls_session_cookies
 func fastls_session_cookies(handle C.uint64_t, data *C.char, length C.size_t) *C.char {
 	return result(func() (any, error) {

@@ -48,6 +48,8 @@ def preflight(env):
         "fhttp/http2/receive_window_test.go": ("func TestReceiveWindowMatchesWire",),
         "fastls/session.go": ("func NewSession",),
         "fastls/cookie_store.go": ("func NewCookieStore",),
+        "fastls/timeouts.go": ("type Timeouts struct",),
+        "fastls/decode.go": ("func decodeResponse",),
         "fhttp/http2/pooled_dial_context_test.go": ("func TestPooledDialCancellationIsolation",),
     }
     for relative, markers in capabilities.items():
@@ -109,6 +111,7 @@ def run():
         execute("network-source", [sys.executable, "tests/test_network.py"])
         execute("pooling-source", [sys.executable, "tests/test_pooling.py"])
         execute("cookies-source", [sys.executable, "tests/test_cookies.py"])
+        execute("decode-timeouts-source", [sys.executable, "tests/test_decode_timeouts.py"])
         execute("cookiejar", ["go", "test", "./cookiejar"], ROOT.parent / "fhttp")
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
@@ -124,6 +127,7 @@ def run():
         execute("network-wheel", [sys.executable, "scripts/test_wheel.py", "--network"])
         execute("pooling-wheel", [sys.executable, "scripts/test_wheel.py", "--pooling"])
         execute("cookies-wheel", [sys.executable, "scripts/test_wheel.py", "--cookies"])
+        execute("decode-timeouts-wheel", [sys.executable, "scripts/test_wheel.py", "--decode-timeouts"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")

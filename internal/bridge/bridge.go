@@ -36,25 +36,34 @@ const (
 )
 
 type Input struct {
-	Session         uint64            `json:"session,omitempty"`
-	URL             string            `json:"url"`
-	Method          string            `json:"method"`
-	Profile         string            `json:"profile"`
-	Headers         map[string]string `json:"headers"`
-	Body            string            `json:"body"`
-	BodyBase64      *string           `json:"body_base64"`
-	TimeoutMS       int64             `json:"timeout_ms"`
-	DisableRedirect bool              `json:"disable_redirect"`
-	CAPEM           string            `json:"ca_pem"`
+	ConnectTimeoutMS int64             `json:"connect_timeout_ms"`
+	HeadersTimeoutMS int64             `json:"headers_timeout_ms"`
+	ReadTimeoutMS    int64             `json:"read_timeout_ms"`
+	DecodeContent    bool              `json:"decode_content"`
+	MaxDecodedBytes  int64             `json:"max_decoded_bytes"`
+	Session          uint64            `json:"session,omitempty"`
+	URL              string            `json:"url"`
+	Method           string            `json:"method"`
+	Profile          string            `json:"profile"`
+	Headers          map[string]string `json:"headers"`
+	Body             string            `json:"body"`
+	BodyBase64       *string           `json:"body_base64"`
+	TimeoutMS        int64             `json:"timeout_ms"`
+	DisableRedirect  bool              `json:"disable_redirect"`
+	CAPEM            string            `json:"ca_pem"`
 }
 
 type Info struct {
-	State        string              `json:"state"`
-	Status       int                 `json:"status,omitempty"`
-	Headers      map[string]string   `json:"headers,omitempty"`
-	HeaderValues map[string][]string `json:"header_values,omitempty"`
-	Match        profile.Match       `json:"match"`
-	Error        string              `json:"error,omitempty"`
+	WireHeaderValues map[string][]string `json:"wire_header_values,omitempty"`
+	Decoded          bool                `json:"decoded"`
+	ErrorCode        string              `json:"error_code,omitempty"`
+	TimeoutPhase     string              `json:"timeout_phase,omitempty"`
+	State            string              `json:"state"`
+	Status           int                 `json:"status,omitempty"`
+	Headers          map[string]string   `json:"headers,omitempty"`
+	HeaderValues     map[string][]string `json:"header_values,omitempty"`
+	Match            profile.Match       `json:"match"`
+	Error            string              `json:"error,omitempty"`
 }
 
 type chunk struct {
@@ -195,6 +204,14 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 	if in.TimeoutMS < 1 || in.TimeoutMS > 86400000 {
 		return 0, errors.New("timeout_ms must be 1..86400000")
 	}
+	for _, value := range []int64{in.ConnectTimeoutMS, in.HeadersTimeoutMS, in.ReadTimeoutMS} {
+		if value < 0 || value > 86400000 {
+			return 0, errors.New("phase timeout_ms must be 0..86400000")
+		}
+	}
+	if in.MaxDecodedBytes < 0 || in.MaxDecodedBytes > 1<<40 {
+		return 0, errors.New("max_decoded_bytes must be 1..1099511627776 or zero for default")
+	}
 	if in.BodyBase64 != nil {
 		if in.Body != "" {
 			return 0, errors.New("body and body_base64 are mutually exclusive")
@@ -276,8 +293,19 @@ func (r *request) run(in Input, opts fastls.Options) {
 	}()
 	var resp fastls.Response
 	var err error
-	if r.pool != nil {
-		resp, err = r.pool.DoContext(r.ctx, in.URL, fastls.RequestOptions{Headers: in.Headers, Body: in.Body, DisableRedirect: in.DisableRedirect}, strings.ToUpper(in.Method))
+	pool := r.pool
+	if pool == nil && (in.DecodeContent || in.ConnectTimeoutMS > 0 || in.HeadersTimeoutMS > 0 || in.ReadTimeoutMS > 0) {
+		pool, err = fastls.NewSession(opts)
+		if err != nil {
+			r.setError(err)
+			return
+		}
+		defer pool.Close()
+	}
+	if pool != nil {
+		resp, err = pool.DoContext(r.ctx, in.URL, fastls.RequestOptions{Headers: in.Headers, Body: in.Body, DisableRedirect: in.DisableRedirect,
+			DecodeContent: in.DecodeContent, MaxDecodedBytes: in.MaxDecodedBytes,
+			Timeouts: fastls.Timeouts{Connect: time.Duration(in.ConnectTimeoutMS) * time.Millisecond, Headers: time.Duration(in.HeadersTimeoutMS) * time.Millisecond, Read: time.Duration(in.ReadTimeoutMS) * time.Millisecond}}, strings.ToUpper(in.Method))
 	} else {
 		resp, err = fastls.NewClient().DoContext(r.ctx, in.URL, opts, strings.ToUpper(in.Method))
 	}
@@ -295,6 +323,7 @@ func (r *request) run(in Input, opts fastls.Options) {
 	r.mu.Lock()
 	r.info.State, r.info.Status, r.info.Headers = "headers", resp.Status, resp.Headers
 	r.info.HeaderValues = resp.HeaderValues
+	r.info.WireHeaderValues, r.info.Decoded = resp.WireHeaderValues, resp.Decoded
 	r.mu.Unlock()
 	for {
 		b := make([]byte, ChunkSize)
@@ -318,7 +347,27 @@ func (r *request) run(in Input, opts fastls.Options) {
 func (r *request) setError(err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.setErrorLocked(err)
+}
+
+func (r *request) setErrorLocked(err error) {
+	if r.info.State == "error" {
+		return
+	}
 	r.info.State, r.info.Error = "error", err.Error()
+	r.info.ErrorCode, r.info.TimeoutPhase = "request_error", ""
+	var phase *fastls.TimeoutError
+	var decoding *fastls.DecodeError
+	switch {
+	case errors.As(err, &phase):
+		r.info.ErrorCode, r.info.TimeoutPhase = "timeout", phase.Phase
+	case errors.Is(err, context.DeadlineExceeded):
+		r.info.ErrorCode, r.info.TimeoutPhase = "timeout", "total"
+	case errors.Is(err, context.Canceled):
+		r.info.ErrorCode = "cancelled"
+	case errors.As(err, &decoding):
+		r.info.ErrorCode = "decode_error"
+	}
 }
 
 func (e *Engine) get(id uint64) (*request, error) {
@@ -339,8 +388,8 @@ func (e *Engine) Info(id uint64) (Info, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	// Preserve already-consumed EOF; otherwise cancellation/timeout is terminal.
-	if r.info.State != "eof" && r.ctx.Err() != nil {
-		r.info.State, r.info.Error = "error", r.ctx.Err().Error()
+	if r.info.State != "eof" && r.info.State != "error" && r.ctx.Err() != nil {
+		r.setErrorLocked(r.ctx.Err())
 	}
 	return r.info, nil
 }

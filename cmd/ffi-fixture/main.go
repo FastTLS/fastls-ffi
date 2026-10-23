@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -77,6 +78,91 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Test-Protocol", r.Proto)
 	w.Header().Set("X-Test-Connection", fmt.Sprint(r.Context().Value(connectionKey{})))
 	switch r.URL.Path {
+	case "/delay-redirect":
+		count, _ := strconv.Atoi(r.URL.Query().Get("n"))
+		if count < 0 || count > 4 {
+			http.Error(w, "count", 400)
+			return
+		}
+		select {
+		case <-time.After(120 * time.Millisecond):
+		case <-r.Context().Done():
+			return
+		}
+		if count > 0 {
+			http.Redirect(w, r, "/delay-redirect?n="+strconv.Itoa(count-1), 302)
+		} else {
+			io.WriteString(w, "done")
+		}
+	case "/encoded-echo":
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "body", 400)
+			return
+		}
+		w.Header().Set("Content-Encoding", r.URL.Query().Get("encoding"))
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+		w.Write(data)
+	case "/encoded-wait":
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(200)
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	case "/gzip-hold":
+		w.Header().Set("Content-Encoding", "gzip")
+		z := gzip.NewWriter(w)
+		defer z.Close()
+		io.WriteString(z, "first")
+		z.Flush()
+		w.(http.Flusher).Flush()
+		select {
+		case <-o.release:
+			io.WriteString(z, "last!")
+		case <-r.Context().Done():
+		}
+	case "/gzip-stream":
+		size, _ := strconv.ParseInt(r.URL.Query().Get("n"), 10, 64)
+		if size <= 0 || size > 128<<20 {
+			http.Error(w, "invalid size", 400)
+			return
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		z := gzip.NewWriter(w)
+		defer z.Close()
+		slab := bytes.Repeat([]byte{0, 1, 128, 255}, 16384)
+		for sent := int64(0); sent < size; {
+			part := slab
+			if int64(len(part)) > size-sent {
+				part = part[:size-sent]
+			}
+			n, err := z.Write(part)
+			sent += int64(n)
+			f.mu.Lock()
+			o.Bytes = sent
+			f.mu.Unlock()
+			if err != nil {
+				return
+			}
+			if sent == int64(len(part)) {
+				z.Flush()
+				w.(http.Flusher).Flush()
+			}
+		}
+	case "/drip":
+		w.Header().Set("Content-Length", "30")
+		for i := 0; i < 6; i++ {
+			if i > 0 {
+				select {
+				case <-time.After(100 * time.Millisecond):
+				case <-r.Context().Done():
+					return
+				}
+			}
+			if _, err := io.WriteString(w, "abcde"); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		}
 	case "/cookie-set":
 		name, value := r.URL.Query().Get("name"), r.URL.Query().Get("value")
 		if name == "" {
