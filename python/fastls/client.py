@@ -20,7 +20,7 @@ MAX_BUFFERED_BODY = 32 * 1024 * 1024
 
 
 def _cancel_task(task):
-    if task.done() or task.cancelling():
+    if task.done() or getattr(task, "_fastls_cancel_requested", False):
         return
     try:
         loop = asyncio.get_running_loop()
@@ -29,6 +29,8 @@ def _cancel_task(task):
     if loop is task.get_loop():
         # Mark cancellation before closing the native handle. A queued producer
         # must not get another turn and use a handle that was just released.
+        # Track our request explicitly for Python 3.10, before Task.cancelling().
+        task._fastls_cancel_requested = True
         task.cancel()
     else:
         task.get_loop().call_soon_threadsafe(_cancel_task, task)
@@ -431,7 +433,7 @@ class AsyncSession(Session):
                         raise FastlsError("server responded before upload finished; duplex streaming is not supported")
                     if duplex:
                         if info["status"] >= 300:
-                            producer.cancel()
+                            _cancel_task(producer)
                         transferred = True
                         return AsyncResponse(self, handle, info, producer=producer)
                     return AsyncResponse(self, handle, info)
@@ -441,7 +443,7 @@ class AsyncSession(Session):
             raise
         finally:
             if producer is not None and not transferred:
-                producer.cancel()
+                _cancel_task(producer)
                 try:
                     outcome = (await asyncio.gather(producer, return_exceptions=True))[0]
                     if isinstance(outcome, BaseException) and not isinstance(outcome, asyncio.CancelledError):
