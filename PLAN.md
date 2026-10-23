@@ -6,8 +6,9 @@
 提供 Session、Promise 请求、单消费者 AsyncIterable 正文、AbortSignal、多值头、原生 Cookie 和连接池管理。
 无损 JSON 和 bigint 保护 uint64 句柄精度；C 字符串逐次释放，动态库进程级持有。
 共享定时器和受限立即调用处理非阻塞轮询，正常 EOF、取消、异常与提前退出均回收句柄。
-Node 首版覆盖总超时，不提供分层超时或自动解压选项；后续功能独立推进。
-本地 Windows x64 / Node 22.23.4 与24.18.0 均通过源码及隔离安装包各16项真实动态库测试，并验证两种模块入口的类型声明。
+Node 0.2默认流式解码，提供wireHeaders/decoded、结构化阶段超时、字节迭代器/Readable/AbortSignal工厂上传及大正文自动流式化。
+七组Python行为测试的79个场景已有对应Node用例，加原有16项共95项；持续测试及语言差异见node/PARITY.md。
+Node 0.2源码及隔离安装包使用相同95项套件和ESM/CommonJS类型检查，按提交保存逐项验收证据。
 已配置跨平台 Node 24 和最低 Node 22 CI；npm 预编译 Go 库分发与公开发布仍待实施。
 用法和范围见 [node/README.md](node/README.md)。
 

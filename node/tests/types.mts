@@ -7,6 +7,14 @@ async function consume(session: Session): Promise<void> {
   const stream: StreamResponse = await session.stream('GET', 'https://example.com');
   for await (const chunk of stream.body) { const bytes: Buffer = chunk; void bytes; }
   session.cookies.set('value', value, { url: 'https://example.com', httpOnly: true });
+  const decoded: boolean = response.decoded;
+  const wire: string | undefined = response.wireHeaders.get('content-encoding');
+  session.post('https://example.com', {
+    timeoutMs: { total: 30000, connect: 1000, write: 1000, headers: 2000, read: 5000 },
+    decodeContent: false, maxDecodedBytes: 1024,
+    body: async function* (signal) { signal.throwIfAborted(); yield Buffer.from('bytes'); },
+  });
+  void decoded; void wire;
   // @ts-expect-error Native handles and per-request ownership are internal.
   session.handle;
   // @ts-expect-error Header values must be strings.

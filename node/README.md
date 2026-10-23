@@ -4,6 +4,8 @@
 通过 Koffi 复用 fastls-ffi 的 C ABI v1，无需 Python 进程或 RPC 服务。
 当前仅支持 Node.js 主线程；暂不支持 worker_threads、Electron、Bun 或浏览器。
 
+0.2 开发版本对齐 Python 的解压、分层超时和上传能力：默认解压响应，大于512 KiB的字符串/字节自动流式上传。新版SDK要求带 stream_decode、phase_timeouts、stream_upload 和 write_timeout 的动态库。
+
 ## 本地构建与使用
 
 先按上级 README 构建 Go 动态库，再在本目录执行：
@@ -44,10 +46,10 @@ try {
 
 - `await session.request(method, url, options)`，以及 `get`、`post`，返回完整缓存的 Response。
 - 请求选项：`profile`、`headers`、`body`、`timeoutMs`、`allowRedirects`、`signal`。
-- `body` 为字符串、Buffer 或 Uint8Array，完整上传上限 512 KiB。
-- `timeoutMs` 为 1..86400000 的整数，默认 30000，覆盖发起请求到正文消费完成。
+- `body` 为字符串、Buffer、Uint8Array、同步/异步字节迭代器、Node Readable 或接收 AbortSignal 的生产者工厂。超过512 KiB的字符串/字节自动使用上传通道。
+- `timeoutMs` 为毫秒整数或 `{ total, connect?, write?, headers?, read? }`，每项范围1..86400000；默认总时限30000。请求级数字覆盖会清除会话分层限制，结构化覆盖替换整份策略。
 - 会话默认头和请求头按大小写不敏感方式合并，请求值优先，包括空字符串。
-- `Response` 提供 `status`、`ok`、`headers`、`match`、`content: Buffer`，以及同步 `text()` / `json()`。
+- `Response` 提供 `status`、`ok`、`headers`、`wireHeaders`、`decoded`、`match`、`content: Buffer`，以及同步 `text()` / `json()`。
 - 4xx/5xx 仍返回 Response；参数、网络、TLS 和原生错误抛出异常。
 - `Headers.get(name)` 返回第一个值或 undefined；`getAll(name)` 保留所有重复值，不按逗号拆分。
   `entries()` / 默认迭代返回每个字段的首值，`multiItems()` 返回全部字段值。
@@ -75,11 +77,13 @@ try {
 可通过 `Readable.from(response.body, { objectMode: false })` 接入 Node 流并使用 `pipeline()`。
 
 `StreamResponse.read()` / `text()` / `json()` 异步读取完整正文，上限同普通请求的 32 MiB；更大响应必须逐块消费。
-响应体保持底层库返回的编码，本 SDK 不主动解压；`text()` 按 UTF-8 解码，替换非法字节。
+默认在Go侧逐块解码gzip、deflate、br及zstd，`decodeContent: false`取得原始字节；`text()` 按 UTF-8 解码，替换非法字节。
+解码时headers移除Content-Encoding/Content-Length，wireHeaders保留线上字段；decoded表示解码视图。
+`maxDecodedBytes`默认256 MiB，范围1..1 TiB，只限制解码输出；普通缓存32 MiB限制仍独立适用。未知编码、校验失败、截断或超限抛出FastlsDecodeError。
 
 正常 EOF、读取异常或提前 `break` 会关闭请求。尚未开始迭代的响应需要显式 `close()`，
 也可调用 `cancel()` 或中止 AbortSignal。AbortSignal 在等待响应头和正文读取期间都有效，
-抛出 `AbortError`（`code: 'ABORT_ERR'`，`cause` 保留 signal.reason）。原生超时当前抛出 FastlsError。
+抛出 `AbortError`（`code: 'ABORT_ERR'`，`cause` 保留 signal.reason）。超时抛出 FastlsTimeoutError，其phase为connect/write/headers/read/total。解码错误、超时错误和AbortError均继承FastlsError。
 `session.close()` 取消并关闭所有活动请求，重复关闭无害；不依赖 GC 清理资源。
 
 ## 连接池、Cookie 和证书
@@ -109,9 +113,9 @@ session.cookies.clear();
 这不是完成通知模型，不承诺固定吞吐量或延迟；初始化、原生控制调用及 JSON/Buffer 转换仍在主线程执行。
 
 句柄使用 bigint，无损解析和序列化 ABI JSON 数字；返回的 C 字符串逐次由 fastls_free 释放。
-加载时检查 ABI 版本和所需符号，动态库保持进程级引用，不主动卸载。
+加载时检查ABI及所需能力，并使用系统级固定加载（Windows PIN / POSIX NODELETE），避免Node环境清理时卸载仍有Go后台线程的动态库。
 原生限制仍适用：最多 64 会话、256 未关闭请求，每会话最多 16 种传输配置。
-首版不提供流式上传、代理、WebSocket、自动解压或分层超时选项。
+不提供代理、WebSocket或完成通知。
 
 ## 验证
 
@@ -125,9 +129,13 @@ npm run test:package
 测试使用真实动态库和本地靶场，覆盖 H1/H2、证书、连接池、Cookie、多值头、二进制、取消、超时、
 异常正文、64 MiB 下载、32 MiB 缓存限制和 128 路并发。安装包测试在临时项目安装 npm tarball，
 重新执行全部测试并检查包名导入和 TypeScript 声明。证据写入仓库 build/node-*.json。
-Windows x64 / Node 22.23.4 和 24.18.0 的源码与隔离安装包各 16 项测试已通过。
-已配置 Linux x64/ARM64、macOS Intel/ARM64 和 Windows x64 的原生 CI，远端结果以实际运行证据为准。
+新增79个Python场景的对应项，连同原有16项，共95项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
+持续测试默认30秒，检查RSS、操作系统句柄/描述符、Go堆和goroutine回收。Linux当前Go/Node组合另跑300秒；设置 `FASTLS_NODE_SOAK_SECONDS=300` 后执行 `npm run test:soak` 可复现。
 
+## 与Python的语言差异
+
+Node统一使用Promise API，不提供Python同步Session或共享同步会话多线程调用；对应场景采用同步迭代器输入和96路Promise请求验证，不宣称线程安全。Node Readable按自身流的生命周期管理文件句柄，区别于Python保留调用方文件对象。
+JavaScript无法强行中断任意Promise：取消会立即释放原生请求，并请求迭代器return/destroy；生产者正在等待的自定义I/O必须支持取消，才能保证其finally及时执行。推荐使用接收AbortSignal的上传工厂。Python的协程强制取消场景对应为工厂信号取消，报告中明确标记适配。
 安装包验证检查必需入口、类型声明及文件白名单，防止把开发文件或本机二进制混入通用 npm 包。
 通过后，实际测试过的 tarball、对应 `.sha256` 和 `node-package-info.json` 保存到仓库 `dist/`，
 并随平台 CI artifact 一起保留。清单记录 Node 版本、系统/架构、npm 包及所用动态库的 SHA256；

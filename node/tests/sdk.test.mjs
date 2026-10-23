@@ -137,7 +137,7 @@ check('binary upload/download, Unicode and request validation', async t => {
   await assert.rejects(s.get(`${fixture.http}/headers`, { timeoutMs: 0 }), /timeoutMs/);
   await assert.rejects(s.get(`${fixture.http}/headers`, { headers: { X: 123 } }), /strings/);
   await assert.rejects(s.get(`${fixture.http}/headers`, { signal: {} }), /AbortSignal/);
-  await assert.rejects(s.post(`${fixture.http}/echo`, { body: Buffer.alloc(512 * 1024 + 1) }), /512KiB/);
+  assert.equal((await s.post(`${fixture.http}/upload`, { body: Buffer.alloc(512 * 1024 + 1) })).json().bytes, 512 * 1024 + 1);
   await assert.rejects(s.get('http://user:secret@localhost/'), /credentials/);
 });
 

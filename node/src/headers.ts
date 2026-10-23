@@ -7,7 +7,9 @@ export class Headers implements Iterable<[string, string]> {
     for (const [name, list] of Object.entries(values)) this.#values.set(name.toLowerCase(), [...list]);
   }
 
-  get(name: string): string | undefined { return this.#values.get(name.toLowerCase())?.[0]; }
+  get(name: string, fallback: string): string;
+  get(name: string): string | undefined;
+  get(name: string, fallback?: string): string | undefined { return this.#values.get(name.toLowerCase())?.[0] ?? fallback; }
   getAll(name: string): string[] { return [...(this.#values.get(name.toLowerCase()) ?? [])]; }
   has(name: string): boolean { return this.#values.has(name.toLowerCase()); }
   *entries(): IterableIterator<[string, string]> {

@@ -1,2 +1,2 @@
 import sdk from './index.js';
-export const { Session, Response, StreamResponse, Headers, Cookies, FastlsError, AbortError } = sdk;
+export const { Session, Response, StreamResponse, Headers, Cookies, FastlsError, AbortError, FastlsDecodeError, FastlsTimeoutError } = sdk;

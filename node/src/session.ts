@@ -3,25 +3,31 @@ import { Cookies } from "./cookies.js";
 import { AbortError, FastlsError } from "./errors.js";
 import { Native, asHandle, encodeNativeJSON } from "./native.js";
 import { Response, StreamResponse, Transfer } from "./response.js";
+import { timeoutFields, type Timeout } from "./timeout.js";
+import { isStreamingBody, startUpload, type UploadBody } from "./upload.js";
 
 export interface RequestOptions {
   profile?: string;
   headers?: Record<string, string>;
   /** Total deadline including response body consumption, in milliseconds. */
-  timeoutMs?: number;
+  timeoutMs?: Timeout;
   allowRedirects?: boolean;
-  body?: string | Uint8Array;
+  body?: UploadBody;
+  decodeContent?: boolean;
+  maxDecodedBytes?: number;
   signal?: AbortSignal;
 }
 
 export interface SessionOptions {
   profile?: string;
   headers?: Record<string, string>;
-  timeoutMs?: number;
+  timeoutMs?: Timeout;
   library?: string;
   /** Private CA roots replacing system roots for this session only. */
   caFile?: string;
   cookies?: boolean;
+  decodeContent?: boolean;
+  maxDecodedBytes?: number;
 }
 
 export interface Stats {
@@ -30,16 +36,15 @@ export interface Stats {
   session_pools: number;
   workers: number;
   buffered_body_bytes: number;
+  buffered_upload_bytes: number;
   goroutines: number;
   heap_alloc_bytes: number;
   heap_inuse_bytes: number;
 }
 
-function timeout(value: number): number {
-  if (!Number.isSafeInteger(value) || value < 1 || value > 86400000) {
-    throw new RangeError("timeoutMs must be an integer in 1..86400000");
-  }
-  return value;
+function decoding(decode: boolean, maximum: number): void {
+  if (typeof decode !== "boolean") throw new TypeError("decodeContent must be a boolean");
+  if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > 2 ** 40) throw new RangeError("maxDecodedBytes must be 1..1099511627776");
 }
 
 function mergeHeaders(...sources: (Record<string, string> | undefined)[]): Record<string, string> {
@@ -59,14 +64,19 @@ export class Session {
   private readonly handle: bigint;
   private readonly profile: string;
   private readonly headers: Record<string, string>;
-  private readonly timeoutMs: number;
+  private readonly timeouts: Record<string, number>;
+  private readonly decodeContent: boolean;
+  private readonly maxDecodedBytes: number;
   private readonly caPem?: string;
   private readonly active = new Set<Transfer>();
   private closed = false;
 
   constructor(options: SessionOptions = {}) {
     this.profile = options.profile ?? "chrome/156/windows";
-    this.timeoutMs = timeout(options.timeoutMs ?? 30000);
+    this.timeouts = timeoutFields(options.timeoutMs ?? 30000);
+    this.decodeContent = options.decodeContent ?? true;
+    this.maxDecodedBytes = options.maxDecodedBytes ?? 256 * 1024 * 1024;
+    decoding(this.decodeContent, this.maxDecodedBytes);
     this.headers = mergeHeaders(options.headers);
     if (options.cookies !== undefined && typeof options.cookies !== "boolean") throw new TypeError("cookies must be a boolean");
     this.caPem = options.caFile === undefined ? undefined : readFileSync(options.caFile, "utf8");
@@ -98,27 +108,33 @@ export class Session {
     if (options.signal?.aborted) throw new AbortError(undefined, { cause: options.signal.reason });
     const headers = mergeHeaders(this.headers, options.headers);
     const body = options.body;
-    if (body !== undefined && typeof body !== "string" && !(body instanceof Uint8Array)) {
-      throw new TypeError("body must be a string or Uint8Array");
-    }
-    const bodyBytes = body === undefined ? undefined : Buffer.from(body);
-    if (bodyBytes && bodyBytes.length > 512 * 1024) throw new RangeError("upload exceeds 512KiB");
+    const streaming = isStreamingBody(body);
+    const bodyBytes = streaming || body === undefined ? undefined : Buffer.from(body as string | Uint8Array);
+    const timeouts = options.timeoutMs === undefined ? this.timeouts : timeoutFields(options.timeoutMs);
+    const decodeContent = options.decodeContent ?? this.decodeContent;
+    const maxDecodedBytes = options.maxDecodedBytes ?? this.maxDecodedBytes;
+    decoding(decodeContent, maxDecodedBytes);
     if (options.allowRedirects !== undefined && typeof options.allowRedirects !== "boolean") {
       throw new TypeError("allowRedirects must be a boolean");
     }
+    const started = performance.now();
     const handle = this.native.start({
       session: this.handle, url, method, headers,
       profile: options.profile ?? this.profile,
-      timeout_ms: timeout(options.timeoutMs ?? this.timeoutMs),
+      ...timeouts, decode_content: decodeContent, max_decoded_bytes: maxDecodedBytes,
       disable_redirect: options.allowRedirects === false,
       ca_pem: this.caPem,
       body_base64: bodyBytes?.toString("base64"),
+      stream_body: streaming || undefined,
     });
     const transfer = new Transfer(this.native, handle, () => this.active.delete(transfer), options.signal);
     this.active.add(transfer);
     try {
-      transfer.attachSignal();
-      const info = await transfer.headers();
+      transfer.attachSignal(timeouts.timeout_ms, started);
+      const upload = streaming ? startUpload(transfer, body!) : undefined;
+      let info;
+      try { info = await transfer.headers(); }
+      finally { if (upload) { upload.stop(); await upload.done; } }
       transfer.ensureOpen();
       return new StreamResponse(transfer, info);
     } catch (error) { transfer.close(); throw error; }
@@ -127,7 +143,7 @@ export class Session {
   async request(method: string, url: string, options: RequestOptions = {}): Promise<Response> {
     const stream = await this.stream(method, url, options);
     try {
-      return new Response(stream.status, stream.headers, stream.match, await stream.read());
+      return new Response(stream.status, stream.headers, stream.match, await stream.read(), stream.wireHeaders, stream.decoded);
     } finally { stream.close(); }
   }
   get(url: string, options?: RequestOptions): Promise<Response> { return this.request("GET", url, options); }

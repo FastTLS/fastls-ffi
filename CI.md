@@ -17,12 +17,15 @@ runner标签采用GitHub官方支持的标准runner。具体可用额度由仓�
 ## 每组实际执行
 
 Node.js SDK 新增同一原生矩阵的检查：前五组使用 Node 24，最低版本组使用 Node 22。
+Node 0.2 将七组Python SDK的79个场景映射为对应Node用例，连同原有16项共95项；源码与隔离安装包均执行。
+每组各运行30秒Node资源回收测试；Linux当前Go组合另跑300秒，检查RSS、句柄/描述符、Go堆及goroutine。
+`npm run test:parity`检查Python新增/删除用例是否仍有精确映射；语言差异见node/PARITY.md。
 在已有原生/Python/C 检查通过后执行 `npm ci --prefix node`、`npm test --prefix node` 和
 `npm run test:package --prefix node`。安装包检查在临时项目安装 tarball，重复真实动态库测试并验证 ESM/CJS 包名入口。
 Node 证据保存在 `build/node-*.json`，编译后的 SDK 同原生证据一起上传；失败会使现有汇总检查失败。
 隔离安装检查还会保留实际测试过的 npm tarball、SHA256 文件和 `dist/node-package-info.json`，
 清单记录 npm 包与配套动态库校验值、平台、Node版本和运行提交；Go 动态库仍作为独立产物提供。
-本地已验证 Windows x64 / Node 22.23.4 与 24.18.0；其它平台的远端执行结果以 Actions 为准，配置加入不代表已通过。
+各平台结果以同一提交的Actions退出状态和artifact中的逐项记录为准，映射清单及配置加入不代表已通过。
 
 构建c-shared动态库及头文件；运行依赖版本门禁测试、核心与桥接Go测试、Python源码SDK集成测试、profile和生成器测试，以及fhttp HTTP2的显式空/零设置与连接设置契约测试、vet检查。
 随后构建wheel、从wheel加载SDK重复集成测试、编译并执行独立C调用程序。公网检测站点不作为CI必需依赖，网络请求测试使用本地靶场。
@@ -37,7 +40,7 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 
 2026-10-23经用户授权，已将相关实现推送到三个上游的v2开发分支，原main和旧标签不变。ci/dependencies.json固定以下审阅提交：
 
-- fastls：b906173c1f48fdde8ec411eae38471c6449ccace。
+- fastls：4e40ea6521d9b5c0d8cef721b770b4063b0ebde6。
 - fhttp：98f4d35f1de6f93f3aa53cfaf33ae090407595b9。
 - imitate：28b32d452256e3acbdb2e904869e5c4331bf0177。
 

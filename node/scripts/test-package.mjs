@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { scenarioCount } from './check-parity.mjs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname, basename } from 'node:path';
 
@@ -11,7 +12,7 @@ const temporary = mkdtempSync(resolve(tmpdir(), 'fastls-node-package-'));
 const sha256 = path => createHash('sha256').update(readFileSync(path)).digest('hex');
 function run(args, cwd = root, env = process.env) {
   const processResult = spawnSync(process.execPath, args, {
-    cwd, env, encoding: 'utf8', windowsHide: true, timeout: 180000,
+    cwd, env, encoding: 'utf8', windowsHide: true, timeout: 600000,
   });
   if (processResult.status !== 0) {
     process.stdout.write(processResult.stdout ?? '');
@@ -44,9 +45,15 @@ try {
   run([resolve(root, 'node_modules/typescript/bin/tsc'), '--ignoreConfig', '--noEmit', '--strict',
     '--module', 'NodeNext', '--target', 'ES2022', '--types', 'node',
     '--typeRoots', resolve(root, 'node_modules/@types'), 'types.mts', 'types.cts'], temporary, env);
-  process.stdout.write(run(['--test', '--test-concurrency=1', ...[
-    'native.test.mjs', 'sdk.test.mjs',
+  const evidenceDirectory = resolve(root, '../build');
+  const previous = new Set(readdirSync(evidenceDirectory));
+  process.stdout.write(run(['--expose-gc', '--test', '--test-concurrency=1', ...[
+    'native.test.mjs', 'sdk.test.mjs', 'parity.test.mjs',
   ].map(file => resolve(root, 'tests', file))], temporary, env));
+  const records = readdirSync(evidenceDirectory).filter(file => file.startsWith('node-parity-package-') && file.endsWith('.json') && !previous.has(file));
+  if (records.length !== 1) throw new Error('Missing or ambiguous installed parity evidence');
+  const parity = JSON.parse(readFileSync(resolve(evidenceDirectory, records[0]), 'utf8'));
+  if (parity.cases.length !== scenarioCount || !parity.cases.every(test => test.passed)) throw new Error('Incomplete Python parity suite');
   // Exercise package exports by name, not just by absolute entry filenames.
   process.stdout.write(run(['--input-type=module', '-e',
     "import {Session} from '@fasttls/fastls'; import {createRequire} from 'node:module'; const cjs=createRequire(import.meta.url)('@fasttls/fastls'); if(Session!==cjs.Session)throw Error('entry mismatch'); const s=new Session(); try {if(!s.listProfiles().includes('chrome/156/windows'))throw Error('missing profile')}finally{s.close()}"], temporary, env));
@@ -60,6 +67,7 @@ try {
     package: { name: packed.name, version: packed.version, file: filename, sha256: sha256(resolve(temporary, filename)) },
     native: { file: basename(env.FASTLS_LIBRARY), sha256: nativeHash, abi: 1, embedded: false },
     checks: { installedSuite: true, types: true, esm: true, commonjs: true },
+    parity: { scenarios: scenarioCount, adaptations: parity.cases.filter(test => test.adaptation).length, evidence: records[0] },
   };
   copyFileSync(resolve(temporary, filename), resolve(destination, filename));
   writeFileSync(resolve(destination, 'node-package-info.json'), JSON.stringify(manifest, null, 2) + '\n');
