@@ -5,5 +5,6 @@ import './parity-decode.mjs';
 import './parity-upload.mjs';
 import './parity-duplex.mjs';
 import './parity-sse.mjs';
+import './parity-notifications.mjs';
 import './parity-stability.mjs';
 import './parity-basic.mjs';

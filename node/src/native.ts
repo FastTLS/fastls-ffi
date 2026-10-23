@@ -70,6 +70,7 @@ function pinLibrary(path: string): void {
 
 export class Native {
   private functions: Record<string, NativeFunction> = {};
+  readonly notificationsAvailable: boolean;
   readonly path: string;
 
   static load(library?: string): Native {
@@ -117,6 +118,17 @@ export class Native {
       this.functions.read = lib.func("int fastls_read(uint64_t handle, _Out_ void *buffer, size_t capacity, _Out_ size_t *length)");
       this.functions.write = lib.func("int fastls_write(uint64_t handle, const void *buffer, size_t length, int end)");
       const features = new Set(this.call<string[]>("features"));
+      let notificationsAvailable = false;
+      if (features.has("session_notifications")) {
+        try {
+          for (const [name, args] of Object.entries({ session_watch: ["uint64_t", "uint16_t", "void *", "size_t"], session_events: ["uint64_t"], session_unwatch: ["uint64_t"] })) {
+            this.functions[name] = lib.func(`fastls_${name}`, "void *", args);
+          }
+          this.functions.wait = lib.func("int fastls_wait(uint64_t handle, uint32_t events, uint32_t timeout_ms)");
+          notificationsAvailable = true;
+        } catch { /* Old ABI-v1 libraries can still use polling. */ }
+      }
+      this.notificationsAvailable = notificationsAvailable;
       for (const feature of ["stream_decode", "phase_timeouts", "stream_upload", "write_timeout"]) {
         if (!features.has(feature)) throw new FastlsError(`native feature required: ${feature}`);
       }
@@ -134,7 +146,7 @@ export class Native {
       // Only these two results contain uint64 handles. Profile catalogs, headers
       // and info metadata use strings and bounded numeric fields; avoid the
       // allocating JS numeric parser on every poll and catalog lookup.
-      envelope = (name === "start" || name === "session_create" ? parseNativeJSON(json) : JSON.parse(json)) as typeof envelope;
+      envelope = (name === "start" || name === "session_create" || name === "session_events" ? parseNativeJSON(json) : JSON.parse(json)) as typeof envelope;
     } finally {
       this.functions.free(pointer);
     }

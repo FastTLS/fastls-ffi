@@ -37,7 +37,7 @@ python -m pip install -e ./python
 ## Node.js
 
 Node.js 22+。动态库构建完成后，在 `node/` 运行 `npm ci` 和 `npm run build`。
-提供 TypeScript 类型、ESM/CommonJS 入口、Promise 请求、流式下载/上传、AbortSignal、自动解压、分层超时、连接池和 Cookie。
+提供 TypeScript 类型、ESM/CommonJS 入口、Promise 请求、流式下载/上传、AbortSignal、自动解压、分层超时、连接池、Cookie和原生就绪通知（新库默认启用）。
 源码默认加载仓库 `dist/`，安装包使用 `FASTLS_LIBRARY` 或 Session 的 `library` 指定动态库。
 详见 [Node.js 使用说明](node/README.md)；普通请求、流式下载、HTTP/2双工和SSE示例在 `node/examples/`。
 当前包未发布 npm，未内置 Go 动态库，仅支持 Node 主线程。

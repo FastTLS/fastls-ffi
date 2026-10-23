@@ -4,10 +4,11 @@ import { AbortError, FastlsError } from "./errors.js";
 import { Native, asHandle, encodeNativeJSON } from "./native.js";
 import { Response, StreamResponse, Transfer } from "./response.js";
 import { timeoutFields, type Timeout } from "./timeout.js";
-import { isStreamingBody, startUpload, type UploadBody } from "./upload.js";
+import { abortable, isStreamingBody, startUpload, type UploadBody } from "./upload.js";
 import { DuplexExchange } from "./duplex.js";
 import type { UploadLifecycle } from "./response.js";
 import { SSEStream, validateSSEOptions, type SSEOptions } from "./sse.js";
+import { Notifier } from "./notifications.js";
 
 export interface RequestOptions {
   profile?: string;
@@ -26,6 +27,7 @@ export interface RequestOptions {
 export type DuplexOptions = Omit<RequestOptions, "body" | "duplex">;
 
 export interface SessionOptions {
+  notifications?: "auto" | "required" | "poll";
   profile?: string;
   headers?: Record<string, string>;
   timeoutMs?: Timeout;
@@ -38,6 +40,7 @@ export interface SessionOptions {
 }
 
 export interface Stats {
+  notifiers?: number;
   open_requests: number;
   open_sessions: number;
   session_pools: number;
@@ -66,6 +69,13 @@ function mergeHeaders(...sources: (Record<string, string> | undefined)[]): Recor
 }
 
 export class Session {
+  /** Construct and initialize; failed initialization closes the new session. */
+  static async open(options: SessionOptions = {}): Promise<Session> {
+    const session = new Session(options);
+    try { await session.ready(); return session; }
+    catch (error) { await session.closeAsync(); throw error; }
+  }
+  readonly notificationMode: "async-events" | "poll";
   readonly cookies: Cookies;
   private readonly native: Native;
   private readonly handle: bigint;
@@ -78,8 +88,12 @@ export class Session {
   private readonly active = new Set<Transfer>();
   private readonly producers = new Set<UploadLifecycle>();
   private closed = false;
+  private notifier?: Notifier;
+  private setup?: Promise<void>;
 
   constructor(options: SessionOptions = {}) {
+    const notifications = options.notifications === undefined ? "auto" : options.notifications;
+    if (!["auto", "required", "poll"].includes(notifications)) throw new TypeError("notifications must be auto, required or poll");
     this.profile = options.profile ?? "chrome/156/windows";
     this.timeouts = timeoutFields(options.timeoutMs ?? 30000);
     this.decodeContent = options.decodeContent ?? true;
@@ -90,6 +104,9 @@ export class Session {
     this.caPem = options.caFile === undefined ? undefined : readFileSync(options.caFile, "utf8");
     if (this.caPem !== undefined && !this.caPem.trim()) throw new TypeError("caFile is empty");
     this.native = Native.load(options.library);
+    const supported = this.native.notificationsAvailable && this.native.call<string[]>("features").includes("session_notifications");
+    if (notifications === "required" && !supported) throw new FastlsError("notifications require a newer Fastls native library");
+    this.notificationMode = notifications !== "poll" && supported ? "async-events" : "poll";
     this.handle = asHandle(this.native.call("session_create"));
     this.cookies = new Cookies(input => {
       this.ensureOpen();
@@ -106,6 +123,36 @@ export class Session {
 
   private ensureOpen(): void {
     if (this.closed) throw new FastlsError("session is closed");
+  }
+
+  /** Initialize the shared wakeup channel before any HTTP request is allocated. */
+  async ready(signal?: AbortSignal): Promise<void> {
+    this.ensureOpen();
+    if (signal !== undefined && !(signal instanceof AbortSignal)) throw new TypeError("signal must be an AbortSignal");
+    if (signal?.aborted) throw new AbortError(undefined, { cause: signal.reason });
+    if (this.notificationMode === "poll") return;
+    if (!this.notifier) {
+      const notifier = this.notifier = new Notifier(this.native, this.handle);
+      const setup = this.setup = notifier.start().catch(async error => {
+        await notifier.closeAsync();
+        if (this.notifier === notifier) { this.notifier = undefined; this.setup = undefined; }
+        throw error;
+      });
+      void setup.catch(() => {});
+    }
+    const notifier = this.notifier;
+    notifier.setupWaiters++;
+    try {
+      if (signal) await abortable(this.setup!, signal); else await this.setup;
+      this.ensureOpen(); notifier.check();
+    } catch (error) {
+      if (signal?.aborted) throw new AbortError(undefined, { cause: signal.reason });
+      throw error;
+    } finally {
+      if (--notifier.setupWaiters === 0 && !notifier.isReady && this.notifier === notifier) {
+        notifier.close(); this.notifier = undefined; this.setup = undefined;
+      }
+    }
   }
 
   private begin(method: string, url: string, options: RequestOptions, manual = false): { transfer: Transfer; body: UploadBody | undefined; streaming: boolean } {
@@ -141,15 +188,17 @@ export class Session {
       stream_body: streaming || undefined,
       duplex: duplex || undefined,
     });
-    const transfer = new Transfer(this.native, handle, () => this.active.delete(transfer), options.signal, duplex);
+    const transfer = new Transfer(this.native, handle, () => { this.active.delete(transfer); this.notifier?.forget(handle); }, options.signal, duplex, this.notifier);
     this.active.add(transfer);
     try {
+      this.notifier?.track(handle);
       transfer.attachSignal(timeouts.timeout_ms, started);
       return { transfer, body, streaming };
     } catch (error) { transfer.close(); throw error; }
   }
 
   async stream(method: string, url: string, options: RequestOptions = {}): Promise<StreamResponse> {
+    await this.ready(options.signal);
     const { transfer, body, streaming } = this.begin(method, url, options);
     try {
       const upload = streaming ? startUpload(transfer, body!) : undefined;
@@ -190,7 +239,14 @@ export class Session {
   /** Open a manual exchange; send() and response reads can run concurrently. */
   duplex(method: string, url: string, options: DuplexOptions = {}): DuplexExchange {
     if ("body" in options || "duplex" in options) throw new TypeError("manual duplex uses send() and finishUpload(), not body or duplex options");
-    return new DuplexExchange(this.begin(method, url, { ...options, duplex: true }, true).transfer);
+    this.ensureOpen();
+    const cancellation = new AbortController();
+    const signal = options.signal === undefined ? cancellation.signal : AbortSignal.any([options.signal, cancellation.signal]);
+    const transfer = this.ready(signal).then(() => {
+      if (cancellation.signal.aborted) throw new FastlsError("exchange is closed");
+      return this.begin(method, url, { ...options, signal, duplex: true }, true).transfer;
+    }, error => { if (cancellation.signal.aborted) throw new FastlsError("exchange is closed"); throw error; });
+    return new DuplexExchange(transfer, () => cancellation.abort());
   }
   get(url: string, options?: RequestOptions): Promise<Response> { return this.request("GET", url, options); }
   post(url: string, options?: RequestOptions): Promise<Response> { return this.request("POST", url, options); }
@@ -203,12 +259,13 @@ export class Session {
     this.closed = true;
     try {
       for (const transfer of this.active) transfer.close(new FastlsError("session is closed"));
-    } finally { this.native.call("session_close", this.handle); }
+    } finally { try { this.notifier?.close(); } finally { this.native.call("session_close", this.handle); } }
   }
   /** Release native resources immediately, then wait for cooperative upload cleanup. */
   async closeAsync(): Promise<void> {
     const producers = [...this.producers];
     this.close();
+    await this.notifier?.closeAsync();
     const results = await Promise.allSettled(producers.map(task => task.cleanup));
     for (const result of results) if (result.status === "rejected") throw result.reason;
     for (const task of producers) task.check();

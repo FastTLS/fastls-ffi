@@ -56,6 +56,6 @@ Session默认total仍为30秒；长连接可显式增加总时限，例如`Timeo
 
 `tests/test_sse.py`共23项验收，包含所有分割位置与逐字节向量、UTF-8/BOM/行尾、id/retry控制块、精确边界与超大整数、H1/H2真实库、gzip及校验失败、204/错误类型、POST与手动恢复、首事件早到、取消时同连接活动流继续完成、会话关闭、心跳与超时、40MiB事件流与背压，以及SSE和全双工组合。源码和wheel均加入六组原生Actions，证据为`build/stability-sse-*.json`。
 
-Node 0.4提供`await session.sse(method, url, options)`及`for await (const event of events)`；配置使用`maxEventBytes`、`lastEventId`和毫秒制`timeoutMs`，状态使用`lastEventId`，显式异步关闭为`closeAsync()`。23项Python SSE验收均有对应Node用例，源码与隔离npm安装包执行相同131项完整套件，包含40MiB事件流哈希、取消和双工组合。Promise与同步接口的差异记录在[node/PARITY.md](node/PARITY.md)，示例和生命周期见[node/README.md](node/README.md)。
+Node 0.4提供`await session.sse(method, url, options)`及`for await (const event of events)`；配置使用`maxEventBytes`、`lastEventId`和毫秒制`timeoutMs`，状态使用`lastEventId`，显式异步关闭为`closeAsync()`。23项Python SSE验收均有对应Node用例，源码与隔离npm安装包执行相同151项完整套件，包含40MiB事件流哈希、取消和双工组合。Promise与同步接口的差异记录在[node/PARITY.md](node/PARITY.md)，示例和生命周期见[node/README.md](node/README.md)。
 
 SSE属于语言便利接口，无新增C符号或ABI版本变化，不包含浏览器EventSource对象、自动重连或WebSocket。
