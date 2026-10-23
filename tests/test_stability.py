@@ -277,7 +277,7 @@ class Stability(FixtureCase):
                         self.assertIn("chrome/156/windows", s.list_profiles())
                     self.idle()
                     samples.append(dict(self.monitor.stats(), **resources()))
-                    # Bound connection churn: this preview intentionally has no pool.
+                    # Bound request churn so resource snapshots remain comparable.
                     await asyncio.sleep(0.1)
                 final = samples[-1]
                 self.assertLessEqual(final["goroutines"], baseline["goroutines"] + 16)

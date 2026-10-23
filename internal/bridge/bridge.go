@@ -4,6 +4,7 @@ package bridge
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -35,6 +36,7 @@ const (
 )
 
 type Input struct {
+	Session         uint64            `json:"session,omitempty"`
 	URL             string            `json:"url"`
 	Method          string            `json:"method"`
 	Profile         string            `json:"profile"`
@@ -59,6 +61,8 @@ type chunk struct {
 	err  error
 }
 type request struct {
+	owner    uint64
+	pool     *fastls.Session
 	ctx      context.Context
 	cancel   context.CancelFunc
 	mu       sync.Mutex
@@ -71,6 +75,7 @@ type request struct {
 }
 
 type Engine struct {
+	sessions map[uint64]*session
 	mu       sync.Mutex
 	requests map[uint64]*request
 	next     atomic.Uint64
@@ -79,7 +84,56 @@ type Engine struct {
 }
 
 func New() *Engine {
-	return &Engine{requests: make(map[uint64]*request), provider: generators.New()}
+	return &Engine{requests: make(map[uint64]*request), sessions: make(map[uint64]*session), provider: generators.New()}
+}
+
+type session struct{ pools map[string]*fastls.Session }
+
+func (e *Engine) CreateSession() (uint64, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(e.sessions) >= 64 {
+		return 0, errors.New("too many open sessions (64)")
+	}
+	id := e.next.Add(1)
+	e.sessions[id] = &session{pools: make(map[string]*fastls.Session)}
+	return id, nil
+}
+
+func (e *Engine) CloseSession(id uint64) {
+	e.mu.Lock()
+	s := e.sessions[id]
+	delete(e.sessions, id)
+	for handle, r := range e.requests {
+		if r.owner == id && id != 0 {
+			r.cancel()
+			delete(e.requests, handle)
+		}
+	}
+	e.mu.Unlock()
+	if s != nil {
+		for _, pool := range s.pools {
+			pool.Close()
+		}
+	}
+}
+
+func (e *Engine) CloseSessionIdle(id uint64) error {
+	e.mu.Lock()
+	s := e.sessions[id]
+	if s == nil {
+		e.mu.Unlock()
+		return errors.New("invalid or closed session handle")
+	}
+	pools := make([]*fastls.Session, 0, len(s.pools))
+	for _, pool := range s.pools {
+		pools = append(pools, pool)
+	}
+	e.mu.Unlock()
+	for _, pool := range pools {
+		pool.CloseIdleConnections()
+	}
+	return nil
 }
 
 func (e *Engine) Profiles() ([]string, error) { return e.provider.List() }
@@ -89,6 +143,11 @@ func (e *Engine) Profiles() ([]string, error) { return e.provider.List() }
 func (e *Engine) Stats() map[string]any {
 	e.mu.Lock()
 	open := len(e.requests)
+	openSessions := len(e.sessions)
+	poolCount := 0
+	for _, s := range e.sessions {
+		poolCount += len(s.pools)
+	}
 	var buffered int64
 	for _, r := range e.requests {
 		buffered += r.buffered.Load()
@@ -97,6 +156,7 @@ func (e *Engine) Stats() map[string]any {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	return map[string]any{"open_requests": open, "workers": e.workers.Load(),
+		"open_sessions": openSessions, "session_pools": poolCount,
 		"buffered_body_bytes": buffered, "goroutines": runtime.NumGoroutine(),
 		"heap_alloc_bytes": mem.HeapAlloc, "heap_inuse_bytes": mem.HeapInuse}
 }
@@ -164,6 +224,36 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 		cancel()
 		return 0, errors.New("too many open requests; close responses")
 	}
+	if in.Session != 0 {
+		s := e.sessions[in.Session]
+		if s == nil {
+			e.mu.Unlock()
+			cancel()
+			return 0, errors.New("invalid or closed session handle")
+		}
+		key := in.Profile + fmt.Sprintf("/%x", sha256.Sum256([]byte(in.CAPEM)))
+		pool := s.pools[key]
+		if pool == nil {
+			if len(s.pools) >= 16 {
+				e.mu.Unlock()
+				cancel()
+				return 0, errors.New("session configuration limit exceeded (16)")
+			}
+			// The first request must not become the pool's default headers or UA.
+			poolOpts := opts
+			poolOpts.Headers, poolOpts.HeaderValues, poolOpts.Body = nil, nil, ""
+			poolOpts.UserAgent = poolOpts.FingerprintUserAgent
+			poolOpts.DisableRedirect = false
+			pool, err = fastls.NewSession(poolOpts)
+			if err != nil {
+				e.mu.Unlock()
+				cancel()
+				return 0, err
+			}
+			s.pools[key] = pool
+		}
+		r.pool, r.owner = pool, in.Session
+	}
 	id := e.next.Add(1)
 	e.requests[id] = r
 	e.workers.Add(1)
@@ -178,9 +268,17 @@ func (r *request) run(in Input, opts fastls.Options) {
 			r.setError(fmt.Errorf("internal request panic: %v", p))
 		}
 	}()
-	resp, err := fastls.NewClient().DoContext(r.ctx, in.URL, opts, strings.ToUpper(in.Method))
+	var resp fastls.Response
+	var err error
+	if r.pool != nil {
+		resp, err = r.pool.DoContext(r.ctx, in.URL, fastls.RequestOptions{Headers: in.Headers, Body: in.Body, DisableRedirect: in.DisableRedirect}, strings.ToUpper(in.Method))
+	} else {
+		resp, err = fastls.NewClient().DoContext(r.ctx, in.URL, opts, strings.ToUpper(in.Method))
+	}
 	// Core may return a diagnostic response together with an error.
-	defer resp.Client.CloseIdleConnections()
+	if r.pool == nil {
+		defer resp.Client.CloseIdleConnections()
+	}
 	if resp.Body != nil {
 		defer resp.Body.Close()
 	}

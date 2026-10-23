@@ -17,6 +17,21 @@ import (
 
 var engine = bridge.New()
 
+//export fastls_session_create
+func fastls_session_create() *C.char {
+	return result(func() (any, error) { return engine.CreateSession() })
+}
+
+//export fastls_session_close
+func fastls_session_close(handle C.uint64_t) *C.char {
+	return result(func() (any, error) { engine.CloseSession(uint64(handle)); return nil, nil })
+}
+
+//export fastls_session_close_idle
+func fastls_session_close_idle(handle C.uint64_t) *C.char {
+	return result(func() (any, error) { return nil, engine.CloseSessionIdle(uint64(handle)) })
+}
+
 func result(fn func() (any, error)) (out *C.char) {
 	defer func() {
 		if p := recover(); p != nil {

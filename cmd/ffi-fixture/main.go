@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -23,6 +24,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -39,6 +41,14 @@ type observation struct {
 type fixture struct {
 	mu      sync.Mutex
 	entries map[string]*observation
+}
+
+type connectionKey struct{}
+
+var connectionIDs atomic.Uint64
+
+func connectionContext(ctx context.Context, conn net.Conn) context.Context {
+	return context.WithValue(ctx, connectionKey{}, connectionIDs.Add(1))
 }
 
 func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -65,6 +75,7 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Unlock()
 	defer func() { f.mu.Lock(); o.Done = true; o.Cancelled = r.Context().Err() != nil; f.mu.Unlock() }()
 	w.Header().Set("X-Test-Protocol", r.Proto)
+	w.Header().Set("X-Test-Connection", fmt.Sprint(r.Context().Value(connectionKey{})))
 	switch r.URL.Path {
 	case "/abort":
 		w.Header().Set("Content-Length", "100")
@@ -206,12 +217,15 @@ func main() {
 		log.Fatal(err)
 	}
 	f := &fixture{entries: make(map[string]*observation)}
-	plain := httptest.NewServer(f)
+	plain := httptest.NewUnstartedServer(f)
+	plain.Config.ConnContext = connectionContext
+	plain.Start()
 	servers := []*httptest.Server{plain}
 	urls := []string{}
 	for _, h2 := range []bool{false, true} {
 		s := httptest.NewUnstartedServer(f)
 		s.EnableHTTP2 = h2
+		s.Config.ConnContext = connectionContext
 		s.TLS = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
 		s.Config.ErrorLog = log.New(io.Discard, "", 0)
 		s.StartTLS()

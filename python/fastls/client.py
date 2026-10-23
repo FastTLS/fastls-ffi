@@ -83,7 +83,7 @@ def _collect(chunks):
 
 
 class Session:
-    """Default configuration and request ownership; no connection pool yet."""
+    """Configuration, request ownership and isolated reusable connection pools."""
     def __init__(self, *, profile="chrome/156/windows", headers=None, timeout=30, library=None, ca_file=None):
         self.profile, self.headers, self.timeout = profile, dict(headers or {}), timeout
         self._ca_pem = Path(ca_file).read_text(encoding="utf-8") if ca_file is not None else None
@@ -93,6 +93,15 @@ class Session:
         self._handles = set()
         self._lock = threading.Lock()
         self._closed = False
+        if not hasattr(self._native.lib, "fastls_session_create"):
+            raise FastlsError("connection pools require a newer Fastls native library")
+        self._session = self._native.call("fastls_session_create")
+
+    def close_idle_connections(self):
+        with self._lock:
+            if self._closed:
+                raise FastlsError("session is closed")
+            self._native.call("fastls_session_close_idle", self._session)
 
     def list_profiles(self):
         return self._native.call("fastls_profiles")
@@ -112,7 +121,7 @@ class Session:
         if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not 0 < seconds <= 86400:
             raise ValueError("timeout must be 0..86400 seconds, excluding zero")
         request = dict(url=url, method=method, profile=self.profile if profile is None else profile,
-                       headers=merged, timeout_ms=max(1, int(seconds * 1000)), disable_redirect=not allow_redirects)
+                       session=self._session, headers=merged, timeout_ms=max(1, int(seconds * 1000)), disable_redirect=not allow_redirects)
         if self._ca_pem is not None:
             request["ca_pem"] = self._ca_pem
         if isinstance(data, bytes):
@@ -173,10 +182,13 @@ class Session:
 
     def close(self):
         with self._lock:
+            if self._closed:
+                return
             self._closed = True
             for handle in list(self._handles):
                 self._native.call("fastls_close", handle)
                 self._handles.remove(handle)
+            self._native.call("fastls_session_close", self._session)
 
     def __enter__(self):
         return self

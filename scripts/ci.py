@@ -46,6 +46,8 @@ def preflight(env):
         "fhttp/go.mod": ("github.com/FastTLS/fhttp",),
         "fhttp/http2/explicit_settings_test.go": ("func TestExplicitZeroDoesNotSelectNavigatorDefaults", "func TestExplicitEmptySettings"),
         "fhttp/http2/receive_window_test.go": ("func TestReceiveWindowMatchesWire",),
+        "fastls/session.go": ("func NewSession",),
+        "fhttp/http2/pooled_dial_context_test.go": ("func TestPooledDialCancellationIsolation",),
     }
     for relative, markers in capabilities.items():
         path = ROOT.parent / relative
@@ -104,18 +106,20 @@ def run():
         execute("core-bridge-python", [sys.executable, "scripts/check.py"])
         execute("stability-source", [sys.executable, "tests/test_stability.py"])
         execute("network-source", [sys.executable, "tests/test_network.py"])
+        execute("pooling-source", [sys.executable, "tests/test_pooling.py"])
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
-        execute("fhttp-contract", ["go", "test", "./http2", "-run", "^(TestExplicitZeroDoesNotSelectNavigatorDefaults|TestExplicitEmptySettings|TestConnectionSettings|TestReceiveWindow.*)$", "-v"], ROOT.parent / "fhttp")
+        execute("fhttp-contract", ["go", "test", "./http2", "-run", "^(TestExplicitZeroDoesNotSelectNavigatorDefaults|TestExplicitEmptySettings|TestConnectionSettings|TestReceiveWindow.*|TestPooledDial.*)$", "-v"], ROOT.parent / "fhttp")
         execute("fhttp-vet", ["go", "vet", "./http2"], ROOT.parent / "fhttp")
         if env.get("FASTLS_CI_RACE", "").lower() == "true":
             execute("race-bridge", ["go", "test", "-race", "./internal/bridge"])
             execute("race-core", ["go", "test", "-race", "./..."], ROOT.parent / "fastls")
-            execute("race-fhttp-window", ["go", "test", "-race", "./http2", "-run", "^TestReceiveWindow"], ROOT.parent / "fhttp")
+            execute("race-fhttp-window", ["go", "test", "-race", "./http2", "-run", "^(TestReceiveWindow|TestPooledDial)"], ROOT.parent / "fhttp")
         execute("wheel-build", [sys.executable, "-m", "pip", "wheel", "./python", "--no-deps", "-w", "dist"])
         execute("wheel-tests", [sys.executable, "scripts/test_wheel.py"])
         execute("stability-wheel", [sys.executable, "scripts/test_wheel.py", "--stability"])
         execute("network-wheel", [sys.executable, "scripts/test_wheel.py", "--network"])
+        execute("pooling-wheel", [sys.executable, "scripts/test_wheel.py", "--pooling"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")
