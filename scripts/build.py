@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import shutil
 import subprocess
 import sys
 
@@ -65,6 +66,12 @@ def main():
     subprocess.run(["go", "build", "-buildmode=c-shared", "-o", str(out / name), "./cmd/fastls-shared"], cwd=ROOT, env=env, check=True)
     if source_digest(env) != before:
         raise SystemExit("source changed during compilation; rebuild before using this artifact")
+    # cgo emits libfastls.h on Unix and fastls.h on Windows. Keep the public
+    # include name stable so the same C consumer builds on every platform.
+    generated_header = (out / name).with_suffix(".h")
+    header = out / "fastls.h"
+    if generated_header != header:
+        shutil.copyfile(generated_header, header)
     (out / "build-info.json").write_text(json.dumps({
         "platform": platform.platform(), "machine": platform.machine(), "local_dependencies": args.local,
         "go": subprocess.check_output(["go", "version"], text=True).strip(),
