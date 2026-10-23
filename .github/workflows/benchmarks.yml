@@ -1,0 +1,111 @@
+name: Python client benchmarks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: smoke validates correctness; quick diagnoses; full measures five rounds
+        type: choice
+        options: [smoke, quick, full]
+        default: full
+      cases:
+        description: Optional exact case names separated by commas; empty runs all cases
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-bench-${{ github.event_name }}-${{ github.ref }}-${{ inputs.cases || 'all' }}
+  cancel-in-progress: true
+
+jobs:
+  dependencies:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      fastls_ref: ${{ steps.refs.outputs.fastls_ref }}
+      fhttp_ref: ${{ steps.refs.outputs.fhttp_ref }}
+      imitate_ref: ${{ steps.refs.outputs.imitate_ref }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - id: refs
+        run: python scripts/ci.py resolve
+
+  benchmark:
+    needs: dependencies
+    name: ${{ matrix.runner }} / ${{ inputs.profile || 'smoke' }} / shard ${{ matrix.shard }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, windows-2022]
+        shard: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.profile == 'full' && !inputs.cases && '[0,1,2,3,4,5]' || '[0]') }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: workspace/fastls-ffi
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
+      BENCH_PROFILE: ${{ inputs.profile || 'smoke' }}
+      BENCH_SHARDS: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'full' && !inputs.cases && '6' || '1' }}
+      BENCH_CASES: ${{ inputs.cases || '' }}
+      BENCH_SHARD_INDEX: ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: workspace/fastls-ffi
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FastTLS/fastls
+          ref: ${{ needs.dependencies.outputs.fastls_ref }}
+          path: workspace/fastls
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FastTLS/fhttp
+          ref: ${{ needs.dependencies.outputs.fhttp_ref }}
+          path: workspace/fhttp
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FastTLS/imitate
+          ref: ${{ needs.dependencies.outputs.imitate_ref }}
+          path: workspace/imitate
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Install locked benchmark-only dependencies
+        run: python -m pip install -r benchmarks/requirements.lock
+      - name: Build library, independent fixture and contract checks
+        run: python benchmarks/prepare.py
+      - name: Run isolated clients with protocol, TLS and hash checks
+        shell: bash
+        run: python benchmarks/run.py --profile "$BENCH_PROFILE" --shards "$BENCH_SHARDS" --shard-index "$BENCH_SHARD_INDEX" --output build/benchmark-results
+      - name: Record independent curl HTTP2 startup diagnostic
+        if: always() && inputs.profile == 'full' && !inputs.cases && matrix.shard == 0
+        run: python benchmarks/probe_h2_startup.py --output build/benchmark-results/curl-h2-startup.json
+      - name: Save raw rounds, resource samples, logs and HTML
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: benchmarks-${{ matrix.runner }}-${{ inputs.profile || 'smoke' }}-${{ matrix.shard }}
+          path: |
+            workspace/fastls-ffi/build/benchmark-results/
+            workspace/fastls-ffi/dist/build-info.json
+          retention-days: 14
