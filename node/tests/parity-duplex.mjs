@@ -72,6 +72,9 @@ p('test_reject_redirect_and_response_eof_stops_upload',async t=>{
     const body=signal=>{signal.addEventListener('abort',()=>aborted=true,{once:true});const iterator=(async function*(){started=true;try{yield SLAB;await delay(60000,null,{signal});}finally{finalized=true;}})();return {next:()=>iterator.next(),return(){returned=true;return iterator.return();},[Symbol.asyncIterator](){return this;}};};
     assert.equal((await s.post(fixture.https2+path,{duplex:true,allowRedirects:true,body})).status,status);assert.ok(returned&&aborted);assert.ok(!started||finalized);await healthy(s);
   }
+  const s=session(t),exchange=s.duplex('POST',fixture.https2+'/upload-reject'),response=await exchange.response;
+  assert.equal(response.status,413);await assert.rejects(exchange.send(SLAB),/server closed the upload/);
+  assert.equal(await response.text(),'');await assert.rejects(response.waitUpload(),/before EOF was accepted/);await healthy(s);
 },'Response EOF cancels the factory and calls iterator.return(); a generator closed before its first next() has not entered its finally.');
 p('test_h1_and_invalid_options_fail',async t=>{
   const s=session(t);for(const protocol of ['http','https1'])await assert.rejects(s.post(fixture[protocol]+'/upload',{duplex:true,body:[Buffer.from('data')]}),/HTTP\/2/);

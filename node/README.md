@@ -142,6 +142,7 @@ try {
 
 `send()` 接受 Buffer/Uint8Array，按64 KiB分块等待原生队列容量；同一 exchange 同时只允许一个 send/finish 调用，重叠调用会被拒绝。发送完成前调用方应保持输入字节不变。
 `finishUpload()` 只关闭上传方向，响应仍可继续读取；响应EOF、取消、超时或会话关闭会停止生产者。
+服务器提前结束上传时，手动send会报错，已返回的响应仍可读取；waitUpload会指出上传EOF未被接受。
 响应头到达后的生产者异常会中止读取并保留原异常。
 
 `close()` 立即释放原生请求；`response.closeAsync()` / `session.closeAsync()` 还等待生产者清理，并报告清理中的异常。
