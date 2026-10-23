@@ -143,7 +143,7 @@ export class Native {
     let envelope: { ok: boolean; result: T; error?: string };
     try {
       const json = koffi.decode.string(pointer);
-      // Only these two results contain uint64 handles. Profile catalogs, headers
+      // Starts, sessions and notification batches contain uint64 handles. Catalogs, headers
       // and info metadata use strings and bounded numeric fields; avoid the
       // allocating JS numeric parser on every poll and catalog lookup.
       envelope = (name === "start" || name === "session_create" || name === "session_events" ? parseNativeJSON(json) : JSON.parse(json)) as typeof envelope;
