@@ -1,6 +1,4 @@
 """Manual synchronous duplex exchange without SDK worker threads."""
-import time
-
 from ._native import FastlsError
 from .upload import split
 
@@ -12,7 +10,6 @@ class DuplexExchange:
         self._response = None
 
     def _write(self, data, end=False):
-        from .client import POLL_INTERVAL
         if self._handle is None or self._finished:
             raise FastlsError("upload is closed")
         while True:
@@ -22,7 +19,7 @@ class DuplexExchange:
                 return
             if code == 2:
                 raise FastlsError("server closed the upload")
-            time.sleep(POLL_INTERVAL)
+            self._owner._wait(self._handle, 4)
 
     def send(self, data):
         """Send binary data, waiting for bounded queue capacity."""
@@ -37,7 +34,7 @@ class DuplexExchange:
 
     @property
     def response(self):
-        from .client import Response, POLL_INTERVAL
+        from .client import Response
         if self._handle is None:
             raise FastlsError("exchange is closed")
         if self._response is None:
@@ -46,7 +43,7 @@ class DuplexExchange:
                 if info["state"] != "pending":
                     self._response = Response(self._owner, self._handle, info)
                     break
-                time.sleep(POLL_INTERVAL)
+                self._owner._wait(self._handle, 1)
         return self._response
 
     def close(self):

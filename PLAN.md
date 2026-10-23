@@ -1,6 +1,6 @@
 # Fastls 跨语言封装实施规划
 
-日期：2026-10-24。状态：第一阶段及三轮测试扩展已完成；第二阶段已实现会话/连接池、多值响应头、Cookie、流式解码及分层超时。第三阶段已完成流式上传、独立写入预算、HTTP/2全双工和SSE工具，完成通知、WebSocket和发布阶段待实施。开发候选，未发布。
+日期：2026-10-24。状态：第一阶段及三轮测试扩展已完成；第二阶段已实现会话/连接池、多值响应头、Cookie、流式解码及分层超时。第三阶段已完成流式上传、独立写入预算、HTTP/2全双工、SSE工具和状态通知，WebSocket和发布阶段待实施。开发候选，未发布。
 
 ## 目标与仓库边界
 
@@ -88,4 +88,8 @@ Windows短定时器提前调度问题已处理，轮询间隔按平台时钟精�
 
 ## 第三阶段交付：Python SSE事件流
 
-Session.sse与AsyncSession.sse复用现有响应流，逐条返回不可变ServerSentEvent；支持UTF-8/BOM、所有行尾与跨块边界、多行data、id/retry控制、手动Last-Event-ID恢复、单消费者和大小限制。处理204、错误MIME/状态、取消、超时、压缩错误与HTTP/2全双工组合。源码/wheel各23项验收纳入六组Actions，见SSE.md。不自动重连或重放请求；完成通知及WebSocket仍待实施。
+Session.sse与AsyncSession.sse复用现有响应流，逐条返回不可变ServerSentEvent；支持UTF-8/BOM、所有行尾与跨块边界、多行data、id/retry控制、手动Last-Event-ID恢复、单消费者和大小限制。处理204、错误MIME/状态、取消、超时、压缩错误与HTTP/2全双工组合。源码/wheel各23项验收纳入六组Actions，见SSE.md。不自动重连或重放请求；状态通知随后交付，见下节；WebSocket仍待实施。
+
+## 第三阶段交付：原生状态通知
+
+C ABI增加fastls_wait及session_watch/events/unwatch；同步等待原生状态，asyncio使用每会话一个认证的本机控制连接接入事件循环，不增加Python工作线程或Go回调。通知合并且有界，用代次处理检查/等待竞态，覆盖上传可写、响应头/正文、EOF、错误与取消。支持auto/required/poll，旧库保持兼容。异步上下文进入时完成初始化，失败和取消均清理候选连接；源码/wheel各20项、Go race和独立C消费者加入六组Actions，详见NOTIFICATIONS.md。WebSocket及发布仍待实施。

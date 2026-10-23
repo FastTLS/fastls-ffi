@@ -15,6 +15,7 @@ type upload struct {
 	data          []byte
 	ended, closed bool
 	wake          chan struct{}
+	changed       func()
 }
 
 func (u *upload) signal() {
@@ -33,7 +34,11 @@ func (u *upload) Read(dst []byte) (int, error) {
 		if len(u.data) > 0 {
 			n := copy(dst, u.data)
 			u.data = u.data[n:]
+			empty := len(u.data) == 0
 			u.mu.Unlock()
+			if empty && u.changed != nil {
+				u.changed()
+			}
 			return n, nil
 		}
 		if u.ended {
@@ -54,6 +59,9 @@ func (u *upload) Close() error {
 	u.data = nil
 	u.mu.Unlock()
 	u.signal()
+	if u.changed != nil {
+		u.changed()
+	}
 	return nil
 }
 

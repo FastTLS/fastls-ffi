@@ -84,8 +84,7 @@ async def download(url):
 
 `await session.get(url)` 返回已缓存的响应；流式响应使用 `await response.aread()`。
 任务取消或上下文退出会关闭请求；`response.cancel()` 也可以直接取消。
-SDK 定时轮询非阻塞状态/读取接口，间隔至少10ms，并大于平台时钟精度以避免短定时器忙等；不用逐请求 Python 线程，Go 网络工作在 goroutine 中执行。
-这是首版调度策略，高并发效率尚未做性能承诺，后续将评估完成通知。
+新动态库默认使用状态通知：同步等待原生就绪，asyncio每会话共用本机唤醒通道，不增加Python工作线程或Go→Python回调。可用notifications='required'要求新能力，或notifications='poll'保留轮询；旧库auto模式继续轮询。生命周期和C ABI见[NOTIFICATIONS.md](NOTIFICATIONS.md)。
 
 ## C ABI v1
 
@@ -94,6 +93,7 @@ SDK 定时轮询非阻塞状态/读取接口，间隔至少10ms，并大于平�
 - `fastls_abi_version()`：当前为1。
 - `fastls_profiles()`：返回规范ID数组的JSON结果。
 - `fastls_stats()`：返回只读诊断JSON结果，新增符号，不改变已有函数的ABI。
+- `fastls_wait()`与`fastls_session_watch/events/unwatch()`：原生就绪等待及会话通知，见[NOTIFICATIONS.md](NOTIFICATIONS.md)。
 - `fastls_start(data, length)`：输入UTF-8 JSON，立即返回请求句柄的JSON结果。
 - `fastls_info(handle)`：返回状态pending/headers/eof/error、状态码、头、Match或错误。
 - `fastls_read(handle, buffer, capacity, &length)`：非阻塞二进制读取。0=数据、1=等待、2=EOF、-1=请求失败、-2=非法参数或句柄。
