@@ -1,5 +1,5 @@
 {
-  "revision": "90e24f3e9c2fecef79ff2e8829a0b57256df453a",
+  "revision": "b51714126aeca1916df64a07e078de7024c1a031",
   "files": {
     "test_python.py": "283d1298c9fc5ddef36e52b634383262466a2de7b9035cf8cbfbdbb100d90422",
     "test_stability.py": "0ad5d3277b48eed4edfe5e9b99e333ce9d70b12e1242f18ad1db0b40ee79a13d",
@@ -8,6 +8,7 @@
     "test_cookies.py": "2879f82d019f18a82ed78887264e065b7bac55fd4f213983dc3d12c316fe0bf2",
     "test_decode_timeouts.py": "f6ca6f951772f8af90bba39a0441811f97660f846ac2d932d51b7ac5b04650f8",
     "test_upload.py": "bf3b188e04d2c8a3bbd11c3c0a85a313e43256fd9edb10f73cf98bb13826b729",
-    "test_duplex.py": "570df447c0b73acc62875263b9538430e28d2fec91d0e3555ffec2f84ccf6e8d"
+    "test_duplex.py": "570df447c0b73acc62875263b9538430e28d2fec91d0e3555ffec2f84ccf6e8d",
+    "test_sse.py": "d50638d18da1c22ae9795595c94e0081fbe996849d51f8fc1e8e99d9e21ae09b"
   }
 }

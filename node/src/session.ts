@@ -7,6 +7,7 @@ import { timeoutFields, type Timeout } from "./timeout.js";
 import { isStreamingBody, startUpload, type UploadBody } from "./upload.js";
 import { DuplexExchange } from "./duplex.js";
 import type { UploadLifecycle } from "./response.js";
+import { SSEStream, validateSSEOptions, type SSEOptions } from "./sse.js";
 
 export interface RequestOptions {
   profile?: string;
@@ -167,6 +168,16 @@ export class Session {
       transfer.ensureOpen();
       return new StreamResponse(transfer, info, transfer.duplex ? upload : undefined);
     } catch (error) { transfer.close(); throw error; }
+  }
+
+  async sse(method: string, url: string, options: SSEOptions = {}): Promise<SSEStream> {
+    const { maxEventBytes = 1024 * 1024, lastEventId, ...request } = options;
+    validateSSEOptions(maxEventBytes, lastEventId);
+    const headers = mergeHeaders({ accept: "text/event-stream", "cache-control": "no-cache" }, request.headers);
+    if (lastEventId !== undefined) headers["last-event-id"] = lastEventId;
+    const response = await this.stream(method, url, { ...request, headers });
+    try { return new SSEStream(response, maxEventBytes, lastEventId); }
+    catch (error) { await response.closeAsync(); throw error; }
   }
 
   async request(method: string, url: string, options: RequestOptions = {}): Promise<Response> {

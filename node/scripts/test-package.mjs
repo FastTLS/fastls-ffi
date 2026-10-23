@@ -56,7 +56,7 @@ try {
   if (parity.cases.length !== scenarioCount || !parity.cases.every(test => test.passed)) throw new Error('Incomplete Python parity suite');
   // Exercise package exports by name, not just by absolute entry filenames.
   process.stdout.write(run(['--input-type=module', '-e',
-    "import {Session} from '@fasttls/fastls'; import {createRequire} from 'node:module'; const cjs=createRequire(import.meta.url)('@fasttls/fastls'); if(Session!==cjs.Session)throw Error('entry mismatch'); const s=new Session(); try {if(!s.listProfiles().includes('chrome/156/windows'))throw Error('missing profile')}finally{s.close()}"], temporary, env));
+    "import {Session,ServerSentEvent,SSEStream} from '@fasttls/fastls'; import {createRequire} from 'node:module'; const cjs=createRequire(import.meta.url)('@fasttls/fastls'); if(Session!==cjs.Session||ServerSentEvent!==cjs.ServerSentEvent||SSEStream!==cjs.SSEStream)throw Error('entry mismatch'); if(new ServerSentEvent('{\"ok\":true}').json().ok!==true)throw Error('event JSON'); const s=new Session(); try {if(!s.listProfiles().includes('chrome/156/windows'))throw Error('missing profile')}finally{s.close()}"], temporary, env));
   // Preserve the exact tested tarball for CI artifacts; it still requires the separate Go library.
   const destination = resolve(root, '../dist');
   mkdirSync(destination, { recursive: true });

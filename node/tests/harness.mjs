@@ -14,6 +14,7 @@ const require = createRequire(import.meta.url);
 const entry = process.env.FASTLS_NODE_PACKAGE ? require.resolve('@fasttls/fastls', { paths: [process.env.FASTLS_NODE_PACKAGE] }) : require.resolve('..');
 export const sdk = require(entry);
 export const { Native } = require(resolve(dirname(entry), 'native.js'));
+export const { SSEDecoder } = require(resolve(dirname(entry), 'sse.js'));
 export const SLAB = Buffer.alloc(65536);
 for (let i=0;i<SLAB.length;i+=4) SLAB.set([0,1,128,255],i);
 export const sha = bytes => createHash('sha256').update(bytes).digest('hex');

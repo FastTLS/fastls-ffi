@@ -1,4 +1,4 @@
-import { Session, type RequestOptions, type Response, type StreamResponse } from '@fasttls/fastls';
+import { Session, ServerSentEvent, type SSEOptions, type SSEStream, type RequestOptions, type Response, type StreamResponse } from '@fasttls/fastls';
 
 async function consume(session: Session): Promise<void> {
   const options: RequestOptions = { body: Buffer.from([0, 255]), signal: AbortSignal.timeout(1000) };
@@ -23,6 +23,20 @@ async function consume(session: Session): Promise<void> {
   await duplex.closeAsync();
   const automatic = await session.stream('POST', 'https://example.com', { duplex: true, body: [Buffer.from('chunk')] });
   await automatic.closeAsync();
+  const sseOptions: SSEOptions = { maxEventBytes: 1024, lastEventId: '41', timeoutMs: { total: 60000, read: 5000 } };
+  const events: SSEStream = await session.sse('GET', 'https://example.com/events', sseOptions);
+  for await (const event of events) {
+    const value: string = event.data, retry: number | undefined = event.retry;
+    const payload: { ok: boolean } = event.json<{ ok: boolean }>();
+    void value; void retry; void payload;
+  }
+  const saved: string = events.lastEventId;
+  const event = new ServerSentEvent(saved);
+  // @ts-expect-error Server-sent events are immutable.
+  event.data = 'changed';
+  // @ts-expect-error IDs must be strings.
+  session.sse('GET', 'https://example.com/events', { lastEventId: 1 });
+  await events.closeAsync();
   await session.closeAsync();
   // @ts-expect-error Manual duplex accepts send() instead of body.
   session.duplex('POST', 'https://example.com', { body: Buffer.from('invalid') });

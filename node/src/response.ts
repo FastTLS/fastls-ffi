@@ -130,6 +130,9 @@ export class StreamResponse {
 
   get ok(): boolean { return this.status >= 200 && this.status < 300; }
 
+  /** @internal Check cancellation even when a parser still holds buffered data. */
+  ensureOpen(): void { this.transfer.ensureOpen(); }
+
   private async *iterate(): AsyncGenerator<Buffer> {
     if (this.consumed) throw new FastlsError("response body already has a consumer");
     this.consumed = true;

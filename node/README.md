@@ -6,6 +6,7 @@
 
 0.2 开发版本对齐 Python 的解压、分层超时和上传能力：默认解压响应，大于512 KiB的字符串/字节自动流式上传。新版SDK要求带 stream_decode、phase_timeouts、stream_upload 和 write_timeout 的动态库。
 0.3 增加显式 HTTP/2 双工读写；使用时另检查原生库的 duplex_h2 能力。
+0.4 增加 SSE 事件流，按需解析 UTF-8 事件，支持手动恢复、事件大小限制及与双工上传组合。
 
 ## 本地构建与使用
 
@@ -151,6 +152,45 @@ try {
 
 重复收发、取消和提前拒绝可运行 `npm run test:duplex:soak`（默认60秒，FASTLS_NODE_DUPLEX_SOAK_SECONDS可设为1..300）。Linux当前Go组合把这项独立压力检查纳入CI，检查原生请求、JS生产者任务、RSS、句柄和goroutine的回收。
 
+## SSE 事件流
+
+```js
+const events = await session.sse('GET', 'https://example.com/events', {
+  timeoutMs: { total: 3_600_000, read: 45_000 },
+  lastEventId: '41', // 可选：上次完整提交的事件 ID
+});
+try {
+  for await (const event of events) {
+    console.log(event.event, event.id, event.data);
+    if (event.data === '[DONE]') break;
+  }
+} finally { await events.closeAsync(); }
+```
+
+`session.sse(method, url, options)` 返回单消费者 `SSEStream`，复用普通请求的配置、Cookie、连接池和 AbortSignal。
+事件为不可变的 `ServerSentEvent`，含 `data`、`event`（默认message）、`id` 和可选的 `retry`（毫秒）；`event.json()` 解析 JSON，非法 JSON 抛出 SyntaxError。
+`[DONE]` 是普通数据，由应用决定是否停止。`events.response` 提供响应元数据，请勿同时读取其正文。
+
+解析支持任意字节分块、UTF-8替换、初始BOM、CR/LF/CRLF、多行及空data；空行提交事件，EOF丢弃未完成的事件。
+ID跨事件保留，空值重置，含NUL的ID忽略。`events.lastEventId` 仅在完整块结束时更新，包括仅含ID的控制块；`events.retry` 保留最近合法的重试提示。
+retry只接受ASCII数字并截到2147483647；单个事件的retry只反映其当前块。
+`lastEventId` 同时设置请求头和初始解析状态，拒绝NUL/CR/LF。SDK不会自动重连或重放请求。
+
+默认请求头为Accept:text/event-stream和Cache-Control:no-cache，请求headers可覆盖，优先于同名会话默认头。
+HTTP200要求唯一的text/event-stream内容类型（可带MIME参数）；HTTP204返回空流，其它状态拒绝。
+始终按UTF-8解析；压缩沿用原生解码及完整性检查，收到压缩流时不能关闭decodeContent。
+
+`maxEventBytes` 默认1MiB，范围1..64MiB，分别限制原始单行及累计data的UTF-8字节数（含多行分隔符）；超限关闭请求。
+无后台事件队列，停止拉取时停止解析和原生读取，整个事件流可超过32MiB缓存上限。解析器还持有当前块、ID、事件类型及解码开销。
+事件之间让出事件循环，确保同一网络块包含大量事件时，计时器和取消仍能执行。
+
+默认总超时仍为30秒；可显式增加total（最长24小时），目前不支持null或关闭总超时。
+注释心跳刷新网络read预算，total仍从请求开始计时。
+`cancel()`、`close()`、`closeAsync()` 和提前break沿用响应清理；未开始迭代时也应显式关闭。
+HTTP/2可组合 `{ duplex: true, body: signal => source(signal) }` 边上传边接收事件；上传完成检查为 `events.response.waitUpload()`。
+可运行示例 `examples/sse.mjs`，完整解析规则与Python对应验收见上级SSE.md和本目录PARITY.md。
+`npm run test:sse:soak` 默认以32路并发重复运行60秒，验证正常结束、提前退出、错误头、解析超限和解码失败后的资源回收；可设置FASTLS_NODE_SSE_SOAK_SECONDS为1..300。Linux当前Go组合纳入CI。
+
 ## 调度与边界
 
 网络由 Go goroutine 执行。SDK 通过共享约 10 ms 定时器轮询非阻塞 C 接口，
@@ -174,7 +214,7 @@ npm run test:package
 测试使用真实动态库和本地靶场，覆盖 H1/H2、证书、连接池、Cookie、多值头、二进制、取消、超时、
 异常正文、64 MiB 下载、32 MiB 缓存限制和 128 路并发。安装包测试在临时项目安装 npm tarball，
 重新执行全部测试并检查包名导入和 TypeScript 声明。证据写入仓库 build/node-*.json。
-新增92个Python场景的对应项，包含13项双工验收，连同原有16项，共108项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
+九组Python套件的115个场景已有对应项，包含13项双工和23项SSE验收，连同原有16项，共131项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
 持续测试默认30秒，检查RSS、操作系统句柄/描述符、Go堆和goroutine回收。Linux当前Go/Node组合另跑300秒；设置 `FASTLS_NODE_SOAK_SECONDS=300` 后执行 `npm run test:soak` 可复现。
 
 ## 与Python的语言差异
