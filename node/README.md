@@ -149,6 +149,8 @@ try {
 应使用接收 AbortSignal 的工厂或可销毁 Readable 来取消挂起I/O。JavaScript不能中断任意Promise；不配合信号的生产者可能使等待清理的Promise持续挂起，但原生请求仍会及时释放。双工 `read()`、`request()` 和迭代结束也会等待清理。
 示例见 `examples/duplex.mjs`。
 
+重复收发、取消和提前拒绝可运行 `npm run test:duplex:soak`（默认60秒，FASTLS_NODE_DUPLEX_SOAK_SECONDS可设为1..300）。Linux当前Go组合把这项独立压力检查纳入CI，检查原生请求、JS生产者任务、RSS、句柄和goroutine的回收。
+
 ## 调度与边界
 
 网络由 Go goroutine 执行。SDK 通过共享约 10 ms 定时器轮询非阻塞 C 接口，

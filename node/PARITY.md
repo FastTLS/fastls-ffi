@@ -41,6 +41,7 @@ TypeScript 的 ESM/CommonJS 类型检查及安装包内容/哈希检查独立于
 ## 持续运行与证据
 
 源码和安装包分别默认运行30秒、32路并发的资源回收测试。Linux当前Go组合额外运行300秒。
+同一Linux组合另跑60秒、32路并发的双工混合长测，轮换自动上传、取消、手动交换与提前拒绝；支持设置FASTLS_NODE_DUPLEX_SOAK_SECONDS=300延长。该独立检查不计入108项主套件。
 预热后检查goroutine增量不超过16、Go heap_inuse峰值增量不超过96MiB、RSS峰值增量不超过128MiB、最终RSS增量不超过96MiB、句柄/描述符增量不超过64，与Python阈值一致。
 记录请求数、完整时间序列和基线；阈值是回归保护，不是无内存泄漏的证明。
 Node读取Windows GetProcessHandleCount、Linux /proc/self/fd 或macOS /dev/fd，RSS采用当前进程工作集；GC可用时在预热后执行一次。
@@ -50,4 +51,5 @@ npm test
 npm run test:package
 # 设置 FASTLS_NODE_SOAK_SECONDS=300 后：
 npm run test:soak
+npm run test:duplex:soak
 ```

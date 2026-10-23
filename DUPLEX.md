@@ -61,3 +61,5 @@ with Session(profile="chrome/156/windows") as session:
 源码与wheel用例均加入六组原生Actions。核心另验证响应头后阻塞上传在write超时、响应关闭、会话关闭时解除阻塞，并纳入Linux race。证据写入`build/stability-duplex-*.json`；配置加入与本地通过不等于全部远端平台已通过，应以同一提交的Actions与artifact为准。
 
 Node 0.3提供`stream(..., { duplex: true, body })`以及`session.duplex()`手动交换，对应`send()`、`finishUpload()`、`response.waitUpload()`和异步清理。13项双工对应测试与原套件合计108项，源码和隔离安装包均执行。接口示例、Promise及生产者取消的差异见[node/README.md](node/README.md)和[node/PARITY.md](node/PARITY.md)。
+
+双工混合持续测试还覆盖同一连接上大量取消后的继续读写。fhttp的已取消流DATA处理必须保持本地连接额度不变，并向对端退还对应字节；不能重复增加本地额度，否则正常流最终会等待不会发出的窗口更新。该回归已纳入连接窗口单元测试及Linux race检查。

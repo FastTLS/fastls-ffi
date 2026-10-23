@@ -149,6 +149,11 @@ jobs:
         env:
           FASTLS_NODE_SOAK_SECONDS: '300'
         run: npm run test:soak --prefix node
+      - name: Mixed HTTP/2 duplex recovery soak
+        if: matrix.race
+        env:
+          FASTLS_NODE_DUPLEX_SOAK_SECONDS: '60'
+        run: npm run test:duplex:soak --prefix node
       - name: Save binaries and evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

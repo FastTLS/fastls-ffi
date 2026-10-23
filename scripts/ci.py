@@ -45,7 +45,7 @@ def preflight(env):
         "imitate/go.mod": ("github.com/FastTLS/imitate",),
         "fhttp/go.mod": ("github.com/FastTLS/fhttp",),
         "fhttp/http2/explicit_settings_test.go": ("func TestExplicitZeroDoesNotSelectNavigatorDefaults", "func TestExplicitEmptySettings"),
-        "fhttp/http2/receive_window_test.go": ("func TestReceiveWindowMatchesWire",),
+        "fhttp/http2/receive_window_test.go": ("func TestReceiveWindowMatchesWire", "func TestReceiveWindowClosedStreamDataRefund", "func TestReceiveWindowClosedStreamDataOverrun"),
         "fastls/session.go": ("func NewSession", "Duplex"),
         "fastls/duplex_test.go": ("func TestDuplexEarlyHeadersUploadLifetime",),
         "fastls/cookie_store.go": ("func NewCookieStore",),

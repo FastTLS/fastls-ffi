@@ -65,5 +65,5 @@ afterEach(async()=>{
 after(async()=>{
   monitor?.close();
   if(child){child.stdin.end();const timer=setTimeout(()=>child.kill(),10000);try{await childExit;}finally{clearTimeout(timer);}}
-  writeFileSync(resolve(root,'build',`node-parity-${evidence.label}-${Date.now()}.json`),JSON.stringify(evidence,null,2));
+  if(evidence.cases.length)writeFileSync(resolve(root,'build',`node-parity-${evidence.label}-${Date.now()}.json`),JSON.stringify(evidence,null,2));
 });

@@ -19,6 +19,7 @@ runner标签采用GitHub官方支持的标准runner。具体可用额度由仓�
 Node.js SDK 新增同一原生矩阵的检查：前五组使用 Node 24，最低版本组使用 Node 22。
 Node 0.3 将八组Python SDK的92个场景映射为对应Node用例，包含13项双工验收，连同原有16项共108项；源码与隔离安装包均执行。
 每组各运行30秒Node资源回收测试；Linux当前Go组合另跑300秒，检查RSS、句柄/描述符、Go堆及goroutine。
+Linux当前Go组合另跑60秒双工混合长测，覆盖同连接连续收发、取消、手动交换和提前拒绝，防止取消后流控记账漂移。
 `npm run test:parity`检查Python新增/删除用例是否仍有精确映射；语言差异见node/PARITY.md。
 在已有原生/Python/C 检查通过后执行 `npm ci --prefix node`、`npm test --prefix node` 和
 `npm run test:package --prefix node`。安装包检查在临时项目安装 tarball，重复真实动态库测试并验证 ESM/CJS 包名入口。
@@ -41,7 +42,7 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 2026-10-23经用户授权，已将相关实现推送到三个上游的v2开发分支，原main和旧标签不变。ci/dependencies.json固定以下审阅提交：
 
 - fastls：632aa5fca49db2a7306eb99c2305151e808e4972。
-- fhttp：98f4d35f1de6f93f3aa53cfaf33ae090407595b9。
+- fhttp：e027ce786984d3e7e831b0d10c54875dec746b35（修复已取消流DATA导致的连接接收额度膨胀）。
 - imitate：28b32d452256e3acbdb2e904869e5c4331bf0177。
 
 Fastls依赖包含连接生命周期、隔离的私有CA根配置、可复用Session、多值头/CookieStore及流式解码/分层预算；Brotli固定v1.2.0以拒绝截断流。fhttp包含HTTP2接收窗口修复、可取消的共用建连及独立空闲超时。动态库须重新构建；核心包测试执行顺序请求、重定向、关闭后重连、活动响应体及并发回归，封装侧重新执行全部同步/异步与流式测试。
