@@ -79,10 +79,12 @@ class Client:
 
     def __init__(self, spec):
         self.spec = spec
-        self.name = spec['client']
+        self.name = 'fastls' if spec['client'] == 'fastls-poll' else spec['client']
         if self.name not in ('requests', 'fastls'):
             raise ValueError('unsupported benchmark client')
-        self.case = spec['case']
+        self.case = dict(spec['case'])
+        if spec['client'] == 'fastls-poll':
+            self.case['poll'] = True
         self.ca = spec['fixture']['ca_file']
         self.native_reference = None
         self.match = None
@@ -407,6 +409,8 @@ def main():
         contract_errors.append(f'native handles not recovered: {native}')
     emit('closed', native=native)
     result.update(server=stats, warmup=warm, native_final=native, tls_wrong_ca_rejected=True, contract_errors=contract_errors, import_seconds=client.import_seconds, session_setup_including_tls_probe_seconds=client.session_setup_seconds, configuration=dict(profile=client.profile if client.name == 'fastls' else None, match=client.match))
+    if client.name == 'fastls':
+        result['configuration']['notification_mode'] = 'poll' if client.case['poll'] else 'native'
     Path(spec['result_file']).write_text(json.dumps(result, indent=2) + '\n')
     if not result['success'] or result['failed'] or warm['failed'] or contract_errors:
         return 1

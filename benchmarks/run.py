@@ -138,6 +138,8 @@ def main():
     p.add_argument('--shards', type=int, default=1)
     p.add_argument('--shard-index', type=int, default=0)
     args = p.parse_args()
+    if not args.case:
+        args.case = [name.strip() for name in os.environ.get('BENCH_CASES', '').split(',') if name.strip()]
     if not 1 <= args.shards <= 32 or not 0 <= args.shard_index < args.shards:
         p.error('invalid shard range')
     rounds = dict(smoke=1, quick=2, full=5)[args.profile] if args.rounds is None else args.rounds
@@ -159,7 +161,7 @@ def main():
         p.error('empty shard')
     identifier = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + platform.system() + '-' + str(args.shard_index)
     library = ROOT / 'dist' / ('fastls.dll' if os.name == 'nt' else 'libfastls.dylib' if sys.platform == 'darwin' else 'libfastls.so')
-    report = dict(schema_version=2, resource_scope='recursive client process tree', environment_id=identifier, profile=args.profile, rounds=rounds, shard=args.shard_index, shards=args.shards, created_at=datetime.now(timezone.utc).isoformat(), python=sys.version, platform=platform.platform(), machine=platform.machine(), cpu=platform.processor(), logical_cpus=psutil.cpu_count(), memory_bytes=psutil.virtual_memory().total, python_ssl=ssl.OPENSSL_VERSION, packages=deps, library_sha256=hashlib.sha256(library.read_bytes()).hexdigest(), build_info=json.loads((ROOT / 'dist/build-info.json').read_text()), sources={name: revision(path) for name, path in (('fastls-ffi', ROOT), ('fastls', ROOT.parent / 'fastls'), ('fhttp', ROOT.parent / 'fhttp'), ('imitate', ROOT.parent / 'imitate'))}, benchmark_sources={path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in (ROOT / 'benchmarks').glob('*.py')}, not_applicable=[dict(client='requests', protocol='h2', reason='standard Requests has no H2 client'), dict(clients=['requests'], workload='parsed', reason='native Fastls SSE parser is an independent measurement')], runs=[])
+    report = dict(schema_version=2, resource_scope='recursive client process tree', environment_id=identifier, profile=args.profile, rounds=rounds, shard=args.shard_index, shards=args.shards, created_at=datetime.now(timezone.utc).isoformat(), python=sys.version, platform=platform.platform(), selected_case_names=[case['name'] for case in selected], machine=platform.machine(), cpu=platform.processor(), logical_cpus=psutil.cpu_count(), memory_bytes=psutil.virtual_memory().total, python_ssl=ssl.OPENSSL_VERSION, packages=deps, library_sha256=hashlib.sha256(library.read_bytes()).hexdigest(), build_info=json.loads((ROOT / 'dist/build-info.json').read_text()), sources={name: revision(path) for name, path in (('fastls-ffi', ROOT), ('fastls', ROOT.parent / 'fastls'), ('fhttp', ROOT.parent / 'fhttp'), ('imitate', ROOT.parent / 'imitate'))}, benchmark_sources={path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in (ROOT / 'benchmarks').glob('*.py')}, not_applicable=[dict(client='requests', protocol='h2', reason='standard Requests has no H2 client'), dict(clients=['requests'], workload='parsed', reason='native Fastls SSE parser is an independent measurement')], runs=[])
     config = {'smoke': (0.15, 0.03, 150, 1048576), 'quick': (1, 0.2, 1000, 16 * 1048576), 'full': (30, 10, 5000, 16 * 1048576)}[args.profile]
     server = subprocess.Popen([str(fixture)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, text=True)
     try:

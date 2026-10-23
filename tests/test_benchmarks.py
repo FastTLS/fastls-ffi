@@ -65,6 +65,9 @@ class BenchmarkContract(unittest.TestCase):
         shards=[plan[i::6] for i in range(6)]
         self.assertEqual(sum(map(len,shards)),len(plan))
         self.assertTrue(all(c["concurrency"]<=128 for c in plan))
+        for name in ("notifications-small-paired","notifications-idle-paired"):
+            paired=next(c for c in plan if c["name"]==name)
+            self.assertEqual(paired["clients"],["fastls","fastls-poll"])
 
     def test_report_is_offline_and_escapes_embedded_json(self):
         report=dict(environment_id="<script>alert(1)</script>",profile="smoke",runs=[])

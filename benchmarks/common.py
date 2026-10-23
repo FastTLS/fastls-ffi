@@ -49,7 +49,6 @@ def cases(profile):
     for count in (1, concurrency):
         put(f'browser-h2-c{count}', 'h2', 'async', ['fastls'], browser=True, concurrency=count)
     for workload in ('small', 'idle'):
-        for poll in (False, True):
-            put(f"notifications-{workload}-{('poll' if poll else 'native')}", 'h2', 'async', ['fastls'], workload=workload, concurrency=concurrency, poll=poll)
+        put(f'notifications-{workload}-paired', 'h2', 'async', ['fastls', 'fastls-poll'], workload=workload, concurrency=concurrency)
     put('sse-parser-h2', 'h2', 'async', ['fastls'], workload='parsed', concurrency=concurrency)
     return result
