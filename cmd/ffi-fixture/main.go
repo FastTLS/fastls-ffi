@@ -103,7 +103,7 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"method": r.Method, "body": body, "headers": r.Header, "protocol": r.Proto})
+		json.NewEncoder(w).Encode(map[string]any{"method": r.Method, "body": body, "headers": r.Header, "protocol": r.Proto, "host": r.Host})
 	case "/wait":
 		select {
 		case <-o.release:

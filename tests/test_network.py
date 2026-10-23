@@ -232,6 +232,7 @@ class NetworkFaults(FixtureCase):
                 self.assertEqual(original["headers"]["Authorization"], [headers["Authorization"]])
                 self.assertEqual(original["headers"]["Cookie"], [headers["Cookie"]])
                 redirected = session.get(self.fixture[name] + "/redirect-host", headers=headers).json()
+                self.assertEqual(redirected["host"], "localhost:" + self.fixture[name].rsplit(":", 1)[1])
                 self.assertNotIn("Authorization", redirected["headers"])
                 self.assertNotIn("Cookie", redirected["headers"])
                 self.assertEqual(redirected["headers"]["X-Test-Public"], ["keep"])
