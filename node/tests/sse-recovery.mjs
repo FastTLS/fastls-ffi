@@ -1,12 +1,13 @@
 import test from 'node:test';
 import { writeFileSync } from 'node:fs';
+import { getHeapSpaceStatistics } from 'node:v8';
 import { session, fixture, assert, sdk, delay, eventually, resources, root, randomUUID } from './harness.mjs';
 
 const seconds = Number(process.env.FASTLS_NODE_SSE_SOAK_SECONDS ?? 60);
 assert.ok(Number.isInteger(seconds) && seconds >= 1 && seconds <= 300);
 test('repeated SSE completion, early break, invalid headers and parser/decode errors recover resources', { timeout: seconds * 1000 + 45000 }, async t => {
   const s = session(t, { timeoutMs: 10000 });
-  const proof = { node: process.version, platform: process.platform, arch: process.arch,
+  const proof = { node: process.version, platform: process.platform, arch: process.arch, runtime_args: process.execArgv,
     concurrency: 32, passed: false, requests: 0, warmup_requests: 96, samples: [],
     completed: 0, cancelled: 0, rejected: 0, parser_errors: 0, decode_errors: 0 };
   let started, batchNumber = 0;
@@ -38,13 +39,13 @@ test('repeated SSE completion, early break, invalid headers and parser/decode er
   };
   try {
     for (let i = 0; i < 3; i++) await batch();
-    global.gc?.(); proof.baseline = resources(); started = performance.now();
+    global.gc?.(); proof.baseline = resources(); proof.baseline_v8 = getHeapSpaceStatistics(); started = performance.now();
     while (performance.now() - started < seconds * 1000) {
       await batch(); proof.samples.push(resources()); await delay(50);
     }
     assert.equal(proof.completed, proof.requests / 4); assert.equal(proof.cancelled, proof.requests / 4);
     assert.equal(proof.rejected, proof.requests / 4); assert.equal(proof.parser_errors + proof.decode_errors, proof.requests / 4);
-    await s.closeAsync(); proof.final = resources();
+    await s.closeAsync(); proof.final = resources(); proof.final_v8 = getHeapSpaceStatistics();
     assert.ok(proof.final.goroutines <= proof.baseline.goroutines + 16);
     assert.ok(proof.final.descriptors_or_handles <= proof.baseline.descriptors_or_handles + 64);
     assert.ok(proof.final.rss_bytes <= proof.baseline.rss_bytes + 96 * 1024 ** 2);

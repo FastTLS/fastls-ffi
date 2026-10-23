@@ -190,6 +190,7 @@ HTTP200要求唯一的text/event-stream内容类型（可带MIME参数）；HTTP
 HTTP/2可组合 `{ duplex: true, body: signal => source(signal) }` 边上传边接收事件；上传完成检查为 `events.response.waitUpload()`。
 可运行示例 `examples/sse.mjs`，完整解析规则与Python对应验收见上级SSE.md和本目录PARITY.md。
 `npm run test:sse:soak` 默认以32路并发重复运行60秒，验证正常结束、提前退出、错误头、解析超限和解码失败后的资源回收；可设置FASTLS_NODE_SSE_SOAK_SECONDS为1..300。Linux当前Go组合纳入CI。
+该独立长测固定V8年轻代参数以比较RSS增量，保留原有资源阈值，记录运行参数和堆空间快照；不会更改SDK用户进程的配置，说明见PARITY.md。
 
 ## 调度与边界
 

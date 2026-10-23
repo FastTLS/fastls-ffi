@@ -47,6 +47,7 @@ TypeScript 的 ESM/CommonJS 类型检查及安装包内容/哈希检查独立于
 源码和安装包分别默认运行30秒、32路并发的资源回收测试。Linux当前Go组合额外运行300秒。
 同一Linux组合另跑60秒、32路并发的双工混合长测，轮换自动上传、取消、手动交换与提前拒绝；支持设置FASTLS_NODE_DUPLEX_SOAK_SECONDS=300延长。该独立检查不计入131项主套件。
 该组合另跑60秒、32路并发的SSE混合长测，轮换正常/压缩事件流、提前break、非法响应头、解析上限及解码错误；设置FASTLS_NODE_SSE_SOAK_SECONDS=300可延长。同样不计入131项主套件，证据为build/node-sse-recovery-source-*.json。
+独立SSE长测显式设置V8的`--max-semi-space-size=16`，以统一不同主机的年轻代容量。Windows Node24默认策略在高分配速率下可将年轻代保留空间扩至128MiB，即使完整GC后存活对象恢复仍保留该空间，影响从冷进程预热基线计算的RSS增量。该参数只约束测试进程的年轻代，不限制老年代、不改变SDK运行配置；RSS、Go堆、goroutine与句柄阈值均保持不变，证据另存运行参数和V8堆空间快照。
 预热后检查goroutine增量不超过16、Go heap_inuse峰值增量不超过96MiB、RSS峰值增量不超过128MiB、最终RSS增量不超过96MiB、句柄/描述符增量不超过64，与Python阈值一致。
 记录请求数、完整时间序列和基线；阈值是回归保护，不是无内存泄漏的证明。
 Node读取Windows GetProcessHandleCount、Linux /proc/self/fd 或macOS /dev/fd，RSS采用当前进程工作集；GC可用时在预热后执行一次。
