@@ -1,17 +1,33 @@
 """Checks that performance reports cannot hide failures or mix hosts."""
 import json
 import math
+import os
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import unittest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"benchmarks"))
 from common import Histogram, cases
 from report import summaries, render
+from run import snapshot
+import psutil
 
 
 class BenchmarkContract(unittest.TestCase):
+    def test_sampler_includes_actual_interpreter_behind_launcher(self):
+        code="import json,os,psutil,sys; data=bytearray(b'x'*(16*1024*1024)); print(json.dumps({'pid':os.getpid(),'rss':psutil.Process().memory_info().rss}),flush=True);sys.stdin.readline()"
+        process=subprocess.Popen([sys.executable,"-c",code],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
+        try:
+            actual=json.loads(process.stdout.readline())
+            sampled=snapshot(psutil.Process(process.pid))
+            self.assertIn(actual["pid"],{p["pid"] for p in sampled["processes"]})
+            self.assertGreaterEqual(sampled["rss_bytes"],actual["rss"]-1024*1024)
+            self.assertEqual(sampled["threads"],sum(p["threads"] for p in sampled["processes"]))
+        finally:
+            process.stdin.close();process.wait(timeout=5);process.stdout.close()
+
     def test_quantiles_are_bounded_and_do_not_retain_samples(self):
         h=Histogram()
         values=[.0001,.001,.01,.1,1.0]*10000
@@ -29,9 +45,10 @@ class BenchmarkContract(unittest.TestCase):
         result=summaries([dict(environment_id="a",runs=[good,failed]),dict(environment_id="b",runs=[good])])
         self.assertEqual(len(result),2)
         first=result[0]
-        self.assertEqual(first["rps"]["median"],10)
+        self.assertNotIn("rps",first)
         self.assertEqual((first["valid_rounds"],first["rounds"],first["failed"]),(1,2,1))
         self.assertEqual(first["errors"],["failure"])
+        self.assertEqual(result[1]["rps"]["median"],10)
         changed=summaries([dict(environment_id="a",runs=[good],source_changed_during_run=True)])[0]
         self.assertEqual(changed["valid_rounds"],0)
         self.assertNotIn("rps",changed)

@@ -50,21 +50,23 @@ class Metrics:
         self.latency, self.ttfb = Histogram(), Histogram()
         self.blocks, self.errors = Counter(), Counter()
         self.error_examples = []
+        self.failure_details = []
         self.lock = threading.Lock()
 
-    def add(self, elapsed, first, size, blocks, error=None, events=0):
+    def add(self, elapsed, first, size, blocks, error=None, events=0, partial_bytes=0):
         with self.lock:
             if error is not None:
                 self.failed += 1; self.errors[type(error).__name__] += 1
                 if len(self.error_examples) < 5:
                     self.error_examples.append(f"{type(error).__name__}: {error}"[:400])
+                    self.failure_details.append(dict(type=type(error).__name__,elapsed_seconds=elapsed,partial_body_bytes=partial_bytes))
             else:
                 self.success += 1; self.bytes += size; self.events += events
                 self.latency.add(elapsed); self.ttfb.add(first)
                 self.blocks.update(blocks)
 
     def result(self, elapsed):
-        return dict(success=self.success, failed=self.failed, errors=dict(self.errors), error_examples=self.error_examples,
+        return dict(success=self.success, failed=self.failed, errors=dict(self.errors), error_examples=self.error_examples,failure_details=self.failure_details,
                     successful_bytes=self.bytes, events=self.events, elapsed_seconds=elapsed,
                     rps=self.success / elapsed, mib_per_second=self.bytes / elapsed / 1048576,
                     p50_seconds=self.latency.percentile(.5), p95_seconds=self.latency.percentile(.95) if self.success>=20 else None,
@@ -84,6 +86,7 @@ class Client:
         self.ca = spec['fixture']['ca_file']
         self.native_reference = None
         self.match = None
+        self.session_setup_seconds = []
         started = CLOCK()
         if self.name == 'requests':
             import requests
@@ -155,6 +158,30 @@ class Client:
         if self.match is None:
             self.match = getattr(response, 'match', None)
 
+    def prime(self, session, run):
+        with self.stream(session, run, True) as response:
+            self.check(response)
+            iterator = response.iter_bytes if self.name == 'fastls' else response.iter_content
+            digest = hashlib.sha256()
+            size = 0
+            for chunk in iterator(chunk_size=65536):
+                digest.update(chunk)
+                size += len(chunk)
+            if size != 1024 or digest.hexdigest() != expected_digest(1024):
+                raise AssertionError('priming body mismatch')
+
+    async def aprime(self, session, run):
+        async with self.astream(session, run, True) as response:
+            self.check(response)
+            iterator = response.aiter_bytes if self.name == 'fastls' else response.aiter_content
+            digest = hashlib.sha256()
+            size = 0
+            async for chunk in iterator(chunk_size=65536):
+                digest.update(chunk)
+                size += len(chunk)
+            if size != 1024 or digest.hexdigest() != expected_digest(1024):
+                raise AssertionError('priming body mismatch')
+
     def finish(self, count, digest, upload):
         if self.case['workload'] == 'upload':
             result = json.loads(upload)
@@ -206,7 +233,7 @@ class Client:
             size = self.finish(count, digest, upload)
             metrics.add(CLOCK() - started, first or CLOCK() - started, size, blocks)
         except Exception as error:
-            metrics.add(CLOCK() - started, 0, 0, {}, error)
+            metrics.add(CLOCK() - started, 0, 0, {}, error, partial_bytes=count)
 
     async def aperform(self, session, run, metrics):
         started = CLOCK()
@@ -247,7 +274,7 @@ class Client:
             size = self.finish(count, digest, upload)
             metrics.add(CLOCK() - started, first or CLOCK() - started, size, blocks)
         except Exception as error:
-            metrics.add(CLOCK() - started, 0, 0, {}, error)
+            metrics.add(CLOCK() - started, 0, 0, {}, error, partial_bytes=count)
 
     def stats(self):
         if self.native_reference is not None:
@@ -279,7 +306,8 @@ def server_stats(spec):
     for _ in range(100):
         with opener.open(url,timeout=5) as response: stats=json.load(response)
         if stats["active"]==0:
-            with opener.open(url+"-warm",timeout=5) as response: response.read()
+            for suffix in ("-warm","-prime"):
+                with opener.open(url+suffix,timeout=5) as response: response.read()
             return stats
         time.sleep(.01)
     raise AssertionError("server retained active benchmark requests")
@@ -289,11 +317,14 @@ def run_sync(client, spec):
     count=client.case["concurrency"]; metrics=Metrics(); warm=Metrics()
     ready=threading.Barrier(count+1,timeout=60); done=threading.Barrier(count+1,timeout=120)
     cleanup=threading.Event(); start=threading.Event(); shared={}
-    warm_started=CLOCK(); warm_deadline=warm_started+spec["warmup_seconds"]
+    warm_started=CLOCK()
     def worker():
         session=None
         try:
-            if not client.case["cold"]: session=client.session()
+            if not client.case["cold"]:
+                setup=CLOCK();session=client.session();client.prime(session,spec["run_id"]+"-prime")
+                client.session_setup_seconds.append(CLOCK()-setup)
+            warm_deadline=CLOCK()+spec["warmup_seconds"]
             while CLOCK()<warm_deadline:
                 if session is None:
                     with client.session() as fresh: client.perform(fresh,spec["run_id"]+"-warm",warm)
@@ -324,7 +355,14 @@ def run_sync(client, spec):
 async def run_async(client,spec):
     metrics=Metrics(); warm=Metrics(); count=client.case["concurrency"]
     async with AsyncExitStack() as stack:
+        setup=CLOCK()
         session=None if client.case["cold"] else await stack.enter_async_context(client.session(async_=True))
+        if session is not None:
+            # Establish the shared H2 connection before concurrent warmup. Record
+            # this setup explicitly; first-parallel startup has its own probe.
+            for _ in range(count):
+                await client.aprime(session,spec["run_id"]+"-prime")
+            client.session_setup_seconds.append(CLOCK()-setup)
         async def operation(run,target):
             if client.case["cold"]:
                 async with client.session(async_=True) as fresh: await client.aperform(fresh,run,target)
@@ -368,7 +406,7 @@ def main():
     if native is not None and any((native[k] for k in ('open_requests', 'workers', 'notifiers', 'open_sessions'))):
         contract_errors.append(f'native handles not recovered: {native}')
     emit('closed', native=native)
-    result.update(server=stats, warmup=warm, native_final=native, tls_wrong_ca_rejected=True, contract_errors=contract_errors, import_seconds=client.import_seconds, configuration=dict(profile=client.profile if client.name == 'fastls' else None, match=client.match))
+    result.update(server=stats, warmup=warm, native_final=native, tls_wrong_ca_rejected=True, contract_errors=contract_errors, import_seconds=client.import_seconds, session_setup_including_tls_probe_seconds=client.session_setup_seconds, configuration=dict(profile=client.profile if client.name == 'fastls' else None, match=client.match))
     Path(spec['result_file']).write_text(json.dumps(result, indent=2) + '\n')
     if not result['success'] or result['failed'] or warm['failed'] or contract_errors:
         return 1
