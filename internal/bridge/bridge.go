@@ -56,6 +56,7 @@ type Input struct {
 }
 
 type Info struct {
+	UploadDiscarded  bool                `json:"upload_discarded,omitempty"`
 	WireHeaderValues map[string][]string `json:"wire_header_values,omitempty"`
 	Decoded          bool                `json:"decoded"`
 	ErrorCode        string              `json:"error_code,omitempty"`
@@ -353,6 +354,7 @@ func (r *request) run(in Input, opts fastls.Options) {
 	r.info.State, r.info.Status, r.info.Headers = "headers", resp.Status, resp.Headers
 	r.info.HeaderValues = resp.HeaderValues
 	r.info.WireHeaderValues, r.info.Decoded = resp.WireHeaderValues, resp.Decoded
+	r.info.UploadDiscarded = in.StreamBody && !resp.RequestHasBody
 	r.mu.Unlock()
 	for {
 		b := make([]byte, ChunkSize)

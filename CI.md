@@ -29,7 +29,7 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 
 2026-10-23经用户授权，已将相关实现推送到三个上游的v2开发分支，原main和旧标签不变。ci/dependencies.json固定以下审阅提交：
 
-- fastls：b906173c1f48fdde8ec411eae38471c6449ccace。
+- fastls：4e40ea6521d9b5c0d8cef721b770b4063b0ebde6。
 - fhttp：98f4d35f1de6f93f3aa53cfaf33ae090407595b9。
 - imitate：28b32d452256e3acbdb2e904869e5c4331bf0177。
 

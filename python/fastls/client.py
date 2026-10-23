@@ -193,7 +193,7 @@ class Session:
             while True:
                 info = self._info(handle)
                 if info["state"] != "pending":
-                    if not ended and info["status"] < 300:
+                    if not ended and info["status"] < 300 and not info.get("upload_discarded"):
                         raise FastlsError("server responded before upload finished; duplex streaming is not supported")
                     return Response(self, handle, info)
                 if not ended:
@@ -334,7 +334,7 @@ class AsyncSession(Session):
                     producer.result()
                 info = self._info(handle)
                 if info["state"] != "pending":
-                    if producer is not None and info["status"] < 300 and (not producer.done() or producer.result() is not True):
+                    if producer is not None and info["status"] < 300 and not info.get("upload_discarded") and (not producer.done() or producer.result() is not True):
                         raise FastlsError("server responded before upload finished; duplex streaming is not supported")
                     return AsyncResponse(self, handle, info)
                 await asyncio.sleep(POLL_INTERVAL)
