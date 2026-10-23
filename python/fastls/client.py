@@ -262,6 +262,17 @@ class Session:
             exchange.close()
 
     @contextmanager
+    def sse(self, method, url, *, max_event_bytes=1024 * 1024, last_event_id=None, **kwargs):
+        from .sse import SSEStream, _request_options
+        options = _request_options(kwargs, max_event_bytes, last_event_id)
+        with self.stream(method, url, **options) as response:
+            events = SSEStream(response, max_event_bytes=max_event_bytes, last_event_id=last_event_id)
+            try:
+                yield events
+            finally:
+                events.close()
+
+    @contextmanager
     def stream(self, method, url, **kwargs):
         response = self._open(method, url, **kwargs)
         try:
@@ -451,6 +462,17 @@ class AsyncSession(Session):
                 except BaseException:
                     self._close_handle(handle)
                     raise
+
+    @asynccontextmanager
+    async def sse(self, method, url, *, max_event_bytes=1024 * 1024, last_event_id=None, **kwargs):
+        from .sse import AsyncSSEStream, _request_options
+        options = _request_options(kwargs, max_event_bytes, last_event_id)
+        async with self.stream(method, url, **options) as response:
+            events = AsyncSSEStream(response, max_event_bytes=max_event_bytes, last_event_id=last_event_id)
+            try:
+                yield events
+            finally:
+                await events.aclose()
 
     @asynccontextmanager
     async def stream(self, method, url, **kwargs):

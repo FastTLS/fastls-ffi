@@ -116,6 +116,7 @@ def run():
         execute("decode-timeouts-source", [sys.executable, "tests/test_decode_timeouts.py"])
         execute("upload-source", [sys.executable, "tests/test_upload.py"])
         execute("duplex-source", [sys.executable, "tests/test_duplex.py"])
+        execute("sse-source", [sys.executable, "tests/test_sse.py"])
         execute("cookiejar", ["go", "test", "./cookiejar"], ROOT.parent / "fhttp")
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
@@ -134,6 +135,7 @@ def run():
         execute("decode-timeouts-wheel", [sys.executable, "scripts/test_wheel.py", "--decode-timeouts"])
         execute("upload-wheel", [sys.executable, "scripts/test_wheel.py", "--upload"])
         execute("duplex-wheel", [sys.executable, "scripts/test_wheel.py", "--duplex"])
+        execute("sse-wheel", [sys.executable, "scripts/test_wheel.py", "--sse"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")

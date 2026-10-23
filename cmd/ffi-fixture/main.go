@@ -79,6 +79,120 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Test-Protocol", r.Proto)
 	w.Header().Set("X-Test-Connection", fmt.Sprint(r.Context().Value(connectionKey{})))
 	switch r.URL.Path {
+	case "/sse-vectors", "/sse-bad":
+		w.Header().Set("Content-Type", "Text/Event-Stream; charset=iso-8859-1")
+		w.Header().Set("X-Test-Accept", r.Header.Get("Accept"))
+		w.Header().Set("X-Test-Last-Event-ID", r.Header.Get("Last-Event-ID"))
+		if r.URL.Path == "/sse-bad" {
+			w.Header().Set("Content-Type", r.URL.Query().Get("type"))
+			if r.URL.Query().Get("duplicate") == "1" {
+				w.Header().Add("Content-Type", "text/event-stream")
+			}
+		}
+		data := []byte("\ufeff: heartbeat\r\nid: 41\r\nretry: 25\r\n\r\nevent: update\rretry: 30\rdata: 第一条\rdata: second\r\r: ping\nData: ignored\nid: bad\x00id\nretry: -1\nretry: ٢\n\ndata\n\nid:\nevent:\ndata:  final\n\ndata: {\"ok\":true}\n\ndata: [DONE]\n\nid: lost\ndata: unfinished")
+		if r.URL.Query().Get("corrupt") == "1" {
+			var encoded bytes.Buffer
+			z := gzip.NewWriter(&encoded)
+			z.Write(data)
+			z.Close()
+			payload := encoded.Bytes()
+			payload[len(payload)-5] ^= 0x80
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Write(payload)
+			return
+		}
+		var output io.Writer = w
+		if r.URL.Query().Get("gzip") == "1" {
+			w.Header().Set("Content-Encoding", "gzip")
+			z := gzip.NewWriter(w)
+			defer z.Close()
+			output = z
+		}
+		step := len(data)
+		if r.URL.Query().Get("fragment") == "1" {
+			step = 1
+		}
+		for offset := 0; offset < len(data); offset += step {
+			end := min(offset+step, len(data))
+			if _, err := output.Write(data[offset:end]); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		}
+	case "/sse-hold":
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "id: first\ndata: first\n\n")
+		w.(http.Flusher).Flush()
+		var ticks <-chan time.Time
+		if r.URL.Query().Get("heartbeat") == "1" {
+			ticker := time.NewTicker(40 * time.Millisecond)
+			defer ticker.Stop()
+			ticks = ticker.C
+		}
+		for {
+			select {
+			case <-o.release:
+				io.WriteString(w, "data: last\n\n")
+				return
+			case <-r.Context().Done():
+				return
+			case <-ticks:
+				if _, err := io.WriteString(w, ": heartbeat\n\n"); err != nil {
+					return
+				}
+				w.(http.Flusher).Flush()
+			}
+		}
+	case "/sse-many":
+		w.Header().Set("Content-Type", "text/event-stream")
+		count, _ := strconv.Atoi(r.URL.Query().Get("n"))
+		size, _ := strconv.Atoi(r.URL.Query().Get("size"))
+		if count < 1 || count > 1000000 || size < 1 || size > 2*1024*1024 {
+			http.Error(w, "bad bounds", 400)
+			return
+		}
+		data := append(append([]byte("data: "), bytes.Repeat([]byte("x"), size)...), '\n', '\n')
+		for i := 0; i < count; i++ {
+			if _, err := w.Write(data); err != nil {
+				return
+			}
+			f.mu.Lock()
+			o.Bytes += int64(len(data))
+			f.mu.Unlock()
+			if i%16 == 0 {
+				w.(http.Flusher).Flush()
+			}
+		}
+	case "/sse-post", "/sse-duplex":
+		w.Header().Set("Content-Type", "text/event-stream")
+		if r.URL.Path == "/sse-post" {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				return
+			}
+			encoded, _ := json.Marshal(map[string]string{"body": string(body), "accept": r.Header.Get("Accept"), "last_id": r.Header.Get("Last-Event-ID")})
+			fmt.Fprintf(w, "data: %s\n\n", encoded)
+			return
+		}
+		if r.ProtoMajor != 2 {
+			http.Error(w, "HTTP2 required", 400)
+			return
+		}
+		io.WriteString(w, "data: ready\n\n")
+		w.(http.Flusher).Flush()
+		buffer := make([]byte, 16384)
+		for {
+			n, err := r.Body.Read(buffer)
+			if n > 0 {
+				if _, writeErr := fmt.Fprintf(w, "data: %s\n\n", buffer[:n]); writeErr != nil {
+					return
+				}
+				w.(http.Flusher).Flush()
+			}
+			if err != nil {
+				return
+			}
+		}
 	case "/duplex", "/duplex-gzip", "/duplex-silent":
 		if r.ProtoMajor != 2 {
 			http.Error(w, "HTTP2 required", 400)
