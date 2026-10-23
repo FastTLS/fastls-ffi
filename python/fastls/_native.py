@@ -39,6 +39,8 @@ class Native:
         for name, args in {"fastls_session_create": [], "fastls_session_close": [C.c_uint64], "fastls_session_close_idle": [C.c_uint64]}.items():
             if hasattr(self.lib, name):
                 signatures[name] = args
+        if hasattr(self.lib, "fastls_session_cookies"):
+            signatures["fastls_session_cookies"] = [C.c_uint64, C.c_char_p, C.c_size_t]
         for name, args in signatures.items():
             fn = getattr(self.lib, name)
             fn.argtypes, fn.restype = args, C.c_void_p

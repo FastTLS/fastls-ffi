@@ -49,11 +49,12 @@ type Input struct {
 }
 
 type Info struct {
-	State   string            `json:"state"`
-	Status  int               `json:"status,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Match   profile.Match     `json:"match"`
-	Error   string            `json:"error,omitempty"`
+	State        string              `json:"state"`
+	Status       int                 `json:"status,omitempty"`
+	Headers      map[string]string   `json:"headers,omitempty"`
+	HeaderValues map[string][]string `json:"header_values,omitempty"`
+	Match        profile.Match       `json:"match"`
+	Error        string              `json:"error,omitempty"`
 }
 
 type chunk struct {
@@ -87,7 +88,10 @@ func New() *Engine {
 	return &Engine{requests: make(map[uint64]*request), sessions: make(map[uint64]*session), provider: generators.New()}
 }
 
-type session struct{ pools map[string]*fastls.Session }
+type session struct {
+	pools   map[string]*fastls.Session
+	cookies *fastls.CookieStore
+}
 
 func (e *Engine) CreateSession() (uint64, error) {
 	e.mu.Lock()
@@ -96,7 +100,7 @@ func (e *Engine) CreateSession() (uint64, error) {
 		return 0, errors.New("too many open sessions (64)")
 	}
 	id := e.next.Add(1)
-	e.sessions[id] = &session{pools: make(map[string]*fastls.Session)}
+	e.sessions[id] = &session{pools: make(map[string]*fastls.Session), cookies: fastls.NewCookieStore()}
 	return id, nil
 }
 
@@ -112,6 +116,7 @@ func (e *Engine) CloseSession(id uint64) {
 	}
 	e.mu.Unlock()
 	if s != nil {
+		s.cookies.SetEnabled(false)
 		for _, pool := range s.pools {
 			pool.Close()
 		}
@@ -244,6 +249,7 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 			poolOpts.Headers, poolOpts.HeaderValues, poolOpts.Body = nil, nil, ""
 			poolOpts.UserAgent = poolOpts.FingerprintUserAgent
 			poolOpts.DisableRedirect = false
+			poolOpts.CookieJar = s.cookies
 			pool, err = fastls.NewSession(poolOpts)
 			if err != nil {
 				e.mu.Unlock()
@@ -288,6 +294,7 @@ func (r *request) run(in Input, opts fastls.Options) {
 	}
 	r.mu.Lock()
 	r.info.State, r.info.Status, r.info.Headers = "headers", resp.Status, resp.Headers
+	r.info.HeaderValues = resp.HeaderValues
 	r.mu.Unlock()
 	for {
 		b := make([]byte, ChunkSize)

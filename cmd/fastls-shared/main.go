@@ -17,6 +17,16 @@ import (
 
 var engine = bridge.New()
 
+//export fastls_session_cookies
+func fastls_session_cookies(handle C.uint64_t, data *C.char, length C.size_t) *C.char {
+	return result(func() (any, error) {
+		if data == nil || length < 1 || length > bridge.MaxCookieInput {
+			return nil, fmt.Errorf("invalid cookie input buffer")
+		}
+		return engine.SessionCookies(uint64(handle), C.GoBytes(unsafe.Pointer(data), C.int(length)))
+	})
+}
+
 //export fastls_session_create
 func fastls_session_create() *C.char {
 	return result(func() (any, error) { return engine.CreateSession() })

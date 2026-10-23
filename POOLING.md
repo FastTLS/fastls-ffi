@@ -46,4 +46,4 @@ fastls_start的JSON新增可选session字段。不传或传0时维持原来的�
 
 tests/test_pooling.py的6项真实动态库测试通过独立Go靶场分配的连接ID验证三种协议的顺序复用、Session/profile/CA隔离、首次请求头不残留、24路HTTP2共用一条连接并取消一半、活动流期间关闭空闲连接、会话回收及建连等待者的独立截止时间。源码和wheel均为六组原生CI的必需检查；同时重跑基础、稳定性、网络异常及Linux300秒持续测试。
 
-本阶段交付连接复用，不包含自动Cookie jar、多值响应头、流式解压、分层超时、流式上传或WebSocket；这些仍在后续实施范围内。
+本文件记录连接复用阶段；后续已增加自动Cookie管理及多值头，见[COOKIES_HEADERS.md](COOKIES_HEADERS.md)。流式解压、分层超时、流式上传及WebSocket仍待实施。

@@ -29,11 +29,11 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 
 2026-10-23经用户授权，已将相关实现推送到三个上游的v2开发分支，原main和旧标签不变。ci/dependencies.json固定以下审阅提交：
 
-- fastls：1a304aacfda774477ae69f860a8ba29be8e46180。
+- fastls：0be56f8fee0c766a6762b5ddf0307dd71d4bc19a。
 - fhttp：2cff95debfe8dfe9228aef198e886de139bbc005。
 - imitate：28b32d452256e3acbdb2e904869e5c4331bf0177。
 
-Fastls依赖包含连接生命周期、隔离的私有CA根配置及可复用Session；fhttp包含HTTP2接收窗口修复、可取消的共用建连及独立空闲超时。动态库须重新构建；核心包测试执行顺序请求、重定向、关闭后重连、活动响应体及并发回归，封装侧重新执行全部同步/异步与流式测试。
+Fastls依赖包含连接生命周期、隔离的私有CA根配置、可复用Session及多值头/CookieStore；fhttp包含HTTP2接收窗口修复、可取消的共用建连及独立空闲超时。动态库须重新构建；核心包测试执行顺序请求、重定向、关闭后重连、活动响应体及并发回归，封装侧重新执行全部同步/异步与流式测试。
 
 更新依赖时，先审阅并推送上游相关实现，再更新完整40位SHA。缺失或非法SHA会使门禁明确失败，不检出旧main冒充通过。
 可以通过以下任一方式提供，优先级从高到低：
@@ -67,6 +67,8 @@ CI脚本核对Go目标与runner架构一致；跨平台二进制必须在相应r
 网络异常扩展在每组源码和wheel各运行11项测试，覆盖TCP/TLS停滞、异常HTTP报文、HTTP2流重置、正文截止时间、重定向方法及敏感头处理。范围与复现步骤见[TESTING_STAGE3.md](TESTING_STAGE3.md)，结果写入build/stability-network-*.json；任何失败都会阻止CI通过。
 
 会话复用阶段在源码和wheel各增加6项真实连接ID验收；核心Session回归及fhttp共用建连取消回归也为必需检查，并在Linux额外执行race。见[POOLING.md](POOLING.md)。
+
+多值头和Cookie阶段在源码与wheel各增加13项真实库测试，额外执行fhttp/cookiejar完整单元测试，并将原生CookieStore并发清空回归纳入核心race。见[COOKIES_HEADERS.md](COOKIES_HEADERS.md)。
 
 ## 上游完整测试的范围
 

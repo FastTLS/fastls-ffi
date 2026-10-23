@@ -77,6 +77,29 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Test-Protocol", r.Proto)
 	w.Header().Set("X-Test-Connection", fmt.Sprint(r.Context().Value(connectionKey{})))
 	switch r.URL.Path {
+	case "/cookie-set":
+		name, value := r.URL.Query().Get("name"), r.URL.Query().Get("value")
+		if name == "" {
+			name, value = "saved", "yes"
+		}
+		age, _ := strconv.Atoi(r.URL.Query().Get("max_age"))
+		http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: "/", MaxAge: age})
+		io.WriteString(w, "set")
+	case "/cookie-fields":
+		w.Header().Add("Set-Cookie", "root=one; Path=/; HttpOnly")
+		w.Header().Add("Set-Cookie", "future=two; Expires=Fri, 01 Jan 2100 00:00:00 GMT; Path=/")
+		w.Header().Add("Set-Cookie", "private=three; Path=/private")
+		w.Header().Add("Set-Cookie", "secure=four; Secure; Path=/")
+		w.Header().Add("Set-Cookie", "foreign=bad; Domain=evil.invalid; Path=/")
+		w.Header().Add("X-List", "a, b")
+		w.Header().Add("X-List", "literal/,/value")
+		io.WriteString(w, "fields")
+	case "/cookie-redirect":
+		http.SetCookie(w, &http.Cookie{Name: "first", Value: "one", Path: "/"})
+		http.Redirect(w, r, "/cookie-middle", http.StatusFound)
+	case "/cookie-middle":
+		http.SetCookie(w, &http.Cookie{Name: "second", Value: "two", Path: "/"})
+		http.Redirect(w, r, "/inspect", http.StatusFound)
 	case "/abort":
 		w.Header().Set("Content-Length", "100")
 		io.WriteString(w, "first")
@@ -121,7 +144,10 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, "released")
 		case <-r.Context().Done():
 		}
-	case "/hold":
+	case "/hold", "/cookie-hold":
+		if r.URL.Path == "/cookie-hold" {
+			http.SetCookie(w, &http.Cookie{Name: "streamed", Value: "ready", Path: "/"})
+		}
 		w.Header().Set("Content-Length", "10")
 		io.WriteString(w, "first")
 		w.(http.Flusher).Flush()

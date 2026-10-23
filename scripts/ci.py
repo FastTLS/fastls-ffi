@@ -47,6 +47,7 @@ def preflight(env):
         "fhttp/http2/explicit_settings_test.go": ("func TestExplicitZeroDoesNotSelectNavigatorDefaults", "func TestExplicitEmptySettings"),
         "fhttp/http2/receive_window_test.go": ("func TestReceiveWindowMatchesWire",),
         "fastls/session.go": ("func NewSession",),
+        "fastls/cookie_store.go": ("func NewCookieStore",),
         "fhttp/http2/pooled_dial_context_test.go": ("func TestPooledDialCancellationIsolation",),
     }
     for relative, markers in capabilities.items():
@@ -107,6 +108,8 @@ def run():
         execute("stability-source", [sys.executable, "tests/test_stability.py"])
         execute("network-source", [sys.executable, "tests/test_network.py"])
         execute("pooling-source", [sys.executable, "tests/test_pooling.py"])
+        execute("cookies-source", [sys.executable, "tests/test_cookies.py"])
+        execute("cookiejar", ["go", "test", "./cookiejar"], ROOT.parent / "fhttp")
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
         execute("fhttp-contract", ["go", "test", "./http2", "-run", "^(TestExplicitZeroDoesNotSelectNavigatorDefaults|TestExplicitEmptySettings|TestConnectionSettings|TestReceiveWindow.*|TestPooledDial.*)$", "-v"], ROOT.parent / "fhttp")
@@ -120,6 +123,7 @@ def run():
         execute("stability-wheel", [sys.executable, "scripts/test_wheel.py", "--stability"])
         execute("network-wheel", [sys.executable, "scripts/test_wheel.py", "--network"])
         execute("pooling-wheel", [sys.executable, "scripts/test_wheel.py", "--pooling"])
+        execute("cookies-wheel", [sys.executable, "scripts/test_wheel.py", "--cookies"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")

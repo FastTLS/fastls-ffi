@@ -8,6 +8,8 @@ import threading
 import time
 
 from ._native import Native, FastlsError
+from .headers import Headers
+from .cookies import Cookies
 
 # Windows asyncio can dispatch timers up to one monotonic-clock tick early.
 # A delay shorter than that tick can repeatedly complete without yielding time.
@@ -19,7 +21,7 @@ class Response:
     def __init__(self, owner, handle, info):
         self._owner, self._handle = owner, handle
         self.status_code = info["status"]
-        self.headers = info.get("headers", {})
+        self.headers = Headers(info.get("header_values"), fallback=info.get("headers", {}))
         self.match = info["match"]
         self._content = None
 
@@ -84,7 +86,9 @@ def _collect(chunks):
 
 class Session:
     """Configuration, request ownership and isolated reusable connection pools."""
-    def __init__(self, *, profile="chrome/156/windows", headers=None, timeout=30, library=None, ca_file=None):
+    def __init__(self, *, profile="chrome/156/windows", headers=None, timeout=30, library=None, ca_file=None, cookies=True):
+        if not isinstance(cookies, bool):
+            raise TypeError("cookies must be a boolean")
         self.profile, self.headers, self.timeout = profile, dict(headers or {}), timeout
         self._ca_pem = Path(ca_file).read_text(encoding="utf-8") if ca_file is not None else None
         if self._ca_pem is not None and not self._ca_pem.strip():
@@ -95,7 +99,12 @@ class Session:
         self._closed = False
         if not hasattr(self._native.lib, "fastls_session_create"):
             raise FastlsError("connection pools require a newer Fastls native library")
+        if not hasattr(self._native.lib, "fastls_session_cookies"):
+            raise FastlsError("cookie management requires a newer Fastls native library")
         self._session = self._native.call("fastls_session_create")
+        self.cookies = Cookies(self)
+        if not cookies:
+            self.cookies._command(action="configure", enabled=False)
 
     def close_idle_connections(self):
         with self._lock:

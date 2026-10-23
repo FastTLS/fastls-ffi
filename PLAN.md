@@ -1,6 +1,6 @@
 # Fastls 跨语言封装实施规划
 
-日期：2026-10-23。状态：第一阶段及三轮测试扩展已完成；第二阶段已实现可复用会话与隔离连接池，其余功能及发布阶段待实施。开发候选，未发布。
+日期：2026-10-23。状态：第一阶段及三轮测试扩展已完成；第二阶段已实现会话/连接池、多值响应头及Cookie管理，解压、分层超时及发布阶段待实施。开发候选，未发布。
 
 ## 目标与仓库边界
 
@@ -69,3 +69,7 @@ Windows短定时器提前调度问题已处理，轮询间隔按平台时钟精�
 ## 第二阶段交付：会话复用
 
 核心新增Session及请求级选项；封装新增原生会话句柄，Python的Session/AsyncSession共享各自的传输层。HTTP1启用keep-alive，HTTP2共用连接，按会话、profile、CA及来源隔离。等待建连期间保留请求取消边界，限制会话、配置与来源数量。详情及验收范围见POOLING.md；Cookie、多值头、解压与分层超时仍待实施。
+
+## 第二阶段交付：多值头与Cookie
+
+核心Response新增HeaderValues，封装保留旧headers并增加header_values。Python使用大小写不敏感的只读Headers映射，提供get_list与multi_items。每个原生Session共享一份带公共后缀检查的CookieStore，自动处理重定向与发送范围；Python增加URL范围的查询、写入、删除和清空，并可禁用。详见COOKIES_HEADERS.md；Cookie不持久化，也不实现浏览器SameSite上下文或配额淘汰。解压、分层超时及后续阶段仍待实施。
