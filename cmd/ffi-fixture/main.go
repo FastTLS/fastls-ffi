@@ -101,8 +101,12 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		json.NewEncoder(w).Encode(map[string]any{"bytes": total, "sha256": fmt.Sprintf("%x", hash.Sum(nil)), "protocol": r.Proto, "length": r.ContentLength})
-	case "/upload-reject":
-		w.WriteHeader(413)
+	case "/upload-reject", "/upload-early-ok":
+		if r.URL.Path == "/upload-reject" {
+			w.WriteHeader(413)
+		} else {
+			w.WriteHeader(200)
+		}
 		w.(http.Flusher).Flush()
 	case "/delay-redirect":
 		count, _ := strconv.Atoi(r.URL.Query().Get("n"))

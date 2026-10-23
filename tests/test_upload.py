@@ -226,6 +226,10 @@ class Upload(FixtureCase):
                 response = await session.post(self.fixture["https2"] + "/upload-reject", data=sync_source())
                 self.assertEqual(response.status_code, 413)
                 self.assertTrue(sync_closed)
+                # Early 2xx could be a duplex echo server. Refuse explicitly
+                # rather than silently truncate the upload or wait for timeout.
+                with self.assertRaisesRegex(FastlsError, "duplex"):
+                    await session.post(self.fixture["https2"] + "/upload-early-ok", data=source())
         asyncio.run(run())
 
 
