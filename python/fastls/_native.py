@@ -70,6 +70,21 @@ class Native:
         self.lib.fastls_read.argtypes = [C.c_uint64, C.c_void_p, C.c_size_t, C.POINTER(C.c_size_t)]
         self.lib.fastls_read.restype = C.c_int
 
+        if hasattr(self.lib, "fastls_write"):
+            self.lib.fastls_write.argtypes = [C.c_uint64, C.c_void_p, C.c_size_t, C.c_int]
+            self.lib.fastls_write.restype = C.c_int
+
+    def write(self, handle, data, end=False):
+        code = self.lib.fastls_write(handle, data, len(data), int(end))
+        if code < 0:
+            info = self.call("fastls_info", handle)
+            if info["state"] == "error":
+                raise_response_error(info)
+            if info["state"] in ("headers", "eof"):
+                return 2  # Server finished the upload early.
+            raise FastlsError("upload is closed or invalid")
+        return code
+
     def call(self, name, *args):
         ptr = getattr(self.lib, name)(*args)
         if not ptr:

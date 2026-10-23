@@ -32,11 +32,11 @@ with Session(profile="chrome/156/windows",
 原有数字timeout仍代表整个请求总时限，默认30秒；也可传Timeout(total=30,connect=None,headers=None,read=None)。所有已指定的值都是秒，必须大于0且不超过86400，None关闭该阶段限制；total始终必需。请求级timeout替换整份会话策略，数字覆盖会清除原先的分层限制。
 
 - connect：每一跳开始，到获得可用连接为止，包含协议发现等待、连接池等待、DNS、TCP及TLS。复用连接通常立即结束此阶段。
-- headers：请求及其完整上传正文写完后，等待最终响应头；1xx不结束此阶段。当前没有独立上传写入超时，发送正文仍受total约束。
+- headers：请求及其完整上传正文写完后，等待最终响应头；1xx不结束此阶段。后续已增加独立write预算，见[流式上传](STREAMING_UPLOAD.md)。
 - read：原生工作线程每次等待网络正文数据的时限；获得数据后重置，不是整个正文下载时间。消费者暂停本身不启动计时；若后台预读仍在等待网络，该预读仍会超时。队列已满后的背压等待不计入read。
 - total：贯穿建连、重定向、正文解码、调用方暂停与等待的总时限。每次重定向重新计算阶段预算，total不会重置；已经正常观察到的EOF保持稳定。
 
-FastlsTimeoutError继承FastlsError，phase区分四种超时；解码失败使用同样继承FastlsError的FastlsDecodeError。取消和普通网络错误仍使用FastlsError。阶段取消只影响当前请求/HTTP2流，不改共享连接的读写deadline。
+FastlsTimeoutError继承FastlsError，phase区分各阶段超时（含后续增加的write）；解码失败使用同样继承FastlsError的FastlsDecodeError。取消和普通网络错误仍使用FastlsError。阶段取消只影响当前请求/HTTP2流，不改共享连接的读写deadline。
 
 分层预算属于请求级配置，不拆分连接池。HTTP2共享建连沿用已有的30秒内部安全上限；较短请求预算会先结束，较长connect设置不会扩大该内部上限。本阶段验证TCP上的HTTP1与HTTP2，不扩展到代理、HTTP3、流式上传或WebSocket。
 
