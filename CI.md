@@ -17,7 +17,7 @@ runner标签采用GitHub官方支持的标准runner。具体可用额度由仓�
 ## 每组实际执行
 
 Node.js SDK 新增同一原生矩阵的检查：前五组使用 Node 24，最低版本组使用 Node 22。
-Node 0.2 将七组Python SDK的79个场景映射为对应Node用例，连同原有16项共95项；源码与隔离安装包均执行。
+Node 0.3 将八组Python SDK的92个场景映射为对应Node用例，包含13项双工验收，连同原有16项共108项；源码与隔离安装包均执行。
 每组各运行30秒Node资源回收测试；Linux当前Go组合另跑300秒，检查RSS、句柄/描述符、Go堆及goroutine。
 `npm run test:parity`检查Python新增/删除用例是否仍有精确映射；语言差异见node/PARITY.md。
 在已有原生/Python/C 检查通过后执行 `npm ci --prefix node`、`npm test --prefix node` 和

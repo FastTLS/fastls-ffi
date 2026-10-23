@@ -15,6 +15,17 @@ async function consume(session: Session): Promise<void> {
     body: async function* (signal) { signal.throwIfAborted(); yield Buffer.from('bytes'); },
   });
   void decoded; void wire;
+  const duplex = session.duplex('POST', 'https://example.com');
+  const duplexResponse: StreamResponse = await duplex.response;
+  await duplex.send(Buffer.from('chunk'));
+  await duplex.finishUpload();
+  await duplexResponse.waitUpload();
+  await duplex.closeAsync();
+  const automatic = await session.stream('POST', 'https://example.com', { duplex: true, body: [Buffer.from('chunk')] });
+  await automatic.closeAsync();
+  await session.closeAsync();
+  // @ts-expect-error Manual duplex accepts send() instead of body.
+  session.duplex('POST', 'https://example.com', { body: Buffer.from('invalid') });
   // @ts-expect-error Native handles and per-request ownership are internal.
   session.handle;
   // @ts-expect-error Header values must be strings.

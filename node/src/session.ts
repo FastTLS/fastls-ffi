@@ -5,6 +5,8 @@ import { Native, asHandle, encodeNativeJSON } from "./native.js";
 import { Response, StreamResponse, Transfer } from "./response.js";
 import { timeoutFields, type Timeout } from "./timeout.js";
 import { isStreamingBody, startUpload, type UploadBody } from "./upload.js";
+import { DuplexExchange } from "./duplex.js";
+import type { UploadLifecycle } from "./response.js";
 
 export interface RequestOptions {
   profile?: string;
@@ -16,7 +18,11 @@ export interface RequestOptions {
   decodeContent?: boolean;
   maxDecodedBytes?: number;
   signal?: AbortSignal;
+  /** Explicit HTTP/2 simultaneous upload/download. Redirects are disabled. */
+  duplex?: boolean;
 }
+
+export type DuplexOptions = Omit<RequestOptions, "body" | "duplex">;
 
 export interface SessionOptions {
   profile?: string;
@@ -69,6 +75,7 @@ export class Session {
   private readonly maxDecodedBytes: number;
   private readonly caPem?: string;
   private readonly active = new Set<Transfer>();
+  private readonly producers = new Set<UploadLifecycle>();
   private closed = false;
 
   constructor(options: SessionOptions = {}) {
@@ -100,15 +107,20 @@ export class Session {
     if (this.closed) throw new FastlsError("session is closed");
   }
 
-  async stream(method: string, url: string, options: RequestOptions = {}): Promise<StreamResponse> {
+  private begin(method: string, url: string, options: RequestOptions, manual = false): { transfer: Transfer; body: UploadBody | undefined; streaming: boolean } {
     this.ensureOpen();
     if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) {
       throw new TypeError("signal must be an AbortSignal");
     }
     if (options.signal?.aborted) throw new AbortError(undefined, { cause: options.signal.reason });
     const headers = mergeHeaders(this.headers, options.headers);
-    const body = options.body;
-    const streaming = isStreamingBody(body);
+    if (options.duplex !== undefined && typeof options.duplex !== "boolean") throw new TypeError("duplex must be a boolean");
+    const duplex = options.duplex ?? false;
+    if (duplex && !this.native.call<string[]>("features").includes("duplex_h2")) {
+      throw new FastlsError("HTTP/2 duplex requires a newer Fastls native library");
+    }
+    const body = options.body === undefined && duplex && !manual ? Buffer.alloc(0) : options.body;
+    const streaming = isStreamingBody(body) || duplex;
     const bodyBytes = streaming || body === undefined ? undefined : Buffer.from(body as string | Uint8Array);
     const timeouts = options.timeoutMs === undefined ? this.timeouts : timeoutFields(options.timeoutMs);
     const decodeContent = options.decodeContent ?? this.decodeContent;
@@ -122,26 +134,38 @@ export class Session {
       session: this.handle, url, method, headers,
       profile: options.profile ?? this.profile,
       ...timeouts, decode_content: decodeContent, max_decoded_bytes: maxDecodedBytes,
-      disable_redirect: options.allowRedirects === false,
+      disable_redirect: duplex || options.allowRedirects === false,
       ca_pem: this.caPem,
       body_base64: bodyBytes?.toString("base64"),
       stream_body: streaming || undefined,
+      duplex: duplex || undefined,
     });
-    const transfer = new Transfer(this.native, handle, () => this.active.delete(transfer), options.signal);
+    const transfer = new Transfer(this.native, handle, () => this.active.delete(transfer), options.signal, duplex);
     this.active.add(transfer);
     try {
       transfer.attachSignal(timeouts.timeout_ms, started);
+      return { transfer, body, streaming };
+    } catch (error) { transfer.close(); throw error; }
+  }
+
+  async stream(method: string, url: string, options: RequestOptions = {}): Promise<StreamResponse> {
+    const { transfer, body, streaming } = this.begin(method, url, options);
+    try {
       const upload = streaming ? startUpload(transfer, body!) : undefined;
+      if (upload) {
+        this.producers.add(upload);
+        void upload.cleanup.then(() => this.producers.delete(upload), () => this.producers.delete(upload));
+      }
       let info;
       try {
         info = await transfer.headers();
-        if (upload && info.status! < 300 && !info.upload_discarded && !upload.complete()) {
+        if (!transfer.duplex && upload && info.status! < 300 && !info.upload_discarded && !upload.complete()) {
           throw new FastlsError("server responded before upload finished; duplex streaming is not supported");
         }
       }
-      finally { if (upload) { upload.stop(); await upload.done; } }
+      finally { if (upload && (!transfer.duplex || !info || info.status! >= 300)) { upload.stop(); await upload.done; } }
       transfer.ensureOpen();
-      return new StreamResponse(transfer, info);
+      return new StreamResponse(transfer, info, transfer.duplex ? upload : undefined);
     } catch (error) { transfer.close(); throw error; }
   }
 
@@ -149,7 +173,13 @@ export class Session {
     const stream = await this.stream(method, url, options);
     try {
       return new Response(stream.status, stream.headers, stream.match, await stream.read(), stream.wireHeaders, stream.decoded);
-    } finally { stream.close(); }
+    } finally { await stream.closeAsync(); }
+  }
+
+  /** Open a manual exchange; send() and response reads can run concurrently. */
+  duplex(method: string, url: string, options: DuplexOptions = {}): DuplexExchange {
+    if ("body" in options || "duplex" in options) throw new TypeError("manual duplex uses send() and finishUpload(), not body or duplex options");
+    return new DuplexExchange(this.begin(method, url, { ...options, duplex: true }, true).transfer);
   }
   get(url: string, options?: RequestOptions): Promise<Response> { return this.request("GET", url, options); }
   post(url: string, options?: RequestOptions): Promise<Response> { return this.request("POST", url, options); }
@@ -163,5 +193,13 @@ export class Session {
     try {
       for (const transfer of this.active) transfer.close(new FastlsError("session is closed"));
     } finally { this.native.call("session_close", this.handle); }
+  }
+  /** Release native resources immediately, then wait for cooperative upload cleanup. */
+  async closeAsync(): Promise<void> {
+    const producers = [...this.producers];
+    this.close();
+    const results = await Promise.allSettled(producers.map(task => task.cleanup));
+    for (const result of results) if (result.status === "rejected") throw result.reason;
+    for (const task of producers) task.check();
   }
 }

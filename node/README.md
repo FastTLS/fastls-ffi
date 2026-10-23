@@ -5,6 +5,7 @@
 当前仅支持 Node.js 主线程；暂不支持 worker_threads、Electron、Bun 或浏览器。
 
 0.2 开发版本对齐 Python 的解压、分层超时和上传能力：默认解压响应，大于512 KiB的字符串/字节自动流式上传。新版SDK要求带 stream_decode、phase_timeouts、stream_upload 和 write_timeout 的动态库。
+0.3 增加显式 HTTP/2 双工读写；使用时另检查原生库的 duplex_h2 能力。
 
 ## 本地构建与使用
 
@@ -106,6 +107,47 @@ session.cookies.clear();
 始终校验证书。可通过 `caFile` 使用仅属于本会话的私有根证书（替代系统根）；文件在构造时读取。
 不修改系统信任库，不提供关闭 TLS 验证选项。
 
+## HTTP/2 双工
+
+`duplex: true` 允许响应头到达后继续上传，可同时读取响应。仅支持 HTTP/2，并始终禁止自动重定向；普通上传仍拒绝未完成上传时提前返回的 2xx。
+
+```js
+const response = await session.stream('POST', url, {
+  duplex: true,
+  body: signal => produceBytes(signal),
+});
+try {
+  for await (const chunk of response.body) await consume(chunk);
+  await response.waitUpload();
+} finally {
+  await response.closeAsync();
+}
+```
+
+`waitUpload()` 等待原生上传 EOF 接受；需要与响应读取并行，单独等待可能被 HTTP/2 流量控制阻塞。
+手动模式可先发送数据，再等待响应头，也可在获得响应后交替收发：
+
+```js
+const exchange = session.duplex('POST', url);
+try {
+  const response = await exchange.response;
+  const reading = consumeResponse(response.body);
+  await exchange.send(Buffer.from('first'));
+  await exchange.finishUpload();
+  await reading;
+} finally {
+  exchange.close();
+}
+```
+
+`send()` 接受 Buffer/Uint8Array，按64 KiB分块等待原生队列容量；同一 exchange 同时只允许一个 send/finish 调用，重叠调用会被拒绝。发送完成前调用方应保持输入字节不变。
+`finishUpload()` 只关闭上传方向，响应仍可继续读取；响应EOF、取消、超时或会话关闭会停止生产者。
+响应头到达后的生产者异常会中止读取并保留原异常。
+
+`close()` 立即释放原生请求；`response.closeAsync()` / `session.closeAsync()` 还等待生产者清理，并报告清理中的异常。
+应使用接收 AbortSignal 的工厂或可销毁 Readable 来取消挂起I/O。JavaScript不能中断任意Promise；不配合信号的生产者可能使等待清理的Promise持续挂起，但原生请求仍会及时释放。双工 `read()`、`request()` 和迭代结束也会等待清理。
+示例见 `examples/duplex.mjs`。
+
 ## 调度与边界
 
 网络由 Go goroutine 执行。SDK 通过共享约 10 ms 定时器轮询非阻塞 C 接口，
@@ -129,7 +171,7 @@ npm run test:package
 测试使用真实动态库和本地靶场，覆盖 H1/H2、证书、连接池、Cookie、多值头、二进制、取消、超时、
 异常正文、64 MiB 下载、32 MiB 缓存限制和 128 路并发。安装包测试在临时项目安装 npm tarball，
 重新执行全部测试并检查包名导入和 TypeScript 声明。证据写入仓库 build/node-*.json。
-新增79个Python场景的对应项，连同原有16项，共95项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
+新增92个Python场景的对应项，包含13项双工验收，连同原有16项，共108项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
 持续测试默认30秒，检查RSS、操作系统句柄/描述符、Go堆和goroutine回收。Linux当前Go/Node组合另跑300秒；设置 `FASTLS_NODE_SOAK_SECONDS=300` 后执行 `npm run test:soak` 可复现。
 
 ## 与Python的语言差异

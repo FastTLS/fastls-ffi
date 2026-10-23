@@ -8,6 +8,13 @@ export const MAX_BUFFERED_BODY = 32 * 1024 * 1024;
 // probe runs, so pending requests can share scratch space without retaining it.
 const READ_BUFFER = Buffer.allocUnsafe(65536);
 
+export interface UploadLifecycle {
+  done: Promise<void>;
+  cleanup: Promise<void>;
+  complete(): boolean;
+  check(): void;
+}
+
 /** Owns one native request and all cancellation hooks. Internal to the SDK. */
 export class Transfer {
   private readonly controller = new AbortController();
@@ -18,7 +25,8 @@ export class Transfer {
   private readonly externalAbort = () => this.close(new AbortError(undefined, { cause: this.external?.reason }));
 
   constructor(private readonly native: Native, private readonly handle: bigint,
-    private readonly release: () => void, private readonly external?: AbortSignal) {}
+    private readonly release: () => void, private readonly external?: AbortSignal,
+    readonly duplex = false) {}
 
   attachSignal(total?: number, started = performance.now()): void {
     this.external?.addEventListener("abort", this.externalAbort, { once: true });
@@ -38,11 +46,18 @@ export class Transfer {
   }
   write(buffer: Uint8Array, end: boolean, signal: AbortSignal): Promise<number> {
     return scheduler.wait(() => {
-      if (this.info().state !== "pending") return 2;
+      if (!this.canWrite()) return 2;
       const code = this.native.write(this.handle, buffer, end);
       return code === 1 ? undefined : code;
     }, signal);
   }
+
+  canWrite(): boolean {
+    const info = this.info();
+    return info.state === "pending" || (this.duplex && info.state === "headers" && info.status! < 300);
+  }
+
+  throwFailure(): void { if (this.failure) throw this.failure; }
 
   async headers(): Promise<NativeInfo> {
     return scheduler.wait(() => {
@@ -104,7 +119,7 @@ export class StreamResponse {
   readonly body: AsyncIterable<Buffer>;
   private consumed = false;
 
-  constructor(private readonly transfer: Transfer, info: NativeInfo) {
+  constructor(private readonly transfer: Transfer, info: NativeInfo, private readonly upload?: UploadLifecycle) {
     this.status = info.status!;
     this.headers = new Headers(info.header_values, info.headers);
     this.wireHeaders = info.wire_header_values ? new Headers(info.wire_header_values) : this.headers;
@@ -124,9 +139,7 @@ export class StreamResponse {
         if (chunk === null) return;
         yield chunk;
       }
-    } finally {
-      this.close();
-    }
+    } finally { await this.closeAsync(); }
   }
 
   async read(): Promise<Buffer> {
@@ -147,6 +160,21 @@ export class StreamResponse {
   }
   async text(): Promise<string> { return (await this.read()).toString("utf8"); }
   async json<T = unknown>(): Promise<T> { return JSON.parse(await this.text()) as T; }
+  /** Consume the response concurrently: waiting alone can block on HTTP/2 flow control. */
+  async waitUpload(): Promise<void> {
+    if (!this.upload) return;
+    await this.upload.done;
+    this.upload.check();
+    if (!this.upload.complete()) {
+      this.transfer.throwFailure();
+      throw new FastlsError("upload ended before EOF was accepted");
+    }
+  }
   cancel(): void { this.transfer.close(new AbortError()); }
   close(): void { this.transfer.close(); }
+  /** Wait for cooperative producer finalization after releasing the native request. */
+  async closeAsync(): Promise<void> {
+    this.close();
+    if (this.upload) { await this.upload.cleanup; this.upload.check(); }
+  }
 }

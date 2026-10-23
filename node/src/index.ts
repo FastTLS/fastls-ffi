@@ -1,5 +1,6 @@
 export { Session } from "./session.js";
-export type { SessionOptions, RequestOptions, Stats } from "./session.js";
+export type { SessionOptions, RequestOptions, DuplexOptions, Stats } from "./session.js";
+export { DuplexExchange } from "./duplex.js";
 export { Response, StreamResponse } from "./response.js";
 export { Headers } from "./headers.js";
 export { Cookies } from "./cookies.js";

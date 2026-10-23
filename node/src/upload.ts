@@ -1,5 +1,5 @@
 import { setImmediate as yieldTurn } from "node:timers/promises";
-import { Transfer } from "./response.js";
+import { Transfer, type UploadLifecycle } from "./response.js";
 
 export type ByteSource = Iterable<Uint8Array> | AsyncIterable<Uint8Array>;
 /** A factory can use the supplied signal to interrupt its own pending I/O. */
@@ -37,8 +37,14 @@ export function isStreamingBody(value: UploadBody | undefined): boolean {
   throw new TypeError("body must be string, Uint8Array, an iterable of bytes or an upload factory");
 }
 
-export function startUpload(transfer: Transfer, body: UploadBody): { done: Promise<void>; stop: () => void; complete: () => boolean } {
+export function startUpload(transfer: Transfer, body: UploadBody): UploadLifecycle & { stop: () => void } {
   let completed = false;
+  let failure: Error | undefined;
+  let clean!: () => void;
+  let failCleanup!: (error: Error) => void;
+  const cleanup = new Promise<void>((resolve, reject) => { clean = resolve; failCleanup = reject; });
+  // Cleanup is also awaited explicitly by closeAsync; keep synchronous close safe.
+  void cleanup.catch(() => {});
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(transfer.signal.reason);
   transfer.signal.addEventListener("abort", forwardAbort, { once: true });
@@ -47,16 +53,19 @@ export function startUpload(transfer: Transfer, body: UploadBody): { done: Promi
   const done = (async () => {
     let iterator: Iterator<Uint8Array> | AsyncIterator<Uint8Array> | undefined;
     let nextPending = false;
+    let pendingNext: Promise<IteratorResult<Uint8Array>> | undefined;
     let source: ByteSource | undefined;
     try {
       source = typeof body === "function" ? body(controller.signal)
         : typeof body === "string" || body instanceof Uint8Array ? scalarChunks(body) : body;
       iterator = Symbol.asyncIterator in source ? source[Symbol.asyncIterator]() : source[Symbol.iterator]();
       let turns = 0;
-      while (!controller.signal.aborted && transfer.info().state === "pending") {
+      while (!controller.signal.aborted && transfer.canWrite()) {
         nextPending = true;
-        const result = await abortable(iterator.next(), controller.signal);
+        pendingNext = Promise.resolve(iterator.next());
+        const result = await abortable(pendingNext, controller.signal);
         nextPending = false;
+        pendingNext = undefined;
         if (result.done) { completed = await transfer.write(Buffer.alloc(0), true, controller.signal) === 0; return; }
         if (!(result.value instanceof Uint8Array)) throw new TypeError("upload chunks must be Uint8Array or Buffer");
         for (let offset = 0; offset < result.value.byteLength; offset += 65536) {
@@ -65,22 +74,37 @@ export function startUpload(transfer: Transfer, body: UploadBody): { done: Promi
         if (++turns % 16 === 0) await yieldTurn();
       }
     } catch (error) {
-      if (!controller.signal.aborted) transfer.close(error instanceof Error ? error : new Error(String(error)));
+      if (!controller.signal.aborted) {
+        failure = error instanceof Error ? error : new Error(String(error));
+        transfer.close(failure);
+      }
     } finally {
       controller.abort(new Error("upload stopped"));
       transfer.signal.removeEventListener("abort", forwardAbort);
-      // Readable.destroy interrupts outstanding next(). Arbitrary JS promises cannot be forcibly cancelled.
-      if (source && "destroy" in source && typeof source.destroy === "function") source.destroy();
-      if (iterator?.return) {
-        try {
-          const cleanup = Promise.resolve(iterator.return());
-          if (nextPending) void cleanup.catch(() => {});
-          else await abortable(cleanup, transfer.signal);
-        } catch (error) {
-          if (!transfer.signal.aborted) transfer.close(error instanceof Error ? error : new Error(String(error)));
+      const finishing = (async () => {
+        // Readable.destroy interrupts pending next(); arbitrary promises require cooperation.
+        if (source && "destroy" in source && typeof source.destroy === "function") source.destroy();
+        // Calling return() queues cleanup behind an outstanding async next().
+        // Observe both outcomes so an error thrown by finally is not swallowed
+        // when cancellation already won the abortable() race.
+        const results = await Promise.allSettled([pendingNext, iterator?.return?.()]);
+        for (const result of results) {
+          if (result.status !== "rejected") continue;
+          const error = result.reason;
+          if (controller.signal.aborted && (error === controller.signal.reason || (error instanceof Error && error.name === "AbortError"))) continue;
+          throw error;
         }
+      })();
+      void finishing.then(clean, error => {
+        failure ??= error instanceof Error ? error : new Error(String(error));
+        transfer.close(failure);
+        failCleanup(failure);
+      });
+      // A pending uncooperative next() must not delay native request cancellation.
+      if (!nextPending) {
+        try { await abortable(finishing, transfer.signal); } catch { /* failure retained above */ }
       }
     }
   })();
-  return { done, stop, complete: () => completed };
+  return { done, cleanup, stop, complete: () => completed, check: () => { if (failure) throw failure; } };
 }

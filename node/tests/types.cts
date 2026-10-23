@@ -6,3 +6,7 @@ function consume(session: fastls.Session): Promise<fastls.Response> {
 }
 void options;
 void consume;
+function manual(session: fastls.Session): fastls.DuplexExchange {
+  return session.duplex('POST', 'https://example.com', { timeoutMs: { total: 1000, write: 200 } });
+}
+void manual;

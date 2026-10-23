@@ -59,3 +59,5 @@ with Session(profile="chrome/156/windows") as session:
 `tests/test_duplex.py`包含13项真实动态库验收：上传前首条响应、请求半关闭、64MiB双向SHA256与缓冲上限、慢消费者、同步交互且无新增Python线程、生产者后期异常、取消读取及H2并行请求、会话关闭、响应头后的写入超时、持续上传时的独立读取超时、总超时、gzip、提前拒绝/重定向、响应EOF停止上传、空正文及不支持的协议。
 
 源码与wheel用例均加入六组原生Actions。核心另验证响应头后阻塞上传在write超时、响应关闭、会话关闭时解除阻塞，并纳入Linux race。证据写入`build/stability-duplex-*.json`；配置加入与本地通过不等于全部远端平台已通过，应以同一提交的Actions与artifact为准。
+
+Node 0.3提供`stream(..., { duplex: true, body })`以及`session.duplex()`手动交换，对应`send()`、`finishUpload()`、`response.waitUpload()`和异步清理。13项双工对应测试与原套件合计108项，源码和隔离安装包均执行。接口示例、Promise及生产者取消的差异见[node/README.md](node/README.md)和[node/PARITY.md](node/PARITY.md)。
