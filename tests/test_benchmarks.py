@@ -49,6 +49,10 @@ class BenchmarkContract(unittest.TestCase):
         self.assertEqual((first["valid_rounds"],first["rounds"],first["failed"]),(1,2,1))
         self.assertEqual(first["errors"],["failure"])
         self.assertEqual(result[1]["rps"]["median"],10)
+        warm_failure=dict(good,valid=False,metrics=dict(rps=10,failed=0,warmup=dict(failed=3)))
+        warming=summaries([dict(environment_id="c",runs=[warm_failure])])[0]
+        self.assertEqual((warming["failed"],warming["warmup_failed"]),(0,3))
+        self.assertNotIn("rps",warming)
         changed=summaries([dict(environment_id="a",runs=[good],source_changed_during_run=True)])[0]
         self.assertEqual(changed["valid_rounds"],0)
         self.assertNotIn("rps",changed)
