@@ -36,6 +36,7 @@ const (
 )
 
 type Input struct {
+	Duplex           bool              `json:"duplex"`
 	WriteTimeoutMS   int64             `json:"write_timeout_ms"`
 	StreamBody       bool              `json:"stream_body"`
 	ConnectTimeoutMS int64             `json:"connect_timeout_ms"`
@@ -235,6 +236,12 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 	if in.StreamBody && (in.Body != "" || in.BodyBase64 != nil) {
 		return 0, errStreamBody
 	}
+	if in.Duplex && !in.StreamBody {
+		return 0, errors.New("duplex requires stream_body")
+	}
+	if in.Duplex && !in.DisableRedirect {
+		return 0, errors.New("duplex requires disable_redirect")
+	}
 	if in.StreamBody {
 		for name := range in.Headers {
 			if strings.EqualFold(name, "Content-Length") || strings.EqualFold(name, "Transfer-Encoding") {
@@ -333,7 +340,7 @@ func (r *request) run(in Input, opts fastls.Options) {
 		if r.upload != nil {
 			body = r.upload
 		}
-		resp, err = pool.DoContext(r.ctx, in.URL, fastls.RequestOptions{Headers: in.Headers, Body: in.Body, BodyReader: body, DisableRedirect: in.DisableRedirect,
+		resp, err = pool.DoContext(r.ctx, in.URL, fastls.RequestOptions{Duplex: in.Duplex, Headers: in.Headers, Body: in.Body, BodyReader: body, DisableRedirect: in.DisableRedirect,
 			DecodeContent: in.DecodeContent, MaxDecodedBytes: in.MaxDecodedBytes,
 			Timeouts: fastls.Timeouts{Write: time.Duration(in.WriteTimeoutMS) * time.Millisecond, Connect: time.Duration(in.ConnectTimeoutMS) * time.Millisecond, Headers: time.Duration(in.HeadersTimeoutMS) * time.Millisecond, Read: time.Duration(in.ReadTimeoutMS) * time.Millisecond}}, strings.ToUpper(in.Method))
 	} else {

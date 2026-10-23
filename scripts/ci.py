@@ -46,7 +46,8 @@ def preflight(env):
         "fhttp/go.mod": ("github.com/FastTLS/fhttp",),
         "fhttp/http2/explicit_settings_test.go": ("func TestExplicitZeroDoesNotSelectNavigatorDefaults", "func TestExplicitEmptySettings"),
         "fhttp/http2/receive_window_test.go": ("func TestReceiveWindowMatchesWire",),
-        "fastls/session.go": ("func NewSession",),
+        "fastls/session.go": ("func NewSession", "Duplex"),
+        "fastls/duplex_test.go": ("func TestDuplexEarlyHeadersUploadLifetime",),
         "fastls/cookie_store.go": ("func NewCookieStore",),
         "fastls/timeouts.go": ("type Timeouts struct",),
         "fastls/decode.go": ("func decodeResponse",),
@@ -114,6 +115,7 @@ def run():
         execute("cookies-source", [sys.executable, "tests/test_cookies.py"])
         execute("decode-timeouts-source", [sys.executable, "tests/test_decode_timeouts.py"])
         execute("upload-source", [sys.executable, "tests/test_upload.py"])
+        execute("duplex-source", [sys.executable, "tests/test_duplex.py"])
         execute("cookiejar", ["go", "test", "./cookiejar"], ROOT.parent / "fhttp")
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
@@ -131,6 +133,7 @@ def run():
         execute("cookies-wheel", [sys.executable, "scripts/test_wheel.py", "--cookies"])
         execute("decode-timeouts-wheel", [sys.executable, "scripts/test_wheel.py", "--decode-timeouts"])
         execute("upload-wheel", [sys.executable, "scripts/test_wheel.py", "--upload"])
+        execute("duplex-wheel", [sys.executable, "scripts/test_wheel.py", "--duplex"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")

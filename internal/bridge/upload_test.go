@@ -54,3 +54,18 @@ func TestUploadBoundedCopyEOFAndCancellation(t *testing.T) {
 		t.Fatal("blocked upload reader")
 	}
 }
+
+func TestDuplexRequiresStreamAndNoRedirect(t *testing.T) {
+	e := New()
+	for _, input := range []string{
+		`{"url":"https://localhost/","duplex":true}`,
+		`{"url":"https://localhost/","duplex":true,"stream_body":true}`,
+	} {
+		if _, err := e.Start([]byte(input)); err == nil {
+			t.Fatalf("accepted ambiguous duplex lifetime: %s", input)
+		}
+	}
+	if stats := e.Stats(); stats["open_requests"] != 0 {
+		t.Fatal("validation allocated request handles")
+	}
+}

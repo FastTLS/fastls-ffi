@@ -81,3 +81,7 @@ Windows短定时器提前调度问题已处理，轮询间隔按平台时钟精�
 ## 第三阶段交付：流式上传与写入预算
 
 核心Session支持一次性BodyReader及Write停顿预算；C ABI新增非阻塞fastls_write及stream_body，上传队列最多64KiB。Python接受文件、同步/异步迭代器和较大正文，处理背压、生产者异常、取消、提前响应及不可重放重定向。源码与wheel各16项验收及Go race纳入六组Actions。详见STREAMING_UPLOAD.md；未增加发布产物或完成通知。
+
+## 第三阶段交付：HTTP/2全双工
+
+显式全双工模式收到响应头后仍保持上传任务；异步响应负责上传任务的取消与异常传播，同步使用手动send/finish_upload与响应读取，不增加Python线程。核心拆分上传写入与响应读取时钟，并保持响应头后的写入限制。上传EOF后可继续下载，响应EOF结束整个交换；不支持自动重定向及H1/H3。源码与wheel各13项真实库验收加入六组Actions，详见DUPLEX.md。

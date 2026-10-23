@@ -79,6 +79,43 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Test-Protocol", r.Proto)
 	w.Header().Set("X-Test-Connection", fmt.Sprint(r.Context().Value(connectionKey{})))
 	switch r.URL.Path {
+	case "/duplex", "/duplex-gzip", "/duplex-silent":
+		if r.ProtoMajor != 2 {
+			http.Error(w, "HTTP2 required", 400)
+			return
+		}
+		var output io.Writer = w
+		var encoded *gzip.Writer
+		if r.URL.Path == "/duplex-gzip" {
+			w.Header().Set("Content-Encoding", "gzip")
+			encoded = gzip.NewWriter(w)
+			output = encoded
+			defer encoded.Close()
+		}
+		flush := func() {
+			if encoded != nil {
+				encoded.Flush()
+			}
+			w.(http.Flusher).Flush()
+		}
+		io.WriteString(output, "ready\n")
+		flush()
+		buffer := make([]byte, 16384)
+		for {
+			n, err := r.Body.Read(buffer)
+			f.mu.Lock()
+			o.Bytes += int64(n)
+			f.mu.Unlock()
+			if n > 0 && r.URL.Path != "/duplex-silent" {
+				if _, writeErr := output.Write(buffer[:n]); writeErr != nil {
+					return
+				}
+				flush()
+			}
+			if err != nil {
+				return
+			}
+		}
 	case "/upload", "/upload-slow":
 		hash := sha256.New()
 		buffer := make([]byte, 16384)

@@ -112,7 +112,7 @@ start输入字段：url、method、profile、headers、body或body_base64、time
 Session 管理默认配置、活动请求及独立的连接池，支持HTTP1 keep-alive和HTTP2多路复用。不同Session、profile或CA配置相互隔离；可调用session.close_idle_connections()主动释放空闲连接。使用方法、限制和C ABI扩展见[POOLING.md](POOLING.md)。
 Session默认自动管理Cookie，提供session.cookies查询、设置、删除与清空；可用cookies=False禁用。response.headers支持大小写不敏感访问和get_list获取重复字段，详细规则见[COOKIES_HEADERS.md](COOKIES_HEADERS.md)。
 Python默认流式解码gzip、deflate、br及zstd，可通过decode_content=False取得原始正文。Timeout支持总时限及连接、响应头、正文读取预算；用法、原始头视图与解码上限见[STREAMING_TIMEOUTS.md](STREAMING_TIMEOUTS.md)。
-已支持同步/异步流式上传及write超时，见[STREAMING_UPLOAD.md](STREAMING_UPLOAD.md)。当前不提供代理、自定义完整Spec或WebSocket；text按UTF-8解码，不提供完整requests/httpx兼容。
+已支持同步/异步流式上传及write超时，见[STREAMING_UPLOAD.md](STREAMING_UPLOAD.md)。HTTP/2支持显式全双工：异步使用duplex=True，同步使用Session.duplex()手动交互，见[DUPLEX.md](DUPLEX.md)。当前不提供代理、自定义完整Spec或WebSocket；text按UTF-8解码，不提供完整requests/httpx兼容。
 指纹TCP TLS请求始终启用证书校验；未提供关闭校验选项。
 本仓库尚未公开发布；许可证和上游发布门禁仍待处理，不能把本地构建当成远端候选已发布。
 
