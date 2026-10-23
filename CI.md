@@ -64,6 +64,8 @@ CI脚本核对Go目标与runner架构一致；跨平台二进制必须在相应r
 每组额外构建独立TLS靶场，源码SDK和wheel各执行11项稳定性用例，包含HTTPS H1/H2、128路混合成功/取消、256句柄限制、64MiB下载和各30秒持续运行。Linux当前Go组合另执行300秒连续运行，以及桥接、核心和HTTP2窗口回归的race检查。
 所有内存、goroutine、句柄样本和用例结果随artifact保存；阈值和结论边界见TESTING_STAGE2.md。
 
+网络异常扩展在每组源码和wheel各运行11项测试，覆盖TCP/TLS停滞、异常HTTP报文、HTTP2流重置、正文截止时间、重定向方法及敏感头处理。范围与复现步骤见[TESTING_STAGE3.md](TESTING_STAGE3.md)，结果写入build/stability-network-*.json；任何失败都会阻止CI通过。
+
 ## 上游完整测试的范围
 
 本地试跑完整fhttp/http2测试已记录失败，包括依赖用户目录charles_cert.pem的用例、原版Accept-Encoding假设、TLS1.0/1.1默认版本变化及PushPromise的Host断言。

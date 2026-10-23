@@ -50,7 +50,7 @@ def resources():
     return {"rss_bytes": rss, "descriptors_or_handles": descriptors}
 
 
-class Stability(unittest.TestCase):
+class FixtureCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         executable = ROOT / "build" / ("ffi-fixture.exe" if sys.platform == "win32" else "ffi-fixture")
@@ -114,6 +114,8 @@ class Stability(unittest.TestCase):
     def tearDown(self):
         self.idle()
 
+
+class Stability(FixtureCase):
     def test_verified_tls_h1_h2_and_ca_isolation(self):
         observed = []
         for name, expected in (("https1", "HTTP/1.1"), ("https2", "HTTP/2.0")):
@@ -291,8 +293,8 @@ class Stability(unittest.TestCase):
 
 class EvidenceResult(unittest.TextTestResult):
     def record(self, test, status):
-        if hasattr(Stability, "metrics"):
-            Stability.metrics.setdefault("results", []).append({"case": test.id(), "status": status})
+        if hasattr(type(test), "metrics"):
+            type(test).metrics.setdefault("results", []).append({"case": test.id(), "status": status})
 
     def addSuccess(self, test):
         super().addSuccess(test); self.record(test, "passed")
@@ -302,6 +304,11 @@ class EvidenceResult(unittest.TextTestResult):
 
     def addError(self, test, err):
         super().addError(test, err); self.record(test, "error")
+
+    def addSubTest(self, test, subtest, err):
+        super().addSubTest(test, subtest, err)
+        if err is not None and hasattr(type(test), "metrics"):
+            type(test).metrics.setdefault("results", []).append({"case": subtest.id(), "status": "failed", "error": str(err[1])})
 
 
 if __name__ == "__main__":

@@ -129,3 +129,5 @@ python scripts/check.py
 上游v2开发源码已推送并固定到提交SHA，无需先发布Go模块标签，配置和启用步骤见 [CI.md](CI.md)。
 
 稳定性验收增加HTTPS H1/H2、128路混合请求/取消、64MiB流式下载、资源回收及持续运行测试；范围、阈值与时间上限见 [TESTING_STAGE2.md](TESTING_STAGE2.md)。这些检查不表示尚未实现的功能已交付。
+
+网络异常测试覆盖握手停滞、截断和畸形响应、HTTP2流重置、读取截止时间、重定向与跨主机敏感头处理；源码及wheel均纳入CI，见[TESTING_STAGE3.md](TESTING_STAGE3.md)。

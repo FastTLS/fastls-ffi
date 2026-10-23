@@ -66,6 +66,44 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() { f.mu.Lock(); o.Done = true; o.Cancelled = r.Context().Err() != nil; f.mu.Unlock() }()
 	w.Header().Set("X-Test-Protocol", r.Proto)
 	switch r.URL.Path {
+	case "/abort":
+		w.Header().Set("Content-Length", "100")
+		io.WriteString(w, "first")
+		w.(http.Flusher).Flush()
+		// net/http closes H1 or emits H2 RST_STREAM after these bytes.
+		panic(http.ErrAbortHandler)
+	case "/status":
+		status, _ := strconv.Atoi(r.URL.Query().Get("code"))
+		if status != 204 && status != 304 && status != 503 {
+			status = 400
+		}
+		w.WriteHeader(status)
+	case "/redirect-code":
+		status, _ := strconv.Atoi(r.URL.Query().Get("code"))
+		if status < 301 || status > 308 || status == 304 || status == 305 || status == 306 {
+			status = 302
+		}
+		http.Redirect(w, r, "/inspect", status)
+	case "/redirect-loop":
+		http.Redirect(w, r, "/redirect-loop", http.StatusFound)
+	case "/redirect-host":
+		_, port, err := net.SplitHostPort(r.Host)
+		if err != nil {
+			http.Error(w, "invalid fixture host", 400)
+			return
+		}
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		http.Redirect(w, r, scheme+"://localhost:"+port+"/inspect", http.StatusFound)
+	case "/inspect":
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"method": r.Method, "body": body, "headers": r.Header, "protocol": r.Proto})
 	case "/wait":
 		select {
 		case <-o.release:

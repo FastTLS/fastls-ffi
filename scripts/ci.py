@@ -103,6 +103,7 @@ def run():
         execute("dependency-gate-tests", [sys.executable, "tests/test_ci.py"])
         execute("core-bridge-python", [sys.executable, "scripts/check.py"])
         execute("stability-source", [sys.executable, "tests/test_stability.py"])
+        execute("network-source", [sys.executable, "tests/test_network.py"])
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
         execute("fhttp-contract", ["go", "test", "./http2", "-run", "^(TestExplicitZeroDoesNotSelectNavigatorDefaults|TestExplicitEmptySettings|TestConnectionSettings|TestReceiveWindow.*)$", "-v"], ROOT.parent / "fhttp")
@@ -114,6 +115,7 @@ def run():
         execute("wheel-build", [sys.executable, "-m", "pip", "wheel", "./python", "--no-deps", "-w", "dist"])
         execute("wheel-tests", [sys.executable, "scripts/test_wheel.py"])
         execute("stability-wheel", [sys.executable, "scripts/test_wheel.py", "--stability"])
+        execute("network-wheel", [sys.executable, "scripts/test_wheel.py", "--network"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")
