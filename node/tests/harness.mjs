@@ -22,7 +22,7 @@ export let fixture, monitor;
 let child, childExit;
 const sessions = new Set();
 export const evidence = { node:process.version, platform:process.platform, arch:process.arch,
-  label:process.env.FASTLS_NODE_PACKAGE?'package':'source', cases:[], measurements:{} };
+  label:process.env.FASTLS_NODE_PACKAGE?'package':'source', pythonBaseline:JSON.parse(readFileSync(resolve(root,'node/tests/python-baseline.json'),'utf8')), cases:[], measurements:{} };
 export function session(t, options={}) {
   const s=new sdk.Session({caFile:fixture.ca_file,timeoutMs:15000,...options});
   sessions.add(s); t.after(()=>s.close()); return s;

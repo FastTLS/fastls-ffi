@@ -40,7 +40,7 @@ p('test_write_timeout_receiver_not_reading',async t=>{
   for(const protocol of ['https1','https2']){const id=randomUUID();try{await assert.rejects(session(t).post(fixture[protocol]+'/wait?id='+id,{body:slabs(4096),timeoutMs:{total:10000,write:250}}),phase('write'));}finally{await control('/release',id);}}
 });
 p('test_write_progress_resets_inactivity_clock',async t=>{const s=session(t);async function* body(){for(let i=0;i<8;i++){yield SLAB;await delay(80);}}const r=await s.post(fixture.https2+'/upload',{body:body(),timeoutMs:{total:5000,write:300}});assert.equal(r.json().bytes,SLAB.length*8);});
-p('test_redirect_does_not_replay_stream',async t=>{const s=session(t);assert.equal((await s.post(fixture.https2+'/redirect-code?code=307',{body:slabs(1)})).status,307);assert.equal((await s.post(fixture.https2+'/redirect-code?code=302',{body:slabs(128)})).json().method,'GET');});
+p('test_redirect_does_not_replay_stream',async t=>{const s=session(t);assert.equal((await s.post(fixture.https2+'/redirect-code?code=307',{body:slabs(1)})).status,307);assert.equal((await s.post(fixture.https2+'/redirect-code?code=302',{body:slabs(128)})).json().method,'GET');async function* forever(){while(true)yield SLAB;}assert.equal((await s.post(fixture.https2+'/redirect-code?code=302',{body:forever()})).json().method,'GET');});
 p('test_invalid_chunks_headers_and_async_in_sync',async t=>{
   const s=session(t);for(const body of [['text'],[123]])await assert.rejects(s.post(fixture.https2+'/upload',{body}),TypeError);
   for(const name of ['Content-Length','Transfer-Encoding'])await assert.rejects(s.post(fixture.https2+'/upload',{body:slabs(1),headers:{[name]:'1'}}),sdk.FastlsError);
@@ -51,5 +51,6 @@ p('test_early_response_stops_async_producer',async t=>{
   assert.equal((await s.post(fixture.https2+'/upload-reject',{body})).status,413);await eventually(()=>closed);
   let syncClosed=false;function* sync(){try{while(true)yield SLAB;}finally{syncClosed=true;}}
   assert.equal((await s.post(fixture.https2+'/upload-reject',{body:sync()})).status,413);assert.ok(syncClosed);
+  await assert.rejects(s.post(fixture.https2+'/upload-early-ok',{body:stalled}),/duplex/);
   const c=new AbortController(),readable=Readable.from(stalled(c.signal));const pending=assert.rejects(s.post(fixture.https2+'/upload',{body:readable,signal:c.signal}),sdk.AbortError);await delay(30);c.abort();await pending;assert.ok(readable.destroyed);
 },'Abort-aware factories allow deterministic generator finalization; uncooperative promises remain caller-owned.');

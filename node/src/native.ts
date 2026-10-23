@@ -38,6 +38,7 @@ export interface NativeInfo {
   timeout_phase?: string;
   decoded?: boolean;
   wire_header_values?: Record<string, string[]>;
+  upload_discarded?: boolean;
 }
 
 // Keep successful and partially loaded libraries alive until process exit.

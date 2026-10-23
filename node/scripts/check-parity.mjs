@@ -1,9 +1,11 @@
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 const root=resolve(import.meta.dirname,'../..');
 const sources=['test_python.py','test_stability.py','test_network.py','test_pooling.py','test_cookies.py','test_decode_timeouts.py','test_upload.py'];
 const python=new Set();
-for(const file of sources){const text=readFileSync(resolve(root,'tests',file),'utf8');for(const match of text.matchAll(/^    (?:async )?def (test_\w+)\(/gm))python.add(`${file}::${match[1]}`);}
+const baseline=JSON.parse(readFileSync(resolve(root,'node/tests/python-baseline.json'),'utf8'));
+for(const file of sources){const text=readFileSync(resolve(root,'tests',file),'utf8').replaceAll('\r\n','\n');if(createHash('sha256').update(text).digest('hex')!==baseline.files[file])throw Error(`Python suite changed: ${file}; review the Node assertions and refresh the baseline`);for(const match of text.matchAll(/^    (?:async )?def (test_\w+)\(/gm))python.add(`${file}::${match[1]}`);}
 const node=new Set();
 for(const file of readdirSync(resolve(root,'node/tests')).filter(file=>/^parity-.+\.mjs$/.test(file))){
   const text=readFileSync(resolve(root,'node/tests',file),'utf8'),source=text.match(/parity\('([^']+)'/)[1];

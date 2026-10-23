@@ -37,7 +37,8 @@ export function isStreamingBody(value: UploadBody | undefined): boolean {
   throw new TypeError("body must be string, Uint8Array, an iterable of bytes or an upload factory");
 }
 
-export function startUpload(transfer: Transfer, body: UploadBody): { done: Promise<void>; stop: () => void } {
+export function startUpload(transfer: Transfer, body: UploadBody): { done: Promise<void>; stop: () => void; complete: () => boolean } {
+  let completed = false;
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(transfer.signal.reason);
   transfer.signal.addEventListener("abort", forwardAbort, { once: true });
@@ -56,7 +57,7 @@ export function startUpload(transfer: Transfer, body: UploadBody): { done: Promi
         nextPending = true;
         const result = await abortable(iterator.next(), controller.signal);
         nextPending = false;
-        if (result.done) { await transfer.write(Buffer.alloc(0), true, controller.signal); return; }
+        if (result.done) { completed = await transfer.write(Buffer.alloc(0), true, controller.signal) === 0; return; }
         if (!(result.value instanceof Uint8Array)) throw new TypeError("upload chunks must be Uint8Array or Buffer");
         for (let offset = 0; offset < result.value.byteLength; offset += 65536) {
           if (await transfer.write(result.value.subarray(offset, offset + 65536), false, controller.signal) === 2) return;
@@ -81,5 +82,5 @@ export function startUpload(transfer: Transfer, body: UploadBody): { done: Promi
       }
     }
   })();
-  return { done, stop };
+  return { done, stop, complete: () => completed };
 }

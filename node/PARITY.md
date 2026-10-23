@@ -2,6 +2,7 @@
 
 范围：当前七个 Python SDK 行为套件的 79 个用例，保留原始文件名和用例名作为 Node 测试 ID。
 对应关系由 `scripts/check-parity.mjs` 检查；Python 用例新增、删除或改名时，映射未更新会失败。
+`tests/python-baseline.json` 同时固定七个 Python 源文件的哈希；即使用例名称不变，断言改变也必须复核 Node 对应测试后更新基线。
 每项在真实动态库和独立本地靶场上执行，结果写入 `build/node-parity-source-*.json` / `node-parity-package-*.json`。
 清单对应关系本身不表示用例通过，应检查同一提交的测试退出状态和逐项结果。
 

@@ -133,7 +133,12 @@ export class Session {
       transfer.attachSignal(timeouts.timeout_ms, started);
       const upload = streaming ? startUpload(transfer, body!) : undefined;
       let info;
-      try { info = await transfer.headers(); }
+      try {
+        info = await transfer.headers();
+        if (upload && info.status! < 300 && !info.upload_discarded && !upload.complete()) {
+          throw new FastlsError("server responded before upload finished; duplex streaming is not supported");
+        }
+      }
       finally { if (upload) { upload.stop(); await upload.done; } }
       transfer.ensureOpen();
       return new StreamResponse(transfer, info);
