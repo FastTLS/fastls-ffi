@@ -1,0 +1,36 @@
+{
+  "name": "@fasttls/fastls",
+  "version": "0.1.0-dev.0",
+  "description": "Node.js bindings for the Fastls C ABI",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc && node -e \"require('node:fs').copyFileSync('src/index.mjs', 'dist/index.mjs')\"",
+    "test": "npm run build && npm run test:types && node --test --test-concurrency=1 tests/*.test.mjs",
+    "test:types": "tsc --ignoreConfig --noEmit --strict --module NodeNext --target ES2022 --types node tests/types.mts tests/types.cts",
+    "test:package": "node scripts/test-package.mjs",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "koffi": "3.3.3",
+    "lossless-json": "4.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2"
+  }
+}

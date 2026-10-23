@@ -1,7 +1,7 @@
 # fastls-ffi
 
-Fastls 的 C ABI 动态库和 Python SDK。当前是未发布的开发版本。
-指纹生成复用独立 `FastTLS/imitate`，请求侧复用 `FastTLS/fastls`；Python 无需手动接入 Provider。
+Fastls 的 C ABI 动态库、Python 和 Node.js SDK。当前是未发布的开发版本。
+指纹生成复用独立 `FastTLS/imitate`，请求侧复用 `FastTLS/fastls`；语言 SDK 无需手动接入 Provider。
 
 ## 本地构建
 
@@ -34,7 +34,15 @@ python -m pip install -e ./python
 
 本地源码默认查找本仓库 `dist/`。安装后建议设置 `FASTLS_LIBRARY` 为动态库绝对路径，或向 Session 传 `library=...`。当前 Python 包尚未内置平台二进制，尚未发布 PyPI。
 
-## 同步调用
+## Node.js
+
+Node.js 22+。动态库构建完成后，在 `node/` 运行 `npm ci` 和 `npm run build`。
+提供 TypeScript 类型、ESM/CommonJS 入口、Promise 请求、流式响应、AbortSignal、连接池和 Cookie。
+源码默认加载仓库 `dist/`，安装包使用 `FASTLS_LIBRARY` 或 Session 的 `library` 指定动态库。
+详见 [Node.js 使用说明](node/README.md)；普通请求及流式下载示例在 `node/examples/`。
+当前包未发布 npm，未内置 Go 动态库，仅支持 Node 主线程。
+
+## Python 同步调用
 
 ```python
 from fastls import Session

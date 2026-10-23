@@ -1,5 +1,16 @@
 # Fastls 跨语言封装实施规划
 
+## Node.js 接入
+
+新增 `node/` TypeScript SDK，通过 Koffi 复用现有 C ABI，无新增 Go 导出或 RPC 服务。
+提供 Session、Promise 请求、单消费者 AsyncIterable 正文、AbortSignal、多值头、原生 Cookie 和连接池管理。
+无损 JSON 和 bigint 保护 uint64 句柄精度；C 字符串逐次释放，动态库进程级持有。
+共享定时器和受限立即调用处理非阻塞轮询，正常 EOF、取消、异常与提前退出均回收句柄。
+Node 首版覆盖总超时，不提供分层超时或自动解压选项；后续功能独立推进。
+本地 Windows x64 / Node 22.23.4 与24.18.0 均通过源码及隔离安装包各16项真实动态库测试，并验证两种模块入口的类型声明。
+已配置跨平台 Node 24 和最低 Node 22 CI；npm 预编译 Go 库分发与公开发布仍待实施。
+用法和范围见 [node/README.md](node/README.md)。
+
 日期：2026-10-23。状态：第一阶段及三轮测试扩展已完成；第二阶段已实现会话/连接池、多值响应头及Cookie管理，解压、分层超时及发布阶段待实施。开发候选，未发布。
 
 ## 目标与仓库边界

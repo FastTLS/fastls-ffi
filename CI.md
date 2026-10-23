@@ -16,6 +16,12 @@ runner标签采用GitHub官方支持的标准runner。具体可用额度由仓�
 
 ## 每组实际执行
 
+Node.js SDK 新增同一原生矩阵的检查：前五组使用 Node 24，最低版本组使用 Node 22。
+在已有原生/Python/C 检查通过后执行 `npm ci --prefix node`、`npm test --prefix node` 和
+`npm run test:package --prefix node`。安装包检查在临时项目安装 tarball，重复真实动态库测试并验证 ESM/CJS 包名入口。
+Node 证据保存在 `build/node-*.json`，编译后的 SDK 同原生证据一起上传；失败会使现有汇总检查失败。
+本地已验证 Windows x64 / Node 22.23.4 与 24.18.0；其它平台的远端执行结果以 Actions 为准，配置加入不代表已通过。
+
 构建c-shared动态库及头文件；运行依赖版本门禁测试、核心与桥接Go测试、Python源码SDK集成测试、profile和生成器测试，以及fhttp HTTP2的显式空/零设置与连接设置契约测试、vet检查。
 随后构建wheel、从wheel加载SDK重复集成测试、编译并执行独立C调用程序。公网检测站点不作为CI必需依赖，网络请求测试使用本地靶场。
 Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖。

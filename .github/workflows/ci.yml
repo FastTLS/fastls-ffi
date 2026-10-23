@@ -1,4 +1,4 @@
-name: Native library and Python SDK
+name: Native library, Python and Node.js SDKs
 
 on:
   push:
@@ -51,7 +51,7 @@ jobs:
 
   native:
     needs: dependencies
-    name: ${{ matrix.target }} / Go ${{ matrix.go }} / Python ${{ matrix.python }}
+    name: ${{ matrix.target }} / Go ${{ matrix.go }} / Python ${{ matrix.python }} / Node ${{ matrix.node }}
     strategy:
       fail-fast: false
       matrix:
@@ -60,31 +60,37 @@ jobs:
             target: windows-amd64
             go: '1.26.10'
             python: '3.11'
+            node: '24'
             race: false
           - runner: ubuntu-24.04
             target: linux-amd64
             go: '1.26.10'
             python: '3.11'
+            node: '24'
             race: true
           - runner: ubuntu-24.04-arm
             target: linux-arm64
             go: '1.26.10'
             python: '3.11'
+            node: '24'
             race: false
           - runner: macos-15-intel
             target: darwin-amd64
             go: '1.26.10'
             python: '3.11'
+            node: '24'
             race: false
           - runner: macos-15
             target: darwin-arm64
             go: '1.26.10'
             python: '3.11'
+            node: '24'
             race: false
           - runner: ubuntu-24.04
             target: linux-amd64
             go: '1.24.11'
             python: '3.10'
+            node: '22'
             race: false
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -127,16 +133,26 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node }}
       - name: Build and execute native, source SDK, wheel and C tests
         run: python scripts/ci.py run
+      - name: Install locked Node.js SDK dependencies
+        run: npm ci --prefix node
+      - name: Build and test Node.js SDK
+        run: npm test --prefix node
+      - name: Install and test npm package in an isolated project
+        run: npm run test:package --prefix node
       - name: Save binaries and evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: fastls-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}
+          name: fastls-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
           path: |
             workspace/fastls-ffi/dist/
             workspace/fastls-ffi/build/
+            workspace/fastls-ffi/node/dist/
           if-no-files-found: warn
           retention-days: 14
 
