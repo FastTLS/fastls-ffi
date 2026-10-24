@@ -321,7 +321,7 @@ class WebSockets(FixtureCase):
             self.assertIn("ws_path=yes", secure)
             for excluded in ("private=", "foreign=", "expired="):
                 self.assertNotIn(excluded, secure)
-            self.assertNotIn("secure=", self.inspect_cookies(s, "http"))
+            self.assertIn("secure=four", self.inspect_cookies(s, "http"))
             with s.websocket(self.url(mode="inspect").replace("127.0.0.1", "localhost")) as ws:
                 ws.send("inspect")
                 self.assertNotIn("Cookie", json.loads(ws.recv())["headers"])
