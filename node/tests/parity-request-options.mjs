@@ -76,10 +76,11 @@ p('test_response_charset_override_and_status_error',async t=>{
     for(const code of [204,304,400,503]){const response=await s.get(fixture[key]+'/status?code='+code,{allowRedirects:false});assert.equal(response.ok,code<400);if(code>=400)assert.throws(()=>response.raiseForStatus(),e=>e instanceof sdk.FastlsHTTPError&&e.response===response&&e.status===code&&e.message===`HTTP ${code}`);else assert.equal(response.raiseForStatus(),undefined);}
   }
   assert.equal(new sdk.Response(200,new sdk.Headers(),{},Buffer.from([48,0])).json(),0);
+  assert.equal(new sdk.Response(200,new sdk.Headers(),{},Buffer.from('\ufefftext')).text(),'\ufefftext');
   for(const bytes of [Buffer.from('\ufeff{"x":1}'),Buffer.from('\ufeff{"x":1}','utf16le'),Buffer.from([0,0,0,123,0,0,0,125])]){const r=new sdk.Response(200,new sdk.Headers(),{},bytes);r.encoding='not-a-codec';assert.deepEqual(r.json(),bytes.length===8?{}:{x:1});}
 });
 p('test_async_query_json_form_and_charset',async t=>{
-  const s=session(t);for(const key of ['https1','https2']){const r=await s.post(fixture[key]+'/inspect',{params:{q:['a','中文']},json:null});assert.deepEqual(r.json().query,{q:['a','中文']});assert.equal(unpack(r).toString(),'null');assert.equal(unpack(await s.post(fixture[key]+'/inspect',{form:{q:'中文'}})).toString(),'q=%E4%B8%AD%E6%96%87');assert.equal((await s.get(fixture[key]+'/charset')).text(),'café');assert.throws(()=>(new sdk.Response(503,new sdk.Headers(),{},Buffer.alloc(0))).raiseForStatus(),sdk.FastlsHTTPError);}
+  const s=session(t);for(const key of ['https1','https2']){const r=await s.post(fixture[key]+'/inspect',{params:{q:['a','中文']},json:null});assert.deepEqual(r.json().query,{q:['a','中文']});assert.equal(unpack(r).toString(),'null');assert.equal(unpack(await s.post(fixture[key]+'/inspect',{form:{q:'中文'}})).toString(),'q=%E4%B8%AD%E6%96%87');assert.equal((await s.get(fixture[key]+'/charset')).text(),'café');const status=await s.get(fixture[key]+'/status?code=503');assert.throws(()=>status.raiseForStatus(),sdk.FastlsHTTPError);}
 },adaptation);
 p('test_async_multipart_file_failure_and_success',async t=>{
   const s=session(t);for(const key of ['https1','https2'])for(const fail of [true,false]){const source=new FileSource(2*1024*1024,{fail,async:true});if(fail)await assert.rejects(s.post(fixture[key]+'/multipart',{files:{file:source}}),/fixture file read failed/);else assert.equal((await s.post(fixture[key]+'/multipart',{files:{file:source},form:{tag:'value'}})).json().parts[1].bytes,source.size);assert.equal(source.closed,false);}
