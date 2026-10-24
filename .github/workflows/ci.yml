@@ -8,16 +8,12 @@ on:
       fastls_ref:
         description: Reviewed FastTLS/fastls commit SHA (optional override)
         type: string
-      fhttp_ref:
-        description: Reviewed FastTLS/fhttp commit SHA (optional override)
+      ftransport_ref:
+        description: Reviewed FastTLS/ftransport commit SHA (optional override)
         type: string
       imitate_ref:
         description: Reviewed FastTLS/imitate commit SHA (optional override)
         type: string
-      full_fhttp_tests:
-        description: Also run the full upstream HTTP2 suite (known legacy failures)
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -32,7 +28,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       fastls_ref: ${{ steps.refs.outputs.fastls_ref }}
-      fhttp_ref: ${{ steps.refs.outputs.fhttp_ref }}
+      ftransport_ref: ${{ steps.refs.outputs.ftransport_ref }}
       imitate_ref: ${{ steps.refs.outputs.imitate_ref }}
       matrix: ${{ steps.refs.outputs.matrix }}
     steps:
@@ -46,7 +42,7 @@ jobs:
         id: refs
         env:
           FASTLS_REF: ${{ inputs.fastls_ref || vars.FASTLS_REF }}
-          FHTTP_REF: ${{ inputs.fhttp_ref || vars.FHTTP_REF }}
+          FTRANSPORT_REF: ${{ inputs.ftransport_ref || vars.FTRANSPORT_REF }}
           IMITATE_REF: ${{ inputs.imitate_ref || vars.IMITATE_REF }}
         run: python scripts/ci.py resolve
 
@@ -62,7 +58,6 @@ jobs:
     env:
       CGO_ENABLED: '1'
       FASTLS_CI_TARGET: ${{ matrix.config.target }}
-      FASTLS_FULL_FHTTP_TESTS: ${{ inputs.full_fhttp_tests || false }}
       FASTLS_STABILITY_SECONDS: '30'
     defaults:
       run:
@@ -80,9 +75,9 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          repository: FastTLS/fhttp
-          ref: ${{ needs.dependencies.outputs.fhttp_ref }}
-          path: workspace/fhttp
+          repository: FastTLS/ftransport
+          ref: ${{ needs.dependencies.outputs.ftransport_ref }}
+          path: workspace/ftransport
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -133,7 +128,6 @@ jobs:
     env:
       CGO_ENABLED: '1'
       FASTLS_CI_TARGET: ${{ matrix.config.target }}
-      FASTLS_FULL_FHTTP_TESTS: ${{ inputs.full_fhttp_tests || false }}
       FASTLS_STABILITY_SECONDS: '30'
     defaults:
       run:
@@ -151,9 +145,9 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          repository: FastTLS/fhttp
-          ref: ${{ needs.dependencies.outputs.fhttp_ref }}
-          path: workspace/fhttp
+          repository: FastTLS/ftransport
+          ref: ${{ needs.dependencies.outputs.ftransport_ref }}
+          path: workspace/ftransport
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -207,7 +201,6 @@ jobs:
     env:
       CGO_ENABLED: '1'
       FASTLS_CI_TARGET: ${{ matrix.config.target }}
-      FASTLS_FULL_FHTTP_TESTS: ${{ inputs.full_fhttp_tests || false }}
       FASTLS_STABILITY_SECONDS: '30'
     defaults:
       run:
@@ -225,9 +218,9 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          repository: FastTLS/fhttp
-          ref: ${{ needs.dependencies.outputs.fhttp_ref }}
-          path: workspace/fhttp
+          repository: FastTLS/ftransport
+          ref: ${{ needs.dependencies.outputs.ftransport_ref }}
+          path: workspace/ftransport
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:

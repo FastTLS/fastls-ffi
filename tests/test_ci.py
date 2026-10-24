@@ -25,7 +25,7 @@ class DependencyGate(unittest.TestCase):
     def resolve(self, overrides):
         env = os.environ.copy()
         env.pop("GITHUB_STEP_SUMMARY", None)
-        for key in ("FASTLS_REF", "FHTTP_REF", "IMITATE_REF"):
+        for key in ("FASTLS_REF", "FTRANSPORT_REF", "IMITATE_REF"):
             env[key] = ""
         env.update(overrides)
         with tempfile.TemporaryDirectory() as temporary:
@@ -35,9 +35,9 @@ class DependencyGate(unittest.TestCase):
             return process, output.read_text() if output.is_file() else ""
 
     def test_reviewed_commit_outputs(self):
-        process, output = self.resolve({key: "a" * 40 for key in ("FASTLS_REF", "FHTTP_REF", "IMITATE_REF")})
+        process, output = self.resolve({key: "a" * 40 for key in ("FASTLS_REF", "FTRANSPORT_REF", "IMITATE_REF")})
         self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
-        self.assertEqual(output.splitlines()[:3], [f"{name}_ref={'a' * 40}" for name in ("fastls", "fhttp", "imitate")])
+        self.assertEqual(output.splitlines()[:3], [f"{name}_ref={'a' * 40}" for name in ("fastls", "ftransport", "imitate")])
         matrix = json.loads(output.splitlines()[3].removeprefix("matrix="))
         self.assertEqual(len(matrix), 6)
         self.assertEqual({c["target"] for c in matrix}, {"windows-amd64", "linux-amd64", "linux-arm64", "darwin-amd64", "darwin-arm64"})
