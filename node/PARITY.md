@@ -1,6 +1,6 @@
 # Python / Node 验收对应关系
 
-范围：十一个 Python SDK 行为套件的 146 个用例，基线为 3e9e6b9，保留原始文件名和用例名作为 Node 测试 ID。
+范围：十一个 Python SDK 行为套件的 146 个用例，基线为 e369f1c，保留原始文件名和用例名作为 Node 测试 ID。
 对应关系由 `scripts/check-parity.mjs` 检查；Python 用例新增、删除或改名时，映射未更新会失败。
 `tests/python-baseline.json` 同时固定十一个 Python 源文件的哈希；即使用例名称不变，断言改变也必须复核 Node 对应测试后更新基线。
 每项在真实动态库和独立本地靶场上执行，结果写入 `build/node-parity-source-*.json` / `node-parity-package-*.json`。
