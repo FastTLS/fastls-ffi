@@ -305,6 +305,10 @@ export class Session {
     await this.ready(options.signal);this.ensureOpen();
     if(options.signal?.aborted)throw new AbortError(undefined,{cause:options.signal.reason});
     if(!this.native.websocketAvailable)throw new FastlsError("WebSocket requires a newer Fastls native library");
+    const cookieMode=options.cookieMode===undefined?"session":options.cookieMode;
+    if(cookieMode!=="session" && cookieMode!=="manual")throw new TypeError("cookieMode must be session or manual");
+    const sessionCookies=this.native.call<string[]>("features").includes("websocket_cookies");
+    if(cookieMode==="session" && !sessionCookies)throw new FastlsError("WebSocket session cookies require a newer Fastls native library; use cookieMode manual for legacy behavior");
     const maximum=(options.maxMessageBytes===undefined?1048576:options.maxMessageBytes);
     if(!Number.isSafeInteger(maximum)||maximum<1||maximum>16777216)throw new RangeError("maxMessageBytes must be 1..16777216");
     const close=wsBudget((options.closeTimeoutMs===undefined?1000:options.closeTimeoutMs),"closeTimeoutMs",60000);
@@ -312,7 +316,7 @@ export class Session {
     const proxy=proxyValue(options.proxy===undefined?this.proxy:options.proxy);
     const proxyCA=proxy?.toLowerCase().startsWith("https://")?(options.proxyCaFile===undefined?this.proxyCaPem:proxyTrust(options.proxyCaFile)):undefined;
     if(options.subprotocols!==undefined && (!Array.isArray(options.subprotocols)||options.subprotocols.some(p=>typeof p!=="string")))throw new TypeError("subprotocols must be an array of strings");
-    const handle=this.native.wsStart({url:prepared.url,session:this.handle,headers,profile:options.profile??this.profile,proxy:proxy||undefined,ca_pem:this.caPem,proxy_ca_pem:proxyCA,subprotocols:options.subprotocols??[],max_message_bytes:maximum,
+    const handle=this.native.wsStart({url:prepared.url,session:this.handle,disable_cookies:sessionCookies&&cookieMode==="manual"?true:undefined,headers,profile:options.profile??this.profile,proxy:proxy||undefined,ca_pem:this.caPem,proxy_ca_pem:proxyCA,subprotocols:options.subprotocols??[],max_message_bytes:maximum,
       timeout_ms:wsBudget((options.handshakeTimeoutMs===undefined?30000:options.handshakeTimeoutMs),"handshakeTimeoutMs"),read_timeout_ms:options.readTimeoutMs===null||options.readTimeoutMs===undefined?0:wsBudget(options.readTimeoutMs,"readTimeoutMs"),write_timeout_ms:wsBudget((options.writeTimeoutMs===undefined?30000:options.writeTimeoutMs),"writeTimeoutMs")});
     const ws=new WebSocket(this.native,handle,()=>{this.websockets.delete(ws);this.notifier?.forget(handle);},maximum,close,this.notifier,options.signal);
     this.websockets.add(ws);

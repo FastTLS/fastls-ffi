@@ -28,8 +28,13 @@ def _milliseconds(value, name, *, zero=False):
 
 def _start(owner, url, *, params=None, headers=None, profile=None, subprotocols=(),
            proxy=_INHERIT_PROXY, proxy_ca_file=_INHERIT_PROXY, handshake_timeout=30,
-           read_timeout=None, write_timeout=30, max_message_bytes=1024 * 1024, close_timeout=1):
-    if "websocket_v1" not in owner._native.call("fastls_features"):
+           read_timeout=None, write_timeout=30, max_message_bytes=1024 * 1024, close_timeout=1, cookie_mode="session"):
+    features = owner._native.call("fastls_features")
+    if cookie_mode not in ("session", "manual"):
+        raise ValueError("cookie_mode must be session or manual")
+    if cookie_mode == "session" and "websocket_cookies" not in features:
+        raise FastlsError("WebSocket session cookies require a newer Fastls native library; use cookie_mode=manual for legacy behavior")
+    if "websocket_v1" not in features:
         raise FastlsError("WebSocket requires a newer Fastls native library")
     if isinstance(max_message_bytes, bool) or not isinstance(max_message_bytes, int) or not 1 <= max_message_bytes <= 16 * 1024 * 1024:
         raise ValueError("max_message_bytes must be 1..16777216")
@@ -46,6 +51,8 @@ def _start(owner, url, *, params=None, headers=None, profile=None, subprotocols=
                    timeout_ms=_milliseconds(handshake_timeout, "handshake_timeout"),
                    read_timeout_ms=0 if read_timeout is None else _milliseconds(read_timeout, "read_timeout"),
                    write_timeout_ms=_milliseconds(write_timeout, "write_timeout"))
+    if cookie_mode == "manual" and "websocket_cookies" in features:
+        request["disable_cookies"] = True
     selected = owner.proxy if proxy is _INHERIT_PROXY else proxy
     if selected is not None and not isinstance(selected, str):
         raise TypeError("proxy must be a URL string or None")

@@ -36,7 +36,9 @@ asyncio.run(main())
 - Chrome 等选择器继续选择对应 TLS 配方和默认身份头；为常规 Upgrade，ALPN 仅提供 `http/1.1`，移除 h2 的 ALPS 扩展，Upgrade 头顺序由 Gorilla 管理。原始 profile match 记录表示选择结果，不表示修改后的握手与浏览器完全一致。`info["websocket"]["alpn_policy"]` 记录此适配；服务器可不协商 ALPN，此时仍是 HTTP/1.1。
 - 支持 text/binary、空消息、入站分片重组、分片间控制帧、自动回应 ping、主动 ping/pong，以及关闭握手。`subprotocols` 是最多 16 个合法 token 的列表/元组；`.subprotocol` 返回服务器选择。拒绝未提供的子协议/扩展。
 - 首版不支持 permessage-deflate、其它压缩扩展、HTTP/2/3 扩展 CONNECT、自动重连、自动重放、握手重定向或环境代理。握手响应最多读取 64 KiB。
-- Cookie 罐暂不自动同步到 WebSocket 握手，也不写回握手中的 Set-Cookie；需要认证时显式提供 `Cookie` / `Authorization` 头。Origin 由调用方设置。`Connection`、`Upgrade`、`Sec-WebSocket-*`、长度/传输头及代理认证头由库管理，不能手动覆盖。
+- 具备 `websocket_cookies` 能力的原生库默认与 HTTP 共用 Session Cookie 罐，按 ws→http、wss→https 处理域、路径、Secure、过期及同名 Cookie 顺序。显式 `Cookie` 头（包括空值）优先；握手响应仍可写回 Cookie。Origin 由调用方设置。`Connection`、`Upgrade`、`Sec-WebSocket-*`、长度/传输头及代理认证头由库管理，不能手动覆盖。
+- 成功且有效的 101、普通 HTTP 拒绝或重定向响应可更新 Cookie；无自动重定向。101 协商校验失败或 TLS 失败不写回。已处理的响应 Cookie 不因随后取消而回滚；会话关闭后忽略迟到写入。
+- Python `cookie_mode="manual"` / Node `cookieMode:"manual"` 禁用本次握手自动收发，显式 Cookie 仍可发送。默认 session 模式要求上述新能力；旧库可显式选择 manual，HTTP 不受此能力门禁影响。`cookies=False` / `cookies:false` 禁用整个会话的自动 Cookie。
 
 ## 资源与并发
 
@@ -77,4 +79,4 @@ int fastls_ws_read(uint64_t handle, void *buffer, size_t capacity,
 
 ## Node.js
 
-Node 0.9通过Session.websocket接入同一ABI，使用Promise消息接口、AbortSignal、每会话就绪通知及受限poll回退。时间参数以Ms命名，关闭使用await closeAsync或立即abort；详见[node/README.md](node/README.md)。21项Python行为映射及线程/asyncio适配记录见[node/PARITY.md](node/PARITY.md)。WS仍不自动读写Cookie罐；当前提交的跨平台验收以Actions和候选证据为准。
+Node 0.9通过Session.websocket接入同一ABI，0.10加入共享Cookie。使用Promise消息接口、AbortSignal、每会话就绪通知及受限poll回退。时间参数以Ms命名，关闭使用await closeAsync或立即abort；详见[node/README.md](node/README.md)。21项WS与14项共享Cookie行为映射见[node/PARITY.md](node/PARITY.md)。跨平台验收以Actions和候选证据为准。

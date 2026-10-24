@@ -1,6 +1,6 @@
 # Python / Node 验收对应关系
 
-范围：十三个 Python SDK 行为套件的 187 个用例，基线为 7bea602，保留原始文件名和用例名作为 Node 测试 ID。
+范围：十四个 Python SDK 行为套件的 201 个用例，基线为 7bea602，保留原始文件名和用例名作为 Node 测试 ID。
 对应关系由 `scripts/check-parity.mjs` 检查；Python 用例新增、删除或改名时，映射未更新会失败。
 `tests/python-baseline.json` 同时固定十三个 Python 源文件的哈希；即使用例名称不变，断言改变也必须复核 Node 对应测试后更新基线。
 每项在真实动态库和独立本地靶场上执行，结果写入 `build/node-parity-source-*.json` / `node-parity-package-*.json`。
@@ -24,13 +24,13 @@
 
 test_websocket.py：21项，消息、分片、控制帧、TLS/ALPN、四种代理、关闭、预算、通知/轮询、取消与兄弟请求隔离。已加入映射与源文件哈希。
 
-加上原有 2 项原生绑定测试和 14 项 Node 基础测试，完整 Node 套件为 203 项。
+加上原有 2 项原生绑定测试和 14 项 Node 基础测试，完整 Node 套件为 217 项。
 TypeScript 的 ESM/CommonJS 类型检查及安装包内容/哈希检查独立于上述用例数。
 共享的Go测试、race检查和Python依赖门禁仍由原CI执行，不用Node重写。
 
 ## 语言适配范围
 
-以下37个场景在逐项记录的 `adaptation` 字段中说明差异：
+以下41个场景在逐项记录的 `adaptation` 字段中说明差异：
 
 - test_python.py::test_sync_stream_first_chunk_before_completion：使用Promise和异步迭代，验证相同的首块时序。
 - test_stability.py::test_multithreaded_sync_session：以96路Promise并发验证请求共享；不提供共享同步Session或worker_threads线程安全承诺。
@@ -92,3 +92,7 @@ npm run test:sse:soak
 ## 0.9 WebSocket适配
 
 新增5项adaptation记录：blocked-send、single-reader/thread、idle notification、cancel-recv/siblings、handshake/session/poll。以Promise/AbortSignal代替Python线程及asyncio任务；未增加worker_threads承诺。源码/安装包均运行21项；test:ws:soak独立运行60秒/32路混合负载，不计入203项。
+
+## 0.10 WebSocket共享Cookie
+
+新增test_websocket_cookies.py的14项逐名映射：HTTP登录→WS认证、握手Cookie→HTTP及删除、域/路径/Secure/同名顺序、显式和空Cookie、禁用/manual模式、HTTP失败响应、无效101/TLS、并发与会话隔离、四种代理、取消/关闭、旧库能力门禁、异步往返及非法模式。并发、取消、异步往返、异步manual四项标注Promise/AbortSignal适配。总计201项Python行为、41项适配、14套件，加16项Node测试共217项。基线文件为新增套件单独记录来源说明及SHA，原13套件仍使用7bea602。WS长测同时检验登录Cookie、成功握手写回及非法101不污染Cookie罐。

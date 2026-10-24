@@ -10,6 +10,7 @@ export interface WebSocketOptions {
   headers?: Record<string,string>; profile?: string; params?: QueryParams;
   proxy?: string | null; proxyCaFile?: string | null; subprotocols?: readonly string[];
   handshakeTimeoutMs?: number; readTimeoutMs?: number | null; writeTimeoutMs?: number;
+  cookieMode?: "session" | "manual";
   closeTimeoutMs?: number; maxMessageBytes?: number; signal?: AbortSignal;
 }
 export class WebSocketClosed extends FastlsError {

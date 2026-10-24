@@ -17,6 +17,7 @@ notifications = "--notifications" in sys.argv[1:]
 proxy = "--proxy" in sys.argv[1:]
 request_options = "--request-options" in sys.argv[1:]
 websocket = "--websocket" in sys.argv[1:]
+websocket_cookies = "--websocket-cookies" in sys.argv[1:]
 wheels = list((ROOT / "dist").glob("*.whl"))
 if len(wheels) != 1:
     raise SystemExit("expected exactly one SDK wheel in dist/")
@@ -34,4 +35,6 @@ if request_options:
     sys.argv = [str(ROOT / "tests/test_request_options.py")]
 if websocket:
     sys.argv = [str(ROOT / "tests/test_websocket.py")]
+if websocket_cookies:
+    sys.argv = [str(ROOT / "tests/test_websocket_cookies.py")]
 runpy.run_path(sys.argv[0], run_name="__main__")
