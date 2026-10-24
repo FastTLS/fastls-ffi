@@ -43,3 +43,9 @@ python scripts/test_wheel.py --proxy
 ```
 
 六组原生 Actions 分别执行源码和 wheel 套件，保存 `stability-proxy-*.json` 及完整日志。核心额外验证握手取消关闭 socket、CONNECT 响应头上限、认证与预读数据、SOCKS 地址类型和凭据错误脱敏。结果以对应提交的 Actions 及产物为准。
+
+## Node.js
+
+Node 0.7使用相同的`proxy_tunnels`能力，无新增ABI函数。`new Session({proxy: url})`设置默认代理；`session.get(url, {proxy: null})`显式直连；省略或undefined继承默认值，空字符串也直连。请求覆盖同样适用于stream、sse和duplex。
+
+源码及内置库安装包各执行10项对应代理用例，保留Python原测试ID；Node用同步/异步生产者和即时/慢速消费者覆盖Python的同步/异步组合。代理靶场由Node测试代码独立实现，安装验收继续清除工具搜索路径并禁用安装脚本。完整范围与类型示例见[node/README.md](node/README.md)及[node/PARITY.md](node/PARITY.md)。

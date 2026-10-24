@@ -223,7 +223,7 @@ try {
 句柄使用 bigint，无损解析和序列化 ABI JSON 数字；返回的 C 字符串逐次由 fastls_free 释放。
 加载时检查ABI及所需能力，并使用系统级固定加载（Windows PIN / POSIX NODELETE），避免Node环境清理时卸载仍有Go后台线程的动态库。
 原生限制仍适用：最多 64 会话、256 未关闭请求，每会话最多 16 种传输配置。
-不提供代理或WebSocket。
+代理支持HTTP CONNECT、socks5及socks5h，见下节；不提供WebSocket。
 
 ## 验证
 
@@ -237,7 +237,7 @@ npm run test:package
 测试使用真实动态库和本地靶场，覆盖 H1/H2、证书、连接池、Cookie、多值头、二进制、取消、超时、
 异常正文、64 MiB 下载、32 MiB 缓存限制和 128 路并发。安装包测试在临时项目安装 npm tarball，
 重新执行全部测试并检查包名导入和 TypeScript 声明。证据写入仓库 build/node-*.json。
-十组Python套件的136个场景已有对应项，包含13项双工、23项SSE和21项通知验收，连同原有16项，共152项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
+十一组Python套件的146个场景已有对应项，包含13项双工、23项SSE、21项通知和10项代理验收，连同原有16项，共162项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
 持续测试默认30秒，检查RSS、操作系统句柄/描述符、Go堆和goroutine回收。Linux当前Go/Node组合另跑300秒；设置 `FASTLS_NODE_SOAK_SECONDS=300` 后执行 `npm run test:soak` 可复现。
 
 ## 与Python的语言差异
@@ -254,10 +254,36 @@ CI 运行时还记录提交 SHA。测试前后会核对动态库未被替换。�
 构建本平台Go动态库后，运行 `npm run pack:native`，产物位于上级 `dist/`。
 例如Windows x64：`fasttls-fastls-0.6.0-dev.0-win32-x64.tgz`；Linux包名另带`-glibc`。
 在目标项目执行 `npm install <候选包绝对路径> --ignore-scripts`，随后即可 `new Session()`，无需Go、Python、编译器或FASTLS_LIBRARY。
-安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整152项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
+安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整162项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
 
 当前候选覆盖Windows x64、Linux glibc x64/arm64、macOS x64/arm64，Node22+。每个tarball只含一个系统/架构，不能将同名版本的这些变体当成可直接发布到npm的通用包。npm的os/cpu/libc字段限制安装目标；首次使用还检查平台、ABI声明、库SHA256及Linux的glibc版本。Linux最低glibc从ELF符号版本提取，macOS最低版本从Mach-O提取，具体要求及系统动态依赖见包内`native/manifest.json`，不将CI宿主机上的通过扩大为所有旧系统均已测试。musl不在当前范围。
 
 加载优先级：Session的`library` → FASTLS_LIBRARY → 包内动态库；源码工作区最后才回退到仓库dist目录。显式覆盖仍检查ABI和能力。包内文件损坏、缺失或平台不符会报错，不静默寻找其它库。SHA256用于完整性核对，不能替代签名或信任来源。
 
 清单还保存Go构建来源摘要、模块版本/校验和、FastTLS仓库提交和收集到的许可证文本。`native/THIRD_PARTY_NOTICES.txt`仅是可用材料清单。当前FastTLS各仓库缺少根LICENSE/COPYING，已明确记为公开发布前的待处理项，不能据此推定已有再分发授权。候选包标记private且没有安装/构建脚本；本阶段仅生成CI验收产物，不发布npm或Release。
+
+## 代理（0.7）
+
+```js
+const session = new Session({
+  proxy: 'http://user:password@127.0.0.1:8080',
+  timeoutMs: { total: 30000, connect: 5000 },
+});
+try {
+  await session.get('https://example.com/');
+  await session.get('https://example.com/', { proxy: null }); // 显式直连
+  await session.get('https://example.com/', { proxy: 'socks5h://127.0.0.1:1080' });
+} finally { await session.closeAsync(); }
+```
+
+Session和请求的`proxy`接受URL字符串或null。请求省略或undefined继承会话默认值；null或空字符串直连。普通请求、stream、sse、自动/手动duplex遵循相同规则。传入其它类型会报TypeError。显式代理要求原生`proxy_tunnels`能力；旧ABI-v1库仍可直连，代理请求在登记请求句柄前报错。
+
+`http://`对HTTP和HTTPS目标均使用HTTP/1.1 CONNECT，默认端口80。`socks5://`本机解析目标域名，`socks5h://`交给代理解析，默认端口1080。支持HTTP Basic和SOCKS用户名/密码认证，凭据按URL规则转义，例如密码中的@写成%40。不读取HTTP_PROXY、HTTPS_PROXY、ALL_PROXY、NO_PROXY及其小写形式。暂不支持https代理、SOCKS4或PAC，详情见上级PROXY.md。
+
+代理地址及凭据、profile和目标CA共同隔离连接池。目标证书仍需验证；目标请求禁止设置Proxy-Authorization和Proxy-Connection。认证只用于代理握手，错误消息不回显凭据或代理任意响应短语。握手计入connect和total预算，AbortSignal取消会关闭未建立的隧道；取消单条H2流继续复用健康的共享隧道。代理拒绝后不降级或自动重试。
+
+代理测试使用Node测试进程中的独立、仅访问loopback的CONNECT/RFC1928/RFC1929靶场；SDK本身不依赖Python或代理辅助进程。十一组Python行为映射、源码及内置库安装包统一验收；语言适配见PARITY.md。
+
+`npm run test:proxy:soak`默认以32路并发运行60秒，轮换正常请求、共享H2流取消、错误认证和停滞握手取消；三种scheme分别使用真实loopback代理。FASTLS_NODE_PROXY_SOAK_SECONDS可设为1..300。Linux当前Go/Node组合执行该独立测试，沿用现有RSS、Go堆、goroutine及句柄阈值，逐批记录写入build/node-proxy-recovery-*.json，不计入162项主套件。
+
+代理独立长测与SSE长测一样，显式使用`--max-semi-space-size=16`固定测试进程的V8半空间上限。本机Windows Node24默认策略在持续分配时将new_space保留空间从4MiB扩大至128MiB，而Go堆、原生请求和隧道已回收。该参数仅作用于独立测试进程，不修改SDK用户进程的运行配置，也不放宽RSS或句柄阈值。证据保存运行参数、V8空间快照，以及阈值判定之后的完整GC诊断；判定使用GC前的最终采样。

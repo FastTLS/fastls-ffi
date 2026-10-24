@@ -8,3 +8,4 @@ import './parity-sse.mjs';
 import './parity-notifications.mjs';
 import './parity-stability.mjs';
 import './parity-basic.mjs';
+import './parity-proxy.mjs';

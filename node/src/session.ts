@@ -11,6 +11,8 @@ import { SSEStream, validateSSEOptions, type SSEOptions } from "./sse.js";
 import { Notifier } from "./notifications.js";
 
 export interface RequestOptions {
+  /** Undefined inherits the session proxy; null or an empty string connects directly. */
+  proxy?: string | null;
   profile?: string;
   headers?: Record<string, string>;
   /** Total deadline including response body consumption, in milliseconds. */
@@ -27,6 +29,8 @@ export interface RequestOptions {
 export type DuplexOptions = Omit<RequestOptions, "body" | "duplex">;
 
 export interface SessionOptions {
+  /** HTTP CONNECT, socks5 (local DNS), or socks5h (proxy DNS) URL. */
+  proxy?: string | null;
   notifications?: "auto" | "required" | "poll";
   profile?: string;
   headers?: Record<string, string>;
@@ -57,6 +61,13 @@ function decoding(decode: boolean, maximum: number): void {
   if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > 2 ** 40) throw new RangeError("maxDecodedBytes must be 1..1099511627776");
 }
 
+function proxyValue(value: unknown): string | null | undefined {
+  if (value !== undefined && value !== null && typeof value !== "string") throw new TypeError("proxy must be a URL string or null");
+  // The native validator owns URL parsing and redacted errors. Do not include
+  // credentials in JavaScript URL parser errors or normalize invalid input.
+  return value as string | null | undefined;
+}
+
 function mergeHeaders(...sources: (Record<string, string> | undefined)[]): Record<string, string> {
   const merged = Object.create(null) as Record<string, string>;
   for (const source of sources) {
@@ -80,6 +91,7 @@ export class Session {
   private readonly native: Native;
   private readonly handle: bigint;
   private readonly profile: string;
+  private readonly proxy: string | null | undefined;
   private readonly headers: Record<string, string>;
   private readonly timeouts: Record<string, number>;
   private readonly decodeContent: boolean;
@@ -92,6 +104,7 @@ export class Session {
   private setup?: Promise<void>;
 
   constructor(options: SessionOptions = {}) {
+    this.proxy = proxyValue(options.proxy);
     const notifications = options.notifications === undefined ? "auto" : options.notifications;
     if (!["auto", "required", "poll"].includes(notifications)) throw new TypeError("notifications must be auto, required or poll");
     this.profile = options.profile ?? "chrome/156/windows";
@@ -162,6 +175,13 @@ export class Session {
     }
     if (options.signal?.aborted) throw new AbortError(undefined, { cause: options.signal.reason });
     const headers = mergeHeaders(this.headers, options.headers);
+    for (const name of ["proxy-authorization", "proxy-connection"]) {
+      if (name in headers) throw new FastlsError("proxy headers must not be sent as target headers; configure proxy URL credentials");
+    }
+    const proxy = proxyValue(options.proxy === undefined ? this.proxy : options.proxy);
+    if (proxy && !this.native.call<string[]>("features").includes("proxy_tunnels")) {
+      throw new FastlsError("proxy support requires a newer Fastls native library");
+    }
     if (options.duplex !== undefined && typeof options.duplex !== "boolean") throw new TypeError("duplex must be a boolean");
     const duplex = options.duplex ?? false;
     if (duplex && !this.native.call<string[]>("features").includes("duplex_h2")) {
@@ -179,7 +199,7 @@ export class Session {
     }
     const started = performance.now();
     const handle = this.native.start({
-      session: this.handle, url, method, headers,
+      session: this.handle, url, method, headers, proxy: proxy || undefined,
       profile: options.profile ?? this.profile,
       ...timeouts, decode_content: decodeContent, max_decoded_bytes: maxDecodedBytes,
       disable_redirect: duplex || options.allowRedirects === false,
