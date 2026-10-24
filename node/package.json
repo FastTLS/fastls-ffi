@@ -1,6 +1,6 @@
 {
   "name": "@fasttls/fastls",
-  "version": "0.6.0-dev.0",
+  "version": "0.7.0-dev.0",
   "description": "Node.js bindings for the Fastls C ABI",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,6 +25,7 @@
     "test:soak": "node --expose-gc --test --test-name-pattern=test_soak_and_resource_recovery tests/parity.test.mjs",
     "test:duplex:soak": "node --expose-gc --test tests/duplex-recovery.mjs",
     "test:sse:soak": "node --expose-gc --max-semi-space-size=16 --test tests/sse-recovery.mjs",
+    "test:proxy:soak": "node --expose-gc --max-semi-space-size=16 --test tests/proxy-recovery.mjs",
     "test:types": "tsc --ignoreConfig --noEmit --strict --module NodeNext --target ES2022 --types node tests/types.mts tests/types.cts",
     "test:package": "node scripts/test-package.mjs",
     "prepack": "npm run build",

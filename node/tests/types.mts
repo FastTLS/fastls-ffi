@@ -1,6 +1,16 @@
 import { Session, ServerSentEvent, type SSEOptions, type SSEStream, type RequestOptions, type Response, type StreamResponse } from '@fasttls/fastls';
 
 async function consume(session: Session): Promise<void> {
+  const proxied = new Session({ proxy: 'http://127.0.0.1:8080' });
+  await proxied.get('https://example.com', { proxy: null });
+  await proxied.get('https://example.com', { proxy: 'socks5h://127.0.0.1:1080' });
+  await proxied.sse('GET', 'https://example.com/events', { proxy: '' });
+  await proxied.duplex('POST', 'https://example.com', { proxy: null }).closeAsync();
+  await proxied.closeAsync();
+  // @ts-expect-error Proxy values must be URL strings or null.
+  new Session({ proxy: false });
+  // @ts-expect-error Proxy values must be URL strings or null.
+  session.get('https://example.com', { proxy: 42 });
   const initialized: Session = await Session.open({ notifications: 'required' });
   await initialized.ready(AbortSignal.timeout(3000));
   const mode: 'async-events' | 'poll' = initialized.notificationMode;

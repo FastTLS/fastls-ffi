@@ -159,6 +159,11 @@ jobs:
         env:
           FASTLS_NODE_SSE_SOAK_SECONDS: '60'
         run: npm run test:sse:soak --prefix node
+      - name: Mixed proxy tunnel recovery soak
+        if: matrix.race
+        env:
+          FASTLS_NODE_PROXY_SOAK_SECONDS: '60'
+        run: npm run test:proxy:soak --prefix node
       - name: Save binaries and evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
