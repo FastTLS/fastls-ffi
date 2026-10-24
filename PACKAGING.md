@@ -1,6 +1,6 @@
 # Python 平台候选包
 
-本阶段生成内置动态库的候选 wheel；不发布 PyPI 或 Release。验证结果以对应提交的 Actions 为准。
+本阶段生成内置动态库的候选 wheel 与 SDK-only sdist；不发布 PyPI 或 Release。验证结果以对应提交的 Actions 为准。
 
 ## 安装与加载
 
@@ -13,7 +13,7 @@
 ## 候选平台范围
 
 - Windows amd64：`py3-none-win_amd64`，原生 Windows runner 验收。
-- Linux amd64/arm64：原生 Ubuntu 24.04 runner，使用普通 `linux_*` 标签。附 ELF 所需 glibc 符号和动态依赖；尚未认证 manylinux 或 musllinux，不保证所有 Linux 发行版可用。
+- Linux amd64/arm64：原生 Ubuntu 24.04 runner，使用普通 `linux_*` 标签。首个公开候选仅承诺 Ubuntu 24.04兼容系统与glibc 2.39或更新版本；门禁拒绝需要更高GLIBC符号的产物。未认证manylinux或musllinux。
 - macOS amd64/arm64：保守使用构建及验收主机的系统大版本作为 wheel 最低版本，不沿用可能早于 Go 运行时要求的 Python 最低部署标签。附 `otool` 依赖和加载命令。
 - Python 最低版本仍为 3.10；当前六组矩阵没有穷举其后所有 Python 版本。
 
@@ -25,8 +25,10 @@ wheel 的 `py3-none` 表示通过 ctypes 调用 C ABI，没有 CPython 扩展 AB
 
 `python scripts/test_wheel.py --all` 将 wheel 用 pip 安装到源码目录之外的临时目录，在隔离 Python 子进程核对导入位置、加载路径、哈希和外置覆盖规则，再运行全部 SDK 套件。首先清除编译器搜索路径做 HTTPS/WS 安装探测；完整套件使用原有资源采样工具。fixture 与测试驱动属于测试端，库不会调用编译器。
 
+`python scripts/test_release.py` 在临时虚拟环境中安装SDK-only sdist、从合成的0.0.0基线升级到候选平台wheel、核对包内库哈希，再卸载并确认包目录和metadata均已清理。sdist不编译或下载原生库，使用时必须显式提供兼容ABI v1动态库。
+
 `dist/ci-inputs.json` 绑定原生库、fixture、wheel、审计记录、workspace 与 SDK 输入。下游阶段拒绝不同提交、架构或哈希的产物。
 
 ## 后续发布门槛
 
-候选包通过原生测试不等于完成公开发布认证。正式发布前仍需完成许可证/第三方随附材料、sdist 的独立安装说明和验收、版本升级/卸载验收，以及拟支持的 Linux 最低 libc/系统范围认证。本轮不自动扩展平台承诺。
+许可证正文与生产依赖的第三方许可证统一进入wheel和sdist；`release`阶段会根据实际Go生产依赖图拒绝过期材料，并验证归档内容、sdist安装、版本升级、卸载和Linux glibc 2.39边界。公开发布仍需由维护者选择最终版本号、签署发布决定并配置目标索引凭据；CI不会自动上传包或创建Release。
