@@ -27,6 +27,13 @@ TARGETS = [
 ]
 
 
+def package_version():
+    # benchmarks/prepare.py loads this file with runpy from outside scripts/.
+    # Keep local runner imports lazy so that read-only preflight stays usable.
+    from package_version import package_version as resolve_package_version
+    return resolve_package_version()
+
+
 
 def summary(message):
     print(message, flush=True)
@@ -126,6 +133,7 @@ def artifact_inputs():
 
 def save_inputs(target, sources):
     (ROOT / "dist" / "ci-inputs.json").write_text(json.dumps(dict(target=target, sources=sources,
+        package_version=package_version(),
         sdk=sdk_inputs(), artifacts=artifact_inputs()), indent=2) + "\n", encoding="utf-8")
 
 
@@ -133,6 +141,8 @@ def verify_inputs(target, sources):
     record = json.loads((ROOT / "dist" / "ci-inputs.json").read_text(encoding="utf-8"))
     if record["target"] != target or record["sources"]["fastls-ffi"] != sources["fastls-ffi"]:
         raise RuntimeError("native artifacts belong to a different target or SDK commit")
+    if record.get("package_version") != package_version():
+        raise RuntimeError("package version changed after build")
     if record["sdk"] != sdk_inputs() or record["artifacts"] != artifact_inputs():
         raise RuntimeError("SDK or native artifacts changed after build")
     for name, revision in sources.items():
@@ -238,6 +248,7 @@ def run(stage="all"):
         if stage in ("all", "release"):
             execute("release-artifacts", [sys.executable, "scripts/release_materials.py", "artifacts"])
             execute("release-install", [sys.executable, "scripts/test_release.py"])
+            execute("development-snapshot", [sys.executable, "scripts/development_snapshot.py", "create"])
         if stage == "race" or (stage == "all" and env.get("FASTLS_CI_RACE", "").lower() == "true"):
             execute("race-bridge", ["go", "test", "-race", "./internal/bridge"])
             execute("race-core", ["go", "test", "-race", "./..."], FASTLS_ROOT)

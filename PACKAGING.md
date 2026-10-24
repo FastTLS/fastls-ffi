@@ -2,6 +2,8 @@
 
 本阶段生成内置动态库的候选 wheel 与 SDK-only sdist；不发布 PyPI 或 Release。验证结果以对应提交的 Actions 为准。
 
+每次 CI 运行使用唯一的 `0.1.0.dev<run-number>` 开发版本。只有通过平台 `release` 验收阶段后，wheel、sdist、原生审计记录和 `development-snapshot.json` 才会作为 `development-snapshot-*` 构建产物保留14天。清单固定版本、目标平台、四仓库提交和文件哈希，并显式标记 `development-only`、`publishable: false`。仓库中的 `python/VERSION` 继续保持 `0.1.0.dev0`，这些产物不会创建标签、GitHub Release 或上传PyPI。
+
 ## 安装与加载
 
 下载匹配平台的 wheel 后运行 `python -m pip install /path/to/fastls_ffi-....whl`。不需要 Go/C 编译器或源码目录，继续使用 `Session(profile="chrome/156/windows")`。
@@ -31,4 +33,4 @@ wheel 的 `py3-none` 表示通过 ctypes 调用 C ABI，没有 CPython 扩展 AB
 
 ## 后续发布门槛
 
-许可证正文与生产依赖的第三方许可证统一进入wheel和sdist；`release`阶段会根据实际Go生产依赖图拒绝过期材料，并验证归档内容、sdist安装、版本升级、卸载和Linux glibc 2.39边界。公开发布仍需由维护者选择最终版本号、签署发布决定并配置目标索引凭据；CI不会自动上传包或创建Release。
+许可证正文与生产依赖的第三方许可证统一进入wheel和sdist；`release`阶段会根据实际Go生产依赖图拒绝过期材料，并验证归档内容、sdist安装、版本升级、卸载和Linux glibc 2.39边界。公开发布仍需由维护者选择最终版本号、签署发布决定并配置目标索引凭据；CI不会自动上传包或创建Release。开发快照即使完成全部认证也不改变这一限制。

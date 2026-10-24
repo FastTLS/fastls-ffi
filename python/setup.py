@@ -10,6 +10,7 @@ import platform
 from pathlib import Path
 import shutil
 import sys
+from email.parser import Parser
 
 from setuptools import Distribution, setup
 from setuptools.command.build_py import build_py
@@ -19,6 +20,21 @@ except ImportError:
     bdist_wheel = None
 
 ROOT = Path(__file__).resolve().parent
+
+
+def package_version():
+    selected = os.environ.get("FASTLS_PACKAGE_VERSION")
+    if selected:
+        return selected
+    # An sdist records the build-time version in its root PKG-INFO. Prefer it
+    # so installing a uniquely versioned development snapshot does not fall
+    # back to the repository's rolling dev0 marker.
+    metadata = ROOT / "PKG-INFO"
+    if metadata.is_file():
+        value = Parser().parsestr(metadata.read_text(encoding="utf-8")).get("Version")
+        if value:
+            return value
+    return (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 
 class NativeDistribution(Distribution):
@@ -72,7 +88,7 @@ if bdist_wheel is not None:
 
 
 setup(
-    version=os.environ.get("FASTLS_PACKAGE_VERSION", (ROOT / "VERSION").read_text(encoding="utf-8").strip()),
+    version=package_version(),
     distclass=NativeDistribution,
     cmdclass=commands,
 )
