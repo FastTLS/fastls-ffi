@@ -36,6 +36,7 @@ const (
 )
 
 type Input struct {
+	Proxy            string            `json:"proxy"`
 	Duplex           bool              `json:"duplex"`
 	WriteTimeoutMS   int64             `json:"write_timeout_ms"`
 	StreamBody       bool              `json:"stream_body"`
@@ -265,7 +266,15 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 	if len(in.Body) > 512*1024 {
 		return 0, errors.New("buffered upload exceeds 512KiB; use stream_body")
 	}
-	opts := fastls.Options{Headers: in.Headers, Body: in.Body, VerifyTLS: true,
+	if err := fastls.ValidateProxy(in.Proxy); err != nil {
+		return 0, err
+	}
+	for name := range in.Headers {
+		if strings.EqualFold(name, "Proxy-Authorization") || strings.EqualFold(name, "Proxy-Connection") {
+			return 0, errors.New("proxy headers must not be sent as target headers; configure proxy URL credentials")
+		}
+	}
+	opts := fastls.Options{Proxy: in.Proxy, Headers: in.Headers, Body: in.Body, VerifyTLS: true,
 		Timeout: int((in.TimeoutMS + 999) / 1000), DisableRedirect: in.DisableRedirect}
 	if in.CAPEM != "" {
 		roots := x509.NewCertPool()
@@ -296,7 +305,8 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 			cancel()
 			return 0, errors.New("invalid or closed session handle")
 		}
-		key := in.Profile + fmt.Sprintf("/%x", sha256.Sum256([]byte(in.CAPEM)))
+		identity, _ := json.Marshal([]string{in.Profile, in.CAPEM, in.Proxy})
+		key := fmt.Sprintf("%x", sha256.Sum256(identity))
 		pool := s.pools[key]
 		if pool == nil {
 			if len(s.pools) >= 16 {
