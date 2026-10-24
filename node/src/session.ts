@@ -10,6 +10,7 @@ import type { UploadLifecycle } from "./response.js";
 import { SSEStream, validateSSEOptions, type SSEOptions } from "./sse.js";
 import { Notifier } from "./notifications.js";
 import { prepare, type QueryParams, type JSONValue, type FormFields, type MultipartFiles } from "./request-options.js";
+import { WebSocket, wsBudget, type WebSocketOptions } from "./websocket.js";
 
 export interface RequestOptions {
   /** Undefined inherits the session proxy; null or an empty string connects directly. */
@@ -63,6 +64,7 @@ export interface Stats {
   goroutines: number;
   heap_alloc_bytes: number;
   heap_inuse_bytes: number;
+  buffered_ws_write_bytes?: number;
 }
 
 function decoding(decode: boolean, maximum: number): void {
@@ -116,6 +118,7 @@ export class Session {
   private readonly maxDecodedBytes: number;
   private readonly caPem?: string;
   private readonly active = new Set<Transfer>();
+  private readonly websockets = new Set<WebSocket>();
   private readonly producers = new Set<UploadLifecycle>();
   private closed = false;
   private notifier?: Notifier;
@@ -298,6 +301,24 @@ export class Session {
   get(url: string, options?: RequestOptions): Promise<Response> { return this.request("GET", url, options); }
   post(url: string, options?: RequestOptions): Promise<Response> { return this.request("POST", url, options); }
 
+  async websocket(url:string, options:WebSocketOptions={}):Promise<WebSocket> {
+    await this.ready(options.signal);this.ensureOpen();
+    if(options.signal?.aborted)throw new AbortError(undefined,{cause:options.signal.reason});
+    if(!this.native.websocketAvailable)throw new FastlsError("WebSocket requires a newer Fastls native library");
+    const maximum=(options.maxMessageBytes===undefined?1048576:options.maxMessageBytes);
+    if(!Number.isSafeInteger(maximum)||maximum<1||maximum>16777216)throw new RangeError("maxMessageBytes must be 1..16777216");
+    const close=wsBudget((options.closeTimeoutMs===undefined?1000:options.closeTimeoutMs),"closeTimeoutMs",60000);
+    const headers=mergeHeaders(this.headers,options.headers),prepared=prepare(url,{params:options.params},headers);
+    const proxy=proxyValue(options.proxy===undefined?this.proxy:options.proxy);
+    const proxyCA=proxy?.toLowerCase().startsWith("https://")?(options.proxyCaFile===undefined?this.proxyCaPem:proxyTrust(options.proxyCaFile)):undefined;
+    if(options.subprotocols!==undefined && (!Array.isArray(options.subprotocols)||options.subprotocols.some(p=>typeof p!=="string")))throw new TypeError("subprotocols must be an array of strings");
+    const handle=this.native.wsStart({url:prepared.url,session:this.handle,headers,profile:options.profile??this.profile,proxy:proxy||undefined,ca_pem:this.caPem,proxy_ca_pem:proxyCA,subprotocols:options.subprotocols??[],max_message_bytes:maximum,
+      timeout_ms:wsBudget((options.handshakeTimeoutMs===undefined?30000:options.handshakeTimeoutMs),"handshakeTimeoutMs"),read_timeout_ms:options.readTimeoutMs===null||options.readTimeoutMs===undefined?0:wsBudget(options.readTimeoutMs,"readTimeoutMs"),write_timeout_ms:wsBudget((options.writeTimeoutMs===undefined?30000:options.writeTimeoutMs),"writeTimeoutMs")});
+    const ws=new WebSocket(this.native,handle,()=>{this.websockets.delete(ws);this.notifier?.forget(handle);},maximum,close,this.notifier,options.signal);
+    this.websockets.add(ws);
+    try{this.notifier?.track(handle);return await ws.opened();}catch(error){ws.abort();throw error;}
+  }
+
   listProfiles(): string[] { this.ensureOpen(); return this.native.call("profiles"); }
   stats(): Stats { this.ensureOpen(); return this.native.call("stats"); }
   closeIdleConnections(): void { this.ensureOpen(); this.native.call("session_close_idle", this.handle); }
@@ -306,6 +327,7 @@ export class Session {
     this.closed = true;
     try {
       for (const transfer of this.active) transfer.close(new FastlsError("session is closed"));
+      for (const ws of this.websockets) ws.abort(new FastlsError("session is closed"));
     } finally { try { this.notifier?.close(); } finally { this.native.call("session_close", this.handle); } }
   }
   /** Release native resources immediately, then wait for cooperative upload cleanup. */

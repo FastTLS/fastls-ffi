@@ -12,6 +12,7 @@
     "test_sse.py": "d50638d18da1c22ae9795595c94e0081fbe996849d51f8fc1e8e99d9e21ae09b",
     "test_notifications.py": "1b35c407a5037bacf00391f0ee94b8d6da4daae8cd29f090535d0e3fed184a4e",
     "test_proxy.py": "4278318c2c360edf38a6c80995cd1286a99f627b130fdb97a8e7c3f2a4917212",
-    "test_request_options.py": "99223609deb9ff8156b055978e3029c46754bd54f66e122cc4b13804c269d47b"
+    "test_request_options.py": "99223609deb9ff8156b055978e3029c46754bd54f66e122cc4b13804c269d47b",
+    "test_websocket.py": "e5833abffb1ea466dfb1bad3f55c9aabeab6541e491b0564984c053a657f8a27"
   }
 }

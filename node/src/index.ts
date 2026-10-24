@@ -1,6 +1,8 @@
 export { Session } from "./session.js";
 export type { SessionOptions, RequestOptions, DuplexOptions, Stats } from "./session.js";
 export { DuplexExchange } from "./duplex.js";
+export { WebSocket, WebSocketClosed } from "./websocket.js";
+export type { WebSocketOptions } from "./websocket.js";
 export { ServerSentEvent, SSEStream } from "./sse.js";
 export type { SSEOptions } from "./sse.js";
 export { Response, StreamResponse } from "./response.js";

@@ -10,7 +10,7 @@ export class FastlsHTTPError extends FastlsError {
   }
 }
 
-export type TimeoutPhase = "connect" | "write" | "headers" | "read" | "total";
+export type TimeoutPhase = "connect" | "write" | "headers" | "read" | "total" | "handshake";
 export class FastlsTimeoutError extends FastlsError {
   override name = "FastlsTimeoutError";
   constructor(message: string, readonly phase: TimeoutPhase) { super(message); }

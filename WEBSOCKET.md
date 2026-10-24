@@ -74,3 +74,7 @@ int fastls_ws_read(uint64_t handle, void *buffer, size_t capacity,
 继续复用 `fastls_info/wait/cancel/close`、会话通知及会话关闭。HTTP 的 `fastls_read/write` 不可用于 WS 句柄。C 调用方必须保证单读者和单写入序列，并在释放句柄前协调并发调用。独立 C 示例见 `examples/c/websocket.c`。
 
 协议依据：[RFC6455](https://www.rfc-editor.org/rfc/rfc6455.html)。消息实现基于仓库已固定的 [Gorilla WebSocket v1.5.3](https://pkg.go.dev/github.com/gorilla/websocket@v1.5.3)，额外实施 UTF-8、协商、长度和生命周期检查。测试靶场独立手写帧，不复用客户端的 WebSocket 库。
+
+## Node.js
+
+Node 0.9通过Session.websocket接入同一ABI，使用Promise消息接口、AbortSignal、每会话就绪通知及受限poll回退。时间参数以Ms命名，关闭使用await closeAsync或立即abort；详见[node/README.md](node/README.md)。21项Python行为映射及线程/asyncio适配记录见[node/PARITY.md](node/PARITY.md)。WS仍不自动读写Cookie罐；当前提交的跨平台验收以Actions和候选证据为准。

@@ -10,3 +10,4 @@ import './parity-stability.mjs';
 import './parity-basic.mjs';
 import './parity-proxy.mjs';
 import './parity-request-options.mjs';
+import './parity-websocket.mjs';
