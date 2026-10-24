@@ -13,14 +13,17 @@ import hashlib
 import platform
 
 ROOT = Path(__file__).resolve().parents[1]
-REFS = ("fastls_ref", "fhttp_ref", "imitate_ref")
+FASTLS_ROOT = Path(os.environ.get("FASTLS_LOCAL_FASTLS", ROOT.parent / "fastls")).resolve()
+FTRANSPORT_ROOT = Path(os.environ.get("FASTLS_LOCAL_FTRANSPORT", ROOT.parent / "ftransport")).resolve()
+IMITATE_ROOT = Path(os.environ.get("FASTLS_LOCAL_IMITATE", ROOT.parent / "imitate")).resolve()
+REFS = ("fastls_ref", "ftransport_ref", "imitate_ref")
 TARGETS = [
     dict(runner="windows-2022", target="windows-amd64", go="1.26.10", python="3.11"),
     dict(runner="ubuntu-24.04", target="linux-amd64", go="1.26.10", python="3.11"),
     dict(runner="ubuntu-24.04-arm", target="linux-arm64", go="1.26.10", python="3.11"),
     dict(runner="macos-15-intel", target="darwin-amd64", go="1.26.10", python="3.11"),
     dict(runner="macos-15", target="darwin-arm64", go="1.26.10", python="3.11"),
-    dict(runner="ubuntu-24.04", target="linux-amd64", go="1.24.11", python="3.10"),
+    dict(runner="ubuntu-24.04", target="linux-amd64", go="1.27.3", python="3.10"),
 ]
 
 
@@ -55,9 +58,9 @@ def preflight(env):
         "fastls/index.go": ("DoContext(", "VerifyTLS", "TLSRootCAs", "ProxyTLSRootCAs", "RequestHasBody"),
         "fastls/profile/go.mod": ("github.com/FastTLS/fastls/profile",),
         "imitate/go.mod": ("github.com/FastTLS/imitate",),
-        "fhttp/go.mod": ("github.com/FastTLS/fhttp",),
-        "fhttp/http2/explicit_settings_test.go": ("func TestExplicitZeroDoesNotSelectNavigatorDefaults", "func TestExplicitEmptySettings"),
-        "fhttp/http2/receive_window_test.go": ("func TestReceiveWindowMatchesWire", "func TestReceiveWindowClosedStreamDataRefund", "func TestReceiveWindowClosedStreamDataOverrun"),
+        "ftransport/go.mod": ("github.com/FastTLS/ftransport",),
+        "ftransport/config_test.go": ("func TestExplicitHTTP2SettingsPreserveEmptyAndZero",),
+        "ftransport/f2_test.go": ("func TestHTTP2ConfiguredWireIdentity", "func TestHTTP2Streams64MiBWithSlowConsumer"),
         "fastls/session.go": ("func NewSession", "Duplex"),
         "fastls/proxy_transport.go": ("func ValidateProxy", "type tunnelProxyDialer"),
         "fastls/websocket_context.go": ("func DialWebSocketContext", "wsHandshakeConn"),
@@ -65,11 +68,11 @@ def preflight(env):
         "fastls/cookie_store.go": ("func NewCookieStore",),
         "fastls/timeouts.go": ("type Timeouts struct",),
         "fastls/decode.go": ("func decodeResponse",),
-        "fhttp/http2/pooled_dial_context_test.go": ("func TestPooledDialCancellationIsolation",),
-        "fhttp/http2/streaming_upload_test.go": ("func TestStreamingUploadBlockedProducerStops",),
+        "ftransport/transport_test.go": ("func TestPooledDialWaiterCancellationIsolation", "func TestHTTP2FullDuplexRemainsActiveUntilBothDirectionsFinish"),
     }
     for relative, markers in capabilities.items():
-        path = ROOT.parent / relative
+        repository, _, child = relative.partition("/")
+        path = {"fastls": FASTLS_ROOT, "ftransport": FTRANSPORT_ROOT, "imitate": IMITATE_ROOT}[repository] / child
         if not path.is_file() or not all(marker in path.read_text(encoding="utf-8") for marker in markers):
             raise RuntimeError(f"upstream checkout lacks required implementation: {relative}; see CI.md")
     host = subprocess.check_output(["go", "env", "GOHOSTOS", "GOHOSTARCH", "GOOS", "GOARCH"], env=env, text=True).split()
@@ -154,7 +157,7 @@ def run(stage="all"):
     evidence.mkdir(parents=True)
     success = False
     sources = {}
-    for name, path in (("fastls-ffi", ROOT), ("fastls", ROOT.parent / "fastls"), ("fhttp", ROOT.parent / "fhttp"), ("imitate", ROOT.parent / "imitate")):
+    for name, path in (("fastls-ffi", ROOT), ("fastls", FASTLS_ROOT), ("ftransport", FTRANSPORT_ROOT), ("imitate", IMITATE_ROOT)):
         if not path.is_dir():
             sources[name] = None
             continue
@@ -188,11 +191,10 @@ def run(stage="all"):
         if stage in ("all", "contracts"):
             execute("dependency-gate-tests", [sys.executable, "tests/test_ci.py"])
             execute("core-bridge-python", [sys.executable, "scripts/check.py"])
-            execute("cookiejar", ["go", "test", "./cookiejar"], ROOT.parent / "fhttp")
-            for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
-                execute(name, ["go", "test", pattern], ROOT.parent / relative)
-            execute("fhttp-contract", ["go", "test", "./http2", "-run", "^(TestExplicitZeroDoesNotSelectNavigatorDefaults|TestExplicitEmptySettings|TestConnectionSettings|TestReceiveWindow.*|TestPooledDial.*|TestStreamingUpload.*)$", "-v"], ROOT.parent / "fhttp")
-            execute("fhttp-vet", ["go", "vet", "./http2"], ROOT.parent / "fhttp")
+            for name, path, pattern in (("profile", FASTLS_ROOT / "profile", "./..."), ("generator", IMITATE_ROOT, "./...")):
+                execute(name, ["go", "test", pattern], path)
+            execute("ftransport-contract", ["go", "test", "./...", "-v"], FTRANSPORT_ROOT)
+            execute("ftransport-vet", ["go", "vet", "./..."], FTRANSPORT_ROOT)
             dist = ROOT / "dist"
             library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
             executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")
@@ -210,8 +212,6 @@ def run(stage="all"):
             ws_consumer = dist / ("c-websocket.exe" if os.name == "nt" else "c-websocket")
             execute("c-websocket-build", compiler + ["examples/c/websocket.c", "-I", str(dist), str(dist / library), "-o", str(ws_consumer)])
             execute("c-websocket-execute", [sys.executable, "tests/test_c_websocket.py"], command_env=runtime_env)
-            if env.get("FASTLS_FULL_FHTTP_TESTS", "").lower() == "true":
-                execute("fhttp-full-diagnostic", ["go", "test", "./http2", "-timeout", "5m"], ROOT.parent / "fhttp")
         if stage in ("all", "source"):
             execute("python-source", [sys.executable, "tests/test_python.py"])
             execute("stability-source", [sys.executable, "tests/test_stability.py"])
@@ -230,8 +230,8 @@ def run(stage="all"):
             execute("wheel-tests", [sys.executable, "scripts/test_wheel.py", "--all"])
         if stage == "race" or (stage == "all" and env.get("FASTLS_CI_RACE", "").lower() == "true"):
             execute("race-bridge", ["go", "test", "-race", "./internal/bridge"])
-            execute("race-core", ["go", "test", "-race", "./..."], ROOT.parent / "fastls")
-            execute("race-fhttp-window", ["go", "test", "-race", "./http2", "-run", "^(TestReceiveWindow|TestPooledDial|TestStreamingUpload)"], ROOT.parent / "fhttp")
+            execute("race-core", ["go", "test", "-race", "./..."], FASTLS_ROOT)
+            execute("race-ftransport", ["go", "test", "-race", "./..."], FTRANSPORT_ROOT)
         if stage == "soak" or (stage == "all" and env.get("FASTLS_CI_RACE", "").lower() == "true"):
             soak_env = dict(env, FASTLS_STABILITY_SECONDS="300", FASTLS_TEST_LABEL="extended")
             execute("extended-soak", [sys.executable, "tests/test_stability.py", "Stability.test_soak_and_resource_recovery"], command_env=soak_env)
