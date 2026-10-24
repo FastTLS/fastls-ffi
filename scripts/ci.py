@@ -174,7 +174,6 @@ def run(stage="all"):
 
     try:
         if stage in ("all", "build"):
-            execute("release-materials", [sys.executable, "scripts/release_materials.py", "materials"])
             sdk_before = sdk_inputs()
             for wheel in (ROOT / "dist").glob("*.whl"):
                 wheel.unlink()
@@ -182,6 +181,7 @@ def run(stage="all"):
                 sdist.unlink()
             execute("build", [sys.executable, "scripts/build.py", "--local"])
             env["GOWORK"] = str(ROOT / "go.work")
+            execute("release-materials", [sys.executable, "scripts/release_materials.py", "materials"], command_env=env)
             execute("fixture-build", ["go", "build", "-o", "build/ffi-fixture.exe" if os.name == "nt" else "build/ffi-fixture", "./cmd/ffi-fixture"])
             execute("native-audit", [sys.executable, "scripts/native_audit.py", str(ROOT / "dist" / library_name())])
             wheel_env = dict(env, FASTLS_BUNDLE_LIBRARY=str(ROOT / "dist" / library_name()))
