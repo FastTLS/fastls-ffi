@@ -19,6 +19,7 @@ import (
 
 	fastls "github.com/FastTLS/fastls"
 	use "github.com/FastTLS/fastls/imitate"
+	http "github.com/FastTLS/fhttp"
 	"github.com/gorilla/websocket"
 )
 
@@ -177,6 +178,7 @@ func (e *Engine) StartWebSocket(raw []byte) (uint64, error) {
 		cancel()
 		return 0, errors.New("too many open requests")
 	}
+	var cookies *fastls.CookieStore
 	if in.Session != 0 {
 		s := e.sessions[in.Session]
 		if s == nil {
@@ -185,6 +187,7 @@ func (e *Engine) StartWebSocket(raw []byte) (uint64, error) {
 			return 0, errors.New("invalid or closed session handle")
 		}
 		r.owner, r.watch = in.Session, s.watch
+		cookies = s.cookies
 	}
 	r.id = e.next.Add(1)
 	e.requests[r.id] = r
@@ -199,7 +202,7 @@ func (e *Engine) StartWebSocket(raw []byte) (uint64, error) {
 		}
 		r.signal()
 	})
-	go func() { defer e.workers.Add(-1); defer cancel(); r.runWebSocket(e, in, opts) }()
+	go func() { defer e.workers.Add(-1); defer cancel(); r.runWebSocket(e, in, opts, cookies) }()
 	return r.id, nil
 }
 
@@ -215,16 +218,47 @@ func (r *request) wsError(err error, phase string) {
 	r.setError(err)
 }
 
-func (r *request) runWebSocket(e *Engine, in WebSocketInput, opts fastls.Options) {
+func (r *request) runWebSocket(e *Engine, in WebSocketInput, opts fastls.Options, cookies *fastls.CookieStore) {
 	defer func() {
 		if recover() != nil {
 			r.setError(errors.New("internal WebSocket failure"))
 		}
 	}()
+	// Reuse the HTTP jar, including its locking, public suffix and Secure rules.
+	u, _ := url.Parse(in.URL)
+	if u.Scheme == "wss" {
+		u.Scheme = "https"
+	} else {
+		u.Scheme = "http"
+	}
+	if cookies != nil {
+		explicit := false
+		for name := range opts.Headers {
+			explicit = explicit || strings.EqualFold(name, "Cookie")
+		}
+		if !explicit {
+			header := &http.Request{Header: make(http.Header)}
+			for _, cookie := range cookies.Cookies(u) {
+				header.AddCookie(cookie)
+			}
+			if value := header.Header.Get("Cookie"); value != "" {
+				if opts.Headers == nil {
+					opts.Headers = make(map[string]string)
+				}
+				opts.Headers["Cookie"] = value
+			}
+		}
+	}
 	ctx, cancel := context.WithTimeout(r.ctx, time.Duration(in.TimeoutMS)*time.Millisecond)
 	c, resp, err := fastls.DialWebSocketContext(ctx, in.URL, opts, in.Protocols)
 	cancel()
 	if resp != nil {
+		// HTTP also accepts cookies from non-success responses. No redirect is
+		// followed: these cookies belong only to the original handshake URL.
+		if cookies != nil {
+			response := &http.Response{Header: http.Header(resp.Header)}
+			cookies.SetCookies(u, response.Cookies())
+		}
 		r.mu.Lock()
 		r.info.Status = resp.StatusCode
 		r.info.HeaderValues = resp.Header

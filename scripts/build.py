@@ -77,6 +77,9 @@ def main():
         "go": subprocess.check_output(["go", "version"], text=True).strip(),
         "cc": env.get("CC", "gcc"), "abi": 1,
         "workspace_source": before,
+        "sources": {name: subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=path, text=True).strip()
+                    for name, path in (("fastls-ffi", ROOT), ("fastls", ROOT.parent / "fastls"),
+                                       ("fhttp", ROOT.parent / "fhttp"), ("imitate", ROOT.parent / "imitate"))} if args.local else {},
         "library_sha256": hashlib.sha256((out / name).read_bytes()).hexdigest(),
         "note": "Unpublished development build. A local workspace build does not validate remote dependency availability.",
     }, indent=2) + "\n", encoding="utf-8")
