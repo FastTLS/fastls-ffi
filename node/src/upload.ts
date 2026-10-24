@@ -4,6 +4,8 @@ import { Transfer, type UploadLifecycle } from "./response.js";
 export type ByteSource = Iterable<Uint8Array> | AsyncIterable<Uint8Array>;
 /** A factory can use the supplied signal to interrupt its own pending I/O. */
 export type UploadBody = string | Uint8Array | ByteSource | ((signal: AbortSignal) => ByteSource);
+/** Internal marker for a known last block; avoid an EOF race with early multipart responses. */
+export const terminalUploadChunks = new WeakSet<Uint8Array>();
 
 export function abortable<T>(promise: PromiseLike<T> | T, signal: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -68,8 +70,11 @@ export function startUpload(transfer: Transfer, body: UploadBody): UploadLifecyc
         pendingNext = undefined;
         if (result.done) { completed = await transfer.write(Buffer.alloc(0), true, controller.signal) === 0; return; }
         if (!(result.value instanceof Uint8Array)) throw new TypeError("upload chunks must be Uint8Array or Buffer");
+        const terminal = terminalUploadChunks.has(result.value);
         for (let offset = 0; offset < result.value.byteLength; offset += 65536) {
-          if (await transfer.write(result.value.subarray(offset, offset + 65536), false, controller.signal) === 2) return;
+          const end = terminal && offset + 65536 >= result.value.byteLength;
+          if (await transfer.write(result.value.subarray(offset, offset + 65536), end, controller.signal) === 2) return;
+          if (end) { completed = true; return; }
         }
         if (++turns % 16 === 0) await yieldTurn();
       }
