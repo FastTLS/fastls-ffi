@@ -481,7 +481,7 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func certificates(dir string) (tls.Certificate, string, string, error) {
+func certificates(dir string, names ...string) (tls.Certificate, string, string, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return tls.Certificate{}, "", "", err
@@ -507,6 +507,10 @@ func certificates(dir string) (tls.Certificate, string, string, error) {
 	}
 	leafKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	leaf := &x509.Certificate{SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: "localhost"}, NotBefore: now.Add(-time.Hour), NotAfter: now.Add(24 * time.Hour), DNSNames: []string{"localhost"}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, KeyUsage: x509.KeyUsageDigitalSignature}
+	if len(names) > 0 {
+		leaf.DNSNames = names
+		leaf.IPAddresses = nil
+	}
 	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, root, &leafKey.PublicKey, key)
 	return tls.Certificate{Certificate: [][]byte{leafDER, der}, PrivateKey: leafKey}, ca, wrong, err
 }
@@ -537,7 +541,17 @@ func main() {
 		servers = append(servers, s)
 		urls = append(urls, s.URL)
 	}
-	json.NewEncoder(os.Stdout).Encode(map[string]string{"http": plain.URL, "https1": urls[0], "https2": urls[1], "ca_file": ca, "wrong_ca_file": wrong})
+	proxyFiles, err := proxyCertificateFiles(filepath.Join(dir, "proxy"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	wrongHost, err := proxyCertificateFiles(filepath.Join(dir, "wrong-host"), "elsewhere.invalid")
+	if err != nil {
+		log.Fatal(err)
+	}
+	json.NewEncoder(os.Stdout).Encode(map[string]string{"http": plain.URL, "https1": urls[0], "https2": urls[1], "ca_file": ca, "wrong_ca_file": wrong,
+		"proxy_ca_file": proxyFiles["ca"], "proxy_cert_file": proxyFiles["cert"], "proxy_key_file": proxyFiles["key"],
+		"proxy_wrong_host_ca_file": wrongHost["ca"], "proxy_wrong_host_cert_file": wrongHost["cert"], "proxy_wrong_host_key_file": wrongHost["key"]})
 	io.Copy(io.Discard, os.Stdin)
 	for _, s := range servers {
 		s.CloseClientConnections()
