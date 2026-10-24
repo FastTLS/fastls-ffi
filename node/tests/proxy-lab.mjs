@@ -4,6 +4,8 @@ import { createServer, createConnection, isIP } from 'node:net';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import assert from 'node:assert/strict';
+import { createServer as createTLSServer } from 'node:tls';
+import { readFileSync } from 'node:fs';
 
 async function read(socket, count) {
   while (true) {
@@ -33,16 +35,33 @@ export class ProxyLab {
   accepted = 0;
   cancelledHandshakes = 0;
   failures = [];
-  static async open(scheme = 'http', { auth = false, mode = 'normal' } = {}) {
+  tlsProtocols = [];
+  static async open(scheme = 'http', { auth = false, mode = 'normal', certFile, keyFile } = {}) {
     const lab = new ProxyLab(); Object.assign(lab, { scheme, auth, mode });
-    lab.server = createServer({ allowHalfOpen: true }, socket => {
-      lab.accepted++; lab.own(socket);
+    const handle = socket => {
       void lab.handle(socket).catch(error => {
         // Remote cancellation is expected; fixture programming errors are not.
         if (!socket.destroyed && !socket.readableEnded && !/EOF|closed|ECONNRESET|EPIPE/.test(String(error))) lab.failures.push(error);
         socket.destroy();
       });
-    });
+    };
+    if (scheme === 'https' && mode !== 'stall-tls') {
+      const pending = new Map();
+      lab.server = createTLSServer({ allowHalfOpen: true, cert: readFileSync(certFile), key: readFileSync(keyFile), ALPNProtocols: ['http/1.1'] });
+      lab.server.on('connection', socket => { const port=socket.remotePort; pending.set(port,socket); socket.once('close',()=>pending.delete(port));lab.accepted++; lab.own(socket); });
+      lab.server.on('secureConnection', socket => {
+        // Replace the raw socket in the live-connection inventory after TLS.
+        lab.sockets.delete(pending.get(socket.remotePort)); pending.delete(socket.remotePort); lab.own(socket);
+        lab.tlsProtocols.push(socket.alpnProtocol); handle(socket);
+      });
+      lab.server.on('tlsClientError', (_error, socket) => socket.destroy());
+    } else {
+      lab.server = createServer({ allowHalfOpen: true }, socket => {
+        lab.accepted++; lab.own(socket);
+        if (mode === 'stall-tls') { void lab.stall(socket).catch(() => {}); return; }
+        handle(socket);
+      });
+    }
     lab.server.listen({ host: '127.0.0.1', port: 0 }); await once(lab.server, 'listening');
     lab.url = `${scheme}://${auth ? 'proxy-user:s3cr%40t%3Asecret@' : ''}127.0.0.1:${lab.server.address().port}`;
     return lab;
@@ -55,10 +74,11 @@ export class ProxyLab {
     try { for await (const chunk of socket) void chunk; } finally { this.cancelledHandshakes++; socket.destroy(); }
   }
   async handle(socket) {
-    if (this.scheme === 'http') {
+    if (this.scheme === 'http' || this.scheme === 'https') {
       let bytes = Buffer.alloc(0), boundary;
       while (true) {
         const part = await read(socket);
+        if (!bytes.length && part[0] !== 67) { socket.destroy(); return; }
         bytes = bytes.length ? Buffer.concat([bytes,part]) : part;
         boundary = bytes.indexOf('\r\n\r\n');
         if (boundary >= 0) {

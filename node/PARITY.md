@@ -1,6 +1,6 @@
 # Python / Node 验收对应关系
 
-范围：十一个 Python SDK 行为套件的 146 个用例，基线为 e369f1c，保留原始文件名和用例名作为 Node 测试 ID。
+范围：十一个 Python SDK 行为套件的 150 个用例，基线为 1990a6b，保留原始文件名和用例名作为 Node 测试 ID。
 对应关系由 `scripts/check-parity.mjs` 检查；Python 用例新增、删除或改名时，映射未更新会失败。
 `tests/python-baseline.json` 同时固定十一个 Python 源文件的哈希；即使用例名称不变，断言改变也必须复核 Node 对应测试后更新基线。
 每项在真实动态库和独立本地靶场上执行，结果写入 `build/node-parity-source-*.json` / `node-parity-package-*.json`。
@@ -18,9 +18,9 @@
 
 - test_notifications.py：21项，空闲时无轮询、代次竞态、共享等待取消、128路混合请求、会话隔离、握手认证/取消、断线、旧库门禁、显式poll及资源回收、32×32独立会话创建关闭。
 
-- test_proxy.py：10项，HTTP CONNECT、SOCKS5本地/代理DNS、认证与目标头隔离、连接/凭据池隔离、显式直连、旧库门禁、目标CA、环境代理忽略、超时取消、64MiB同步/异步上传下载、慢消费者、SSE与双工。
+- test_proxy.py：14项，HTTP/HTTPS CONNECT、独立代理CA与主机名验证、SOCKS5本地/代理DNS、认证与目标头隔离、连接/凭据池隔离、显式直连、旧库门禁、目标CA、环境代理忽略、超时取消、64MiB同步/异步上传下载、慢消费者、SSE与双工。
 
-加上原有 2 项原生绑定测试和 14 项 Node 基础测试，完整 Node 套件为 162 项。
+加上原有 2 项原生绑定测试和 14 项 Node 基础测试，完整 Node 套件为 166 项。
 TypeScript 的 ESM/CommonJS 类型检查及安装包内容/哈希检查独立于上述用例数。
 共享的Go测试、race检查和Python依赖门禁仍由原CI执行，不用Node重写。
 
@@ -59,8 +59,8 @@ TypeScript 的 ESM/CommonJS 类型检查及安装包内容/哈希检查独立于
 ## 持续运行与证据
 
 源码和安装包分别默认运行30秒、32路并发的资源回收测试。Linux当前Go组合额外运行300秒。
-同一Linux组合另跑60秒、32路并发的双工混合长测，轮换自动上传、取消、手动交换与提前拒绝；支持设置FASTLS_NODE_DUPLEX_SOAK_SECONDS=300延长。该独立检查不计入162项主套件。
-该组合另跑60秒、32路并发的SSE混合长测，轮换正常/压缩事件流、提前break、非法响应头、解析上限及解码错误；设置FASTLS_NODE_SSE_SOAK_SECONDS=300可延长。同样不计入162项主套件，证据为build/node-sse-recovery-source-*.json。
+同一Linux组合另跑60秒、32路并发的双工混合长测，轮换自动上传、取消、手动交换与提前拒绝；支持设置FASTLS_NODE_DUPLEX_SOAK_SECONDS=300延长。该独立检查不计入166项主套件。
+该组合另跑60秒、32路并发的SSE混合长测，轮换正常/压缩事件流、提前break、非法响应头、解析上限及解码错误；设置FASTLS_NODE_SSE_SOAK_SECONDS=300可延长。同样不计入166项主套件，证据为build/node-sse-recovery-source-*.json。
 独立SSE长测显式设置V8的`--max-semi-space-size=16`，以统一不同主机的年轻代容量。Windows Node24默认策略在高分配速率下可将年轻代保留空间扩至128MiB，即使完整GC后存活对象恢复仍保留该空间，影响从冷进程预热基线计算的RSS增量。该参数只约束测试进程的年轻代，不限制老年代、不改变SDK运行配置；RSS、Go堆、goroutine与句柄阈值均保持不变，证据另存运行参数和V8堆空间快照。
 预热后检查goroutine增量不超过16、Go heap_inuse峰值增量不超过96MiB、RSS峰值增量不超过128MiB、最终RSS增量不超过96MiB、句柄/描述符增量不超过64，与Python阈值一致。
 记录请求数、完整时间序列和基线；阈值是回归保护，不是无内存泄漏的证明。
@@ -75,6 +75,6 @@ npm run test:duplex:soak
 npm run test:sse:soak
 ```
 
-代理扩展另提供60秒、32路并发的混合回收检查，覆盖三种代理的正常H2、单流取消、认证拒绝和握手取消；Linux当前组合纳入CI，支持FASTLS_NODE_PROXY_SOAK_SECONDS=300。独立证据为build/node-proxy-recovery-source-*.json，沿用上述回收阈值，不计入162项主套件。
+代理扩展另提供60秒、32路并发的混合回收检查，覆盖四种代理的正常H2、单流取消、认证拒绝和握手取消；Linux当前组合纳入CI，支持FASTLS_NODE_PROXY_SOAK_SECONDS=300。独立证据为build/node-proxy-recovery-source-*.json，沿用上述回收阈值，不计入166项主套件。
 
 代理独立长测与SSE长测一样，显式使用`--max-semi-space-size=16`固定测试进程的V8半空间上限。本机Windows Node24默认策略在持续分配时将new_space保留空间从4MiB扩大至128MiB，而Go堆、原生请求和隧道已回收。该参数仅作用于独立测试进程，不修改SDK用户进程的运行配置，也不放宽RSS或句柄阈值。证据保存运行参数、V8空间快照，以及阈值判定之后的完整GC诊断；判定使用GC前的最终采样。

@@ -9,18 +9,18 @@ assert.ok(Number.isInteger(seconds) && seconds >= 1 && seconds <= 300);
 
 test('proxy tunnels recover after shared H2 cancellation, failed auth and cancelled handshakes', { timeout: seconds*1000+45000 }, async t => {
   const normal=[], stalled=[];
-  for (const scheme of ['http','socks5','socks5h']) {
+  for (const scheme of ['http','https','socks5','socks5h']) {
     for (const [target, mode] of [[normal,'normal'],[stalled,'stall']]) {
-      const proxy=await ProxyLab.open(scheme,{auth:true,mode}); target.push(proxy); t.after(()=>proxy.close());
+      const proxy=await ProxyLab.open(scheme,{auth:true,mode,certFile:fixture.proxy_cert_file,keyFile:fixture.proxy_key_file}); target.push(proxy); t.after(()=>proxy.close());
     }
   }
-  const s=session(t,{proxy:normal[0].url,timeoutMs:10000});
+  const s=session(t,{proxy:normal[0].url,proxyCaFile:fixture.proxy_ca_file,timeoutMs:10000});
   const proof={node:process.version,platform:process.platform,arch:process.arch,runtime_args:process.execArgv,concurrency:32,passed:false,
-    requests:0,completed:0,cancelled_body:0,rejected:0,cancelled_handshake:0,warmup_requests:99,samples:[]};
+    requests:0,completed:0,cancelled_body:0,rejected:0,cancelled_handshake:0,warmup_requests:100,samples:[]};
   let started;
   const batch=async()=>{
     await Promise.all(Array.from({length:32},async(_,index)=>{
-      const proxy=normal[index%3];
+      const schemeIndex=Math.floor(index/4)%normal.length,proxy=normal[schemeIndex];
       if (index%4===0) {
         assert.equal((await s.get(fixture.https2+'/bytes?n=1024',{proxy:proxy.url})).content.length,1024);proof.completed++;
       } else if(index%4===1) {
@@ -30,7 +30,7 @@ test('proxy tunnels recover after shared H2 cancellation, failed auth and cancel
         await assert.rejects(s.get(fixture.https2,{proxy:proxy.url.replace('s3cr%40t%3Asecret','bad-password')}),error=>error instanceof sdk.FastlsError&&!/bad-password|proxy-user|CredentialMustNotBeEchoed/.test(String(error)));proof.rejected++;
       } else {
         const controller=new AbortController();
-        const pending=assert.rejects(s.get(fixture.https2,{proxy:stalled[index%3].url,signal:controller.signal}),sdk.AbortError);
+        const pending=assert.rejects(s.get(fixture.https2,{proxy:stalled[schemeIndex].url,signal:controller.signal}),sdk.AbortError);
         const timer=setTimeout(()=>controller.abort(),10);
         try{await pending;}finally{clearTimeout(timer);}proof.cancelled_handshake++;
       }

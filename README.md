@@ -37,7 +37,7 @@ python -m pip install -e ./python
 ## Node.js
 
 Node.js 22+。动态库构建完成后，在 `node/` 运行 `npm ci` 和 `npm run build`。
-提供 TypeScript 类型、ESM/CommonJS 入口、Promise 请求、流式下载/上传、AbortSignal、自动解压、分层超时、连接池、Cookie、HTTP CONNECT/SOCKS5代理和原生就绪通知（新库默认启用）。
+提供 TypeScript 类型、ESM/CommonJS 入口、Promise 请求、流式下载/上传、AbortSignal、自动解压、分层超时、连接池、Cookie、HTTP/HTTPS CONNECT/SOCKS5代理和原生就绪通知（新库默认启用）。
 源码默认加载仓库 `dist/`；内置库候选包可直接使用，也可通过 `FASTLS_LIBRARY` 或 Session 的 `library` 覆盖动态库。
 详见 [Node.js 使用说明](node/README.md)；普通请求、流式下载、HTTP/2双工和SSE示例在 `node/examples/`。
 当前未发布npm，仅支持Node主线程。`npm run pack:native --prefix node`生成内置本平台Go动态库的候选包；安装后无需手动配置库路径，平台要求及分发边界见Node说明。

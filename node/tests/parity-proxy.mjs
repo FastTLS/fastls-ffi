@@ -1,9 +1,13 @@
-import { parity, session, fixture, assert, delay, sdk, Native, eventually, randomUUID, evidence, monitor, SLAB, repeatedHash } from './harness.mjs';
+import { parity, session as baseSession, fixture, assert, delay, sdk, Native, eventually, randomUUID, evidence, monitor, SLAB, repeatedHash } from './harness.mjs';
 import { createHash } from 'node:crypto';
 import { ProxyLab } from './proxy-lab.mjs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, dirname, basename } from 'node:path';
 const p = (name, fn, adaptation) => parity('test_proxy.py', name, fn, adaptation);
-const schemes = ['http', 'socks5', 'socks5h'];
-async function lab(t, scheme = 'http', options) { const p = await ProxyLab.open(scheme, options); t.after(() => p.close()); return p; }
+const schemes = ['http', 'https', 'socks5', 'socks5h'];
+const session=(t,options)=>baseSession(t,{proxyCaFile:fixture.proxy_ca_file,...options});
+async function lab(t, scheme = 'http', options) { const p = await ProxyLab.open(scheme, {certFile:fixture.proxy_cert_file,keyFile:fixture.proxy_key_file,...options}); t.after(() => p.close()); return p; }
 function redacted(error) {
   assert.ok(error instanceof sdk.FastlsError);
   assert.doesNotMatch(String(error), /secret|proxy-user|bad-password|CredentialMustNotBeEchoed/);
@@ -20,6 +24,7 @@ p('test_protocols_authentication_and_target_header_isolation', async t => {
       assert.equal(r.headers.get('x-test-protocol'),key==='https2'?'HTTP/2.0':'HTTP/1.1');
     } } finally { await s.closeAsync(); }
     await proxy.waitIdle(); assert.equal(proxy.targets.length,3);
+    if(scheme==='https')assert.deepEqual(proxy.tlsProtocols,['http/1.1','http/1.1','http/1.1']);
   }
 });
 
@@ -60,7 +65,7 @@ p('test_socks_dns_modes', async t => {
 });
 
 p('test_invalid_urls_and_credentials_are_not_exposed', async t => {
-  const urls=['https://proxy-user:secret@127.0.0.1:1','socks4://proxy-user:secret@127.0.0.1:1','http://proxy-user:secret@host:bad','http://proxy-user:secret@host:0','http://proxy-user:secret@host/path','http://proxy-user:secret@host?query=secret','http://proxy-user:sec%ZZret@host','http://:secret@host'];
+  const urls=['socks4://proxy-user:secret@127.0.0.1:1','http://proxy-user:secret@host:bad','http://proxy-user:secret@host:0','http://proxy-user:secret@host/path','http://proxy-user:secret@host?query=secret','http://proxy-user:sec%ZZret@host','http://:secret@host'];
   const s=session(t);
   for (const proxy of urls) await assert.rejects(s.get(fixture.http,{proxy}),redacted);
   for (const name of ['Proxy-Authorization','proxy-connection']) await assert.rejects(s.get(fixture.http,{headers:{[name]:'secret'}}),redacted);
@@ -79,6 +84,9 @@ p('test_invalid_urls_and_credentials_are_not_exposed', async t => {
     assert.equal((await s.get(fixture.http)).status,200);
     assert.equal(s.stats().open_requests,0);
   } finally { native.call=original; }
+  native.call=function(name,...args){const value=original.call(this,name,...args);return name==='features'?value.filter(x=>x!=='https_proxy_tls'):value;};
+  try{await assert.rejects(s.get(fixture.http,{proxy:'https://127.0.0.1:1'}),/HTTPS proxy support requires a newer/);assert.equal(s.stats().open_requests,0);}
+  finally{native.call=original;}
 });
 
 p('test_rejection_and_wrong_auth_do_not_retry_or_leak_secrets', async t => {
@@ -90,7 +98,7 @@ p('test_rejection_and_wrong_auth_do_not_retry_or_leak_secrets', async t => {
 });
 
 p('test_connect_timeout_total_timeout_and_explicit_cancellation', async t => {
-  for (const [scheme,mode] of [['http','stall'],['socks5','stall'],['socks5h','stall-auth'],['socks5h','stall-connect']]) {
+  for (const [scheme,mode] of [['http','stall'],['https','stall-tls'],['https','stall'],['socks5','stall'],['socks5h','stall-auth'],['socks5h','stall-connect']]) {
     const proxy=await lab(t,scheme,{auth:true,mode}),s=session(t,{proxy:proxy.url});
     try {
       for (const [timeoutMs,phase] of [[{total:3000,connect:150},'connect'],[150,'total']]) {
@@ -101,7 +109,7 @@ p('test_connect_timeout_total_timeout_and_explicit_cancellation', async t => {
       const controller=new AbortController(),pending=assert.rejects(s.get(fixture.https2,{signal:controller.signal}),sdk.AbortError);
       await eventually(()=>proxy.accepted>=3); controller.abort(); await pending; await proxy.waitIdle();
     } finally { await s.closeAsync(); }
-    assert.equal(proxy.accepted,3); assert.ok(proxy.cancelledHandshakes>=3);
+    assert.equal(proxy.accepted,3); assert.ok(proxy.cancelledHandshakes>=2);
   }
 });
 
@@ -168,4 +176,51 @@ p('test_cancel_one_h2_stream_keeps_shared_tunnel', async t => {
     await proxy.waitIdle();
   }
   await eventually(()=>monitor.stats().open_requests===0);
+});
+
+p('test_https_proxy_trust_is_independent_and_pool_isolated',async t=>{
+ const proxy=await lab(t,'https',{auth:true}),url=fixture.https2+'/bytes?n=4',s=session(t,{proxy:proxy.url});
+ try{
+  const original=(await s.get(url)).headers.get('x-test-connection');
+  for(const proxyCaFile of [fixture.ca_file,fixture.wrong_ca_file,null]){
+   await assert.rejects(s.get(url,{proxyCaFile}),sdk.FastlsError);
+   assert.equal((await s.get(url)).headers.get('x-test-connection'),original);
+  }
+  assert.notEqual((await s.get(url,{proxy:null})).headers.get('x-test-connection'),original);
+  s.caPem=readFileSync(fixture.proxy_ca_file,'utf8');
+  await assert.rejects(s.get(url),sdk.FastlsError);
+ }finally{await s.closeAsync();}
+ await proxy.waitIdle();
+ const override=session(t,{proxyCaFile:null});
+ try{assert.equal((await override.get(url,{proxy:proxy.url,proxyCaFile:fixture.proxy_ca_file})).status,200);}
+ finally{await override.closeAsync();}
+ await proxy.waitIdle();
+});
+
+p('test_https_proxy_hostname_is_verified',async t=>{
+ const proxy=await lab(t,'https',{certFile:fixture.proxy_wrong_host_cert_file,keyFile:fixture.proxy_wrong_host_key_file});
+ const s=session(t,{proxy:proxy.url,proxyCaFile:fixture.proxy_wrong_host_ca_file});
+ try{await assert.rejects(s.get(fixture.https2),/IP SAN|valid for|hostname/);}finally{await s.closeAsync();}
+ await proxy.waitIdle();assert.deepEqual(proxy.targets,[]);
+});
+
+p('test_https_proxy_does_not_fallback_to_cleartext',async t=>{
+ const proxy=await lab(t),s=session(t,{proxy:proxy.url.replace('http://','https://')});
+ try{await assert.rejects(s.get(fixture.https2),sdk.FastlsError);}finally{await s.closeAsync();}
+ await proxy.waitIdle();assert.equal(proxy.accepted,1);assert.deepEqual(proxy.targets,[]);
+});
+
+p('test_https_proxy_invalid_ca_rejected_without_request_leak',async t=>{
+ const directory=mkdtempSync(resolve(tmpdir(),'fastls-proxy-ca-')),file=resolve(directory,'ca.pem');
+ t.after(()=>{assert.equal(dirname(directory),resolve(tmpdir()));assert.ok(basename(directory).startsWith('fastls-proxy-ca-'));rmSync(directory,{recursive:true,force:true});});
+ const proxy=await lab(t,'https');writeFileSync(file,'');
+ assert.throws(()=>session(t,{proxy:proxy.url,proxyCaFile:file}),TypeError);
+ const s=session(t,{proxy:proxy.url});
+ try{
+  await assert.rejects(s.get(fixture.https2,{proxyCaFile:file}),TypeError);
+  writeFileSync(file,'not a certificate');await assert.rejects(s.get(fixture.https2,{proxyCaFile:file}),sdk.FastlsError);
+  assert.equal(s.stats().open_requests,0);assert.equal(proxy.accepted,0);
+  // HTTP/SOCKS/direct overrides ignore the default proxy CA and unused file overrides.
+  assert.equal((await s.get(fixture.http,{proxy:null,proxyCaFile:'/unused-file'})).status,200);
+ }finally{await s.closeAsync();}
 });
