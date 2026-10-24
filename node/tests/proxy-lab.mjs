@@ -47,7 +47,9 @@ export class ProxyLab {
     };
     if (scheme === 'https' && mode !== 'stall-tls') {
       const pending = new Map();
-      lab.server = createTLSServer({ allowHalfOpen: true, cert: readFileSync(certFile), key: readFileSync(keyFile), ALPNProtocols: ['http/1.1'] });
+      // A peer cancelling before TLS completes must close the accepted socket.
+      // Application H2 half-close uses END_STREAM, not a TLS/TCP half-close.
+      lab.server = createTLSServer({ allowHalfOpen: false, cert: readFileSync(certFile), key: readFileSync(keyFile), ALPNProtocols: ['http/1.1'] });
       lab.server.on('connection', socket => { const port=socket.remotePort; pending.set(port,socket); socket.once('close',()=>pending.delete(port));lab.accepted++; lab.own(socket); });
       lab.server.on('secureConnection', socket => {
         // Replace the raw socket in the live-connection inventory after TLS.
