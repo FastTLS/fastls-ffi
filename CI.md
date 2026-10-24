@@ -29,8 +29,8 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 
 F3 本地集成分支已生成不可变提交，`ci/dependencies.json` 固定以下候选；执行远端矩阵前须先推送这些提交，当前文档不把本地提交声称为已发布：
 
-- fastls：b2e550fea46e7e8c607e212f9632c5a9327e6888。
-- ftransport：a1916e4d252300d33ba1be4903d79b84168cd2c2。
+- fastls：f2b213de88e47c8c0911197a93928daf86827020（已合并）。
+- ftransport：89e11191566268687328d9f3fc19ccc23e0a4d58（已合并）。
 - imitate：28b32d452256e3acbdb2e904869e5c4331bf0177。
 
 Fastls依赖包含连接生命周期、隔离的私有CA根配置、可复用Session、多值头/CookieStore及流式解码/分层预算；Brotli固定v1.2.0以拒绝截断流。ftransport负责标准库请求/响应、HTTP/1.1头顺序、HTTP/2帧与流控、可取消的共用建连及独立空闲超时。动态库须重新构建；核心包测试执行顺序请求、重定向、关闭后重连、活动响应体及并发回归，封装侧重新执行全部同步/异步与流式测试。
@@ -86,7 +86,7 @@ ftransport 的完整测试与 vet 现在是 contracts 阶段的必需检查；Li
 
 ## 并行阶段
 
-`run` 默认仍完整串行执行，便于本地复现；`run --stage build|contracts|source|wheel|race|soak` 提供独立入口。
+`run` 默认仍完整串行执行，便于本地复现；`run --stage build|contracts|source|wheel|release|race|soak` 提供独立入口。release阶段核对许可证材料、sdist、从旧版本升级到平台wheel、卸载清理及Linux glibc边界。
 
 Actions 先执行六组原生构建，每组只构建一次 library、fixture 和 wheel，上传带哈希的输入产物。构建矩阵完成后，六组 contracts/source/wheel 分别作为独立 job 并行运行；当前 Linux x64 的 race 与 300 秒 soak 也使用独立 runner，不争用功能测试或性能测量的机器。代价是更多 runner 启动、checkout 和产物下载；实际总耗时取决于额度与队列，不预设提速倍率。
 

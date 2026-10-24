@@ -13,7 +13,12 @@ import sys
 
 from setuptools import Distribution, setup
 from setuptools.command.build_py import build_py
-from wheel.bdist_wheel import bdist_wheel
+try:
+    from wheel.bdist_wheel import bdist_wheel
+except ImportError:
+    bdist_wheel = None
+
+ROOT = Path(__file__).resolve().parent
 
 
 class NativeDistribution(Distribution):
@@ -45,21 +50,29 @@ class NativeBuild(build_py):
             shutil.copy2(source.with_name("native-audit.json"), destination / "native-audit.json")
 
 
-class PlatformWheel(bdist_wheel):
-    def finalize_options(self):
-        super().finalize_options()
-        if os.environ.get("FASTLS_BUNDLE_LIBRARY"):
-            self.root_is_pure = False
+commands = {"build_py": NativeBuild}
+if bdist_wheel is not None:
+    class PlatformWheel(bdist_wheel):
+        def finalize_options(self):
+            super().finalize_options()
+            if os.environ.get("FASTLS_BUNDLE_LIBRARY"):
+                self.root_is_pure = False
 
-    def get_tag(self):
-        python, abi, tag = super().get_tag()
-        if os.environ.get("FASTLS_BUNDLE_LIBRARY"):
-            if sys.platform == "darwin":
-                # Python's deployment target may predate the Go runtime.
-                # Candidates conservatively require the tested host major.
-                tag = f"macosx_{platform.mac_ver()[0].split('.')[0]}_0_{platform.machine()}"
-            return "py3", "none", tag
-        return python, abi, tag
+        def get_tag(self):
+            python, abi, tag = super().get_tag()
+            if os.environ.get("FASTLS_BUNDLE_LIBRARY"):
+                if sys.platform == "darwin":
+                    # Python's deployment target may predate the Go runtime.
+                    # Candidates conservatively require the tested host major.
+                    tag = f"macosx_{platform.mac_ver()[0].split('.')[0]}_0_{platform.machine()}"
+                return "py3", "none", tag
+            return python, abi, tag
+
+    commands["bdist_wheel"] = PlatformWheel
 
 
-setup(distclass=NativeDistribution, cmdclass={"build_py": NativeBuild, "bdist_wheel": PlatformWheel})
+setup(
+    version=os.environ.get("FASTLS_PACKAGE_VERSION", (ROOT / "VERSION").read_text(encoding="utf-8").strip()),
+    distclass=NativeDistribution,
+    cmdclass=commands,
+)
