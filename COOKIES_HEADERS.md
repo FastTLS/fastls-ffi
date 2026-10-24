@@ -25,7 +25,7 @@ Set-Cookie、Link等字段不会按逗号或旧的/,/分隔符拆分；每个解
 
 ## Cookie规则与操作
 
-- 自动接收每一项Set-Cookie，并按RFC 6265的域名、host-only、路径、Secure、Max-Age和Expires规则选择后续请求的Cookie。使用内置Public Suffix List拒绝跨公共后缀的Cookie。
+- 自动接收每一项Set-Cookie，并按RFC 6265的域名、host-only、路径、Secure、Max-Age和Expires规则选择后续请求的Cookie。Go 1.26标准库按浏览器安全源语义将localhost和回环IP视为安全源，因此Secure Cookie可在这些主机的HTTP请求中发送；其他HTTP主机仍不会发送。使用内置Public Suffix List拒绝跨公共后缀的Cookie。
 - 重定向响应在下一跳发送前更新存储；禁止跟随重定向时仍接收该响应的Cookie。跨主机重定向只会使用目标主机有权接收的存储内容。
 - 显式Cookie请求头（包括空字符串）控制整个请求及重定向链的手动Cookie，不再自动追加存储中的Cookie；响应仍更新存储。手动头在跨主机重定向中的转发遵守核心客户端的敏感头规则。
 - cookies.get_list(url)返回该URL可发送的{name,value}列表，保留不同路径下的同名Cookie；get_dict(url)及get(name,url=...)优先选择匹配路径更长的一项。这是发送视图，不是包含完整属性的存储导出。
