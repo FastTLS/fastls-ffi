@@ -15,6 +15,8 @@ duplex = "--duplex" in sys.argv[1:]
 sse = "--sse" in sys.argv[1:]
 notifications = "--notifications" in sys.argv[1:]
 proxy = "--proxy" in sys.argv[1:]
+request_options = "--request-options" in sys.argv[1:]
+websocket = "--websocket" in sys.argv[1:]
 wheels = list((ROOT / "dist").glob("*.whl"))
 if len(wheels) != 1:
     raise SystemExit("expected exactly one SDK wheel in dist/")
@@ -28,4 +30,8 @@ print("Packaged SDK:", fastls.__file__, flush=True)
 os.environ["FASTLS_TEST_LABEL"] = "wheel"
 sys.path.insert(0, str(ROOT / "tests"))
 sys.argv = [str(ROOT / ("tests/test_proxy.py" if proxy else "tests/test_notifications.py" if notifications else "tests/test_sse.py" if sse else "tests/test_duplex.py" if duplex else "tests/test_upload.py" if upload else "tests/test_decode_timeouts.py" if decode_timeouts else "tests/test_cookies.py" if cookies else "tests/test_pooling.py" if pooling else "tests/test_network.py" if network else "tests/test_stability.py" if stability else "tests/test_python.py"))]
+if request_options:
+    sys.argv = [str(ROOT / "tests/test_request_options.py")]
+if websocket:
+    sys.argv = [str(ROOT / "tests/test_websocket.py")]
 runpy.run_path(sys.argv[0], run_name="__main__")

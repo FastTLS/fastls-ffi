@@ -57,6 +57,12 @@ class Native:
             signatures["fastls_stats"] = []
         if hasattr(self.lib, "fastls_features"):
             signatures["fastls_features"] = []
+        if hasattr(self.lib, "fastls_ws_start"):
+            signatures["fastls_ws_start"] = [C.c_char_p, C.c_size_t]
+            self.lib.fastls_ws_send.argtypes = [C.c_uint64, C.c_int, C.c_void_p, C.c_size_t]
+            self.lib.fastls_ws_send.restype = C.c_int
+            self.lib.fastls_ws_read.argtypes = [C.c_uint64, C.c_void_p, C.c_size_t, C.POINTER(C.c_size_t), C.POINTER(C.c_int), C.POINTER(C.c_int)]
+            self.lib.fastls_ws_read.restype = C.c_int
         for name, args in {"fastls_session_create": [], "fastls_session_close": [C.c_uint64], "fastls_session_close_idle": [C.c_uint64]}.items():
             if hasattr(self.lib, name):
                 signatures[name] = args

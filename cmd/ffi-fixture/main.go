@@ -54,6 +54,12 @@ func connectionContext(ctx context.Context, conn net.Conn) context.Context {
 }
 
 func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if f.websocketRoute(w, r) {
+		return
+	}
+	if requestOptionsRoute(w, r) {
+		return
+	}
 	if benchmarkRoute(w, r) {
 		return
 	}
@@ -416,7 +422,7 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"method": r.Method, "body": body, "headers": r.Header, "protocol": r.Proto, "host": r.Host})
+		json.NewEncoder(w).Encode(map[string]any{"method": r.Method, "body": body, "headers": r.Header, "protocol": r.Proto, "host": r.Host, "query": r.URL.Query(), "raw_query": r.URL.RawQuery})
 	case "/wait":
 		select {
 		case <-o.release:
@@ -549,10 +555,20 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	wrongCert, err := tls.LoadX509KeyPair(wrongHost["cert"], wrongHost["key"])
+	if err != nil {
+		log.Fatal(err)
+	}
+	wrongWS := httptest.NewUnstartedServer(f)
+	wrongWS.TLS = &tls.Config{Certificates: []tls.Certificate{wrongCert}, MinVersion: tls.VersionTLS12}
+	wrongWS.Config.ErrorLog = log.New(io.Discard, "", 0)
+	wrongWS.StartTLS()
+	servers = append(servers, wrongWS)
 	json.NewEncoder(os.Stdout).Encode(map[string]string{"http": plain.URL, "https1": urls[0], "https2": urls[1], "ca_file": ca, "wrong_ca_file": wrong,
 		"proxy_ca_file": proxyFiles["ca"], "proxy_cert_file": proxyFiles["cert"], "proxy_key_file": proxyFiles["key"],
-		"proxy_wrong_host_ca_file": wrongHost["ca"], "proxy_wrong_host_cert_file": wrongHost["cert"], "proxy_wrong_host_key_file": wrongHost["key"]})
+		"proxy_wrong_host_ca_file": wrongHost["ca"], "proxy_wrong_host_cert_file": wrongHost["cert"], "proxy_wrong_host_key_file": wrongHost["key"], "ws_wrong_host": wrongWS.URL})
 	io.Copy(io.Discard, os.Stdin)
+	closeWebSocketPeers()
 	for _, s := range servers {
 		s.CloseClientConnections()
 		s.Close()
