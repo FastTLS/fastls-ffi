@@ -6,6 +6,8 @@ import sys
 import tempfile
 import venv
 
+from package_version import package_version
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -27,9 +29,9 @@ def probe(python, cwd, env, code, *args):
 def main():
     wheel, sdist = one("*.whl", "wheel"), one("*.tar.gz", "sdist")
     library = ROOT / "dist" / ("fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so")
-    candidate = (ROOT / "python" / "VERSION").read_text(encoding="utf-8").strip()
+    candidate = package_version()
     clean = os.environ.copy()
-    for name in ("FASTLS_LIBRARY", "PYTHONPATH", "PYTHONHOME", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
+    for name in ("FASTLS_LIBRARY", "FASTLS_PACKAGE_VERSION", "PYTHONPATH", "PYTHONHOME", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
         clean.pop(name, None)
 
     with tempfile.TemporaryDirectory(prefix="fastls-release-") as temporary:
