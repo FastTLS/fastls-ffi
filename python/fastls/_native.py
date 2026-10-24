@@ -37,11 +37,26 @@ _load_lock = threading.Lock()
 class Native:
     def __init__(self, library=None):
         name = "fastls.dll" if sys.platform == "win32" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
-        path = Path(library or os.environ.get("FASTLS_LIBRARY") or Path(__file__).resolve().parents[2] / "dist" / name).resolve()
+        selected = library if library is not None else os.environ.get("FASTLS_LIBRARY")
+        if selected is None:
+            bundled = Path(__file__).resolve().parent / "_lib" / name
+            development = Path(__file__).resolve().parents[2]
+            if bundled.is_file():
+                selected = bundled
+            elif (development / "python" / "pyproject.toml").is_file():
+                selected = development / "dist" / name
+            else:
+                raise FastlsError("Fastls native library is missing; install a platform wheel or set FASTLS_LIBRARY")
+        path = Path(selected).resolve()
         with _load_lock:
             if path not in _libraries:
-                _libraries[path] = C.CDLL(str(path))
+                try:
+                    _libraries[path] = C.CDLL(str(path))
+                except OSError as error:
+                    raise FastlsError(f"Cannot load Fastls native library at {path}; check its architecture and system dependencies") from error
             self.lib = _libraries[path]  # Retain the library for the process lifetime.
+        if not hasattr(self.lib, "fastls_abi_version"):
+            raise FastlsError("Selected library does not provide the Fastls C ABI")
         self.lib.fastls_abi_version.argtypes = []
         self.lib.fastls_abi_version.restype = C.c_uint32
         if self.lib.fastls_abi_version() != 1:

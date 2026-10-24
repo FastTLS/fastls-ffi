@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       fastls_ref: ${{ steps.refs.outputs.fastls_ref }}
-      fhttp_ref: ${{ steps.refs.outputs.fhttp_ref }}
+      ftransport_ref: ${{ steps.refs.outputs.ftransport_ref }}
       imitate_ref: ${{ steps.refs.outputs.imitate_ref }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -73,9 +73,9 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          repository: FastTLS/fhttp
-          ref: ${{ needs.dependencies.outputs.fhttp_ref }}
-          path: workspace/fhttp
+          repository: FastTLS/ftransport
+          ref: ${{ needs.dependencies.outputs.ftransport_ref }}
+          path: workspace/ftransport
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:

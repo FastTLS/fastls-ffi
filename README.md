@@ -5,12 +5,12 @@ Fastls 的 C ABI 动态库和 Python SDK。当前是未发布的开发版本。
 
 ## 本地构建
 
-需要 Go 1.24+ 与目标平台的 cgo C 编译器。当前上游依赖是未发布候选，需要本地兄弟仓库：
+需要 Go 1.26+ 与目标平台的 cgo C 编译器。当前上游依赖是未发布候选，需要本地兄弟仓库：
 
 ```text
 workspace/
   fastls/          # 含 profile 子模块与本阶段核心改动
-  fhttp/
+  ftransport/
   imitate/
   fastls-ffi/
 ```
@@ -26,13 +26,13 @@ python scripts/build.py --local
 `--local` 只写本仓库被忽略的 go.work，不修改全局 Go 配置或上游 go.mod。
 不带 `--local` 的构建要求依赖候选已能从模块源获取；目前不承诺可用。
 
-Python 3.10+，无第三方运行依赖。安装本地 SDK：
+Python 3.10+，无第三方Python运行依赖。安装本地 SDK：
 
 ```shell
 python -m pip install -e ./python
 ```
 
-本地源码默认查找本仓库 `dist/`。安装后建议设置 `FASTLS_LIBRARY` 为动态库绝对路径，或向 Session 传 `library=...`。当前 Python 包尚未内置平台二进制，尚未发布 PyPI。
+本地源码和SDK-only sdist不编译或下载原生库，默认可查找本仓库 `dist/`；独立安装后需设置 `FASTLS_LIBRARY` 为动态库绝对路径，或向 Session 传 `library=...`。候选平台wheel已内置对应动态库，但尚未发布PyPI；平台与系统边界见[PACKAGING.md](PACKAGING.md)。
 
 ## 同步调用
 
@@ -112,9 +112,9 @@ start输入字段：url、method、profile、headers、body或body_base64、time
 Session 管理默认配置、活动请求及独立的连接池，支持HTTP1 keep-alive和HTTP2多路复用。不同Session、profile或CA配置相互隔离；可调用session.close_idle_connections()主动释放空闲连接。使用方法、限制和C ABI扩展见[POOLING.md](POOLING.md)。
 Session默认自动管理Cookie，提供session.cookies查询、设置、删除与清空；可用cookies=False禁用。response.headers支持大小写不敏感访问和get_list获取重复字段，详细规则见[COOKIES_HEADERS.md](COOKIES_HEADERS.md)。
 Python默认流式解码gzip、deflate、br及zstd，可通过decode_content=False取得原始正文。Timeout支持总时限及连接、响应头、正文读取预算；用法、原始头视图与解码上限见[STREAMING_TIMEOUTS.md](STREAMING_TIMEOUTS.md)。
-已支持同步/异步流式上传及write超时，见[STREAMING_UPLOAD.md](STREAMING_UPLOAD.md)。HTTP/2支持显式全双工：异步使用duplex=True，同步使用Session.duplex()手动交互，见[DUPLEX.md](DUPLEX.md)。Python同步与asyncio新增session.sse()按事件消费SSE，支持id/retry、手动恢复及大小限制，见[SSE.md](SSE.md)。当前不提供代理、自定义完整Spec或WebSocket；text按UTF-8解码，不提供完整requests/httpx兼容。
+已支持同步/异步流式上传及write超时，见[STREAMING_UPLOAD.md](STREAMING_UPLOAD.md)。HTTP/2支持显式全双工：异步使用duplex=True，同步使用Session.duplex()手动交互，见[DUPLEX.md](DUPLEX.md)。Python同步与asyncio新增session.sse()按事件消费SSE，支持id/retry、手动恢复及大小限制，见[SSE.md](SSE.md)。代理与WebSocket支持分别见[PROXY.md](PROXY.md)和[WEBSOCKET.md](WEBSOCKET.md)；当前不提供自定义完整Spec，text按UTF-8解码，也不提供完整requests/httpx兼容。
 指纹TCP TLS请求始终启用证书校验；未提供关闭校验选项。
-本仓库尚未公开发布；许可证和上游发布门禁仍待处理，不能把本地构建当成远端候选已发布。
+本仓库尚未公开发布。许可证、sdist、升级/卸载和Linux glibc范围已经纳入release门禁；最终版本号、发布签署及目标索引凭据仍由维护者决定，不能把本地构建或Actions artifact当成已发布版本。
 
 ```shell
 go test ./internal/bridge

@@ -86,6 +86,9 @@ func (f *fixture) websocketRoute(w http.ResponseWriter, r *http.Request) bool {
 	}
 	mode := r.URL.Query().Get("mode")
 	if mode == "reject" {
+		for _, cookie := range r.URL.Query()["set_cookie"] {
+			w.Header().Add("Set-Cookie", cookie)
+		}
 		http.Error(w, "not upgraded", 403)
 		return true
 	}
@@ -132,6 +135,12 @@ func (f *fixture) websocketRoute(w http.ResponseWriter, r *http.Request) bool {
 		accept = "invalid"
 	}
 	fmt.Fprintf(rw, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\nX-WS-Protocol: %s\r\n", accept, r.Proto)
+	for _, cookie := range r.URL.Query()["set_cookie"] {
+		// Query input is test-controlled; still reject injected wire headers.
+		if !strings.ContainsAny(cookie, "\r\n") {
+			fmt.Fprintf(rw, "Set-Cookie: %s\r\n", cookie)
+		}
+	}
 	if mode == "bad-subprotocol" {
 		fmt.Fprint(rw, "Sec-WebSocket-Protocol: unoffered\r\n")
 	}

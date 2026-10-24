@@ -296,6 +296,65 @@ class WebSockets(FixtureCase):
         self.assertLessEqual(final["goroutines"], baseline["goroutines"]+2)
         self.metrics["cases"]["recovery"] = dict(baseline=baseline, final=final, connections=25)
 
+    def inspect_cookies(self, session, key="https1", **kwargs):
+        with session.websocket(self.url(key, "inspect"), **kwargs) as ws:
+            ws.send("inspect")
+            return "; ".join(json.loads(ws.recv())["headers"].get("Cookie", []))
+
+    def test_http_login_cookie_to_ws_and_explicit_override(self):
+        with self.session() as s:
+            s.get(self.fixture["https2"] + "/cookie-set?name=login&value=accepted")
+            self.assertEqual(self.inspect_cookies(s), "login=accepted")
+            self.assertEqual(self.inspect_cookies(s, headers={"cOoKiE": "manual=only"}), "manual=only")
+            self.assertEqual(s.cookies.get("login", url=self.fixture["https1"]), "accepted")
+        with self.session() as other:
+            self.assertEqual(self.inspect_cookies(other), "")
+
+    def test_ws_cookie_scope_secure_expiry_and_disabled_storage(self):
+        with self.session() as s:
+            base = self.fixture["https1"]
+            s.get(base + "/cookie-fields")
+            s.cookies.set("ws_path", "yes", url=base, path="/ws")
+            s.cookies.set("expired", "no", url=base, expires="2000-01-01T00:00:00Z")
+            secure = self.inspect_cookies(s)
+            self.assertIn("secure=four", secure)
+            self.assertIn("ws_path=yes", secure)
+            for excluded in ("private=", "foreign=", "expired="):
+                self.assertNotIn(excluded, secure)
+            self.assertIn("secure=four", self.inspect_cookies(s, "http"))
+            with s.websocket(self.url(mode="inspect").replace("127.0.0.1", "localhost")) as ws:
+                ws.send("inspect")
+                self.assertNotIn("Cookie", json.loads(ws.recv())["headers"])
+        with self.session(cookies=False) as s:
+            self.inspect_cookies(s, params={"set_cookie": "ignored=yes; Path=/"})
+            self.assertEqual(s.cookies.get_dict(base), {})
+
+    def test_ws_response_cookies_update_http_and_failed_handshake(self):
+        with self.session() as s:
+            base = self.fixture["https1"]
+            self.inspect_cookies(s, params={"set_cookie": ["a=one; Path=/", "b=two; Path=/", "bad=no; Domain=evil.invalid; Path=/"]})
+            self.assertEqual(s.cookies.get_dict(base), {"a": "one", "b": "two"})
+            echoed = s.get(base + "/inspect").json()["headers"]["Cookie"]
+            self.assertIn("a=one", "; ".join(echoed))
+            self.inspect_cookies(s, params={"set_cookie": ["a=new; Path=/", "b=; Max-Age=0; Path=/"]})
+            self.assertEqual(s.cookies.get_dict(base), {"a": "new"})
+            with self.assertRaises(FastlsError):
+                s.ws_connect(self.url(mode="reject"), params={"set_cookie": "failed=saved; Path=/"})
+            self.assertEqual(s.cookies.get("failed", url=base), "saved")
+
+    def test_async_http_ws_cookie_exchange_and_parallel_sessions(self):
+        async def run():
+            async def exchange(value):
+                async with self.session(async_=True) as s:
+                    await s.get(self.fixture["https2"] + "/cookie-set", params={"name": "login", "value": value})
+                    async with s.websocket(self.url(mode="inspect"), params={"set_cookie": "reply=yes; Path=/"}) as ws:
+                        await ws.send("inspect")
+                        cookies = json.loads(await ws.recv())["headers"]["Cookie"]
+                        self.assertEqual(cookies, ["login=" + value])
+                    self.assertEqual(s.cookies.get("reply", url=self.fixture["https2"]), "yes")
+            await asyncio.gather(*(exchange(str(i)) for i in range(8)))
+        asyncio.run(run())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2, testRunner=unittest.TextTestRunner(verbosity=2, resultclass=EvidenceResult))
