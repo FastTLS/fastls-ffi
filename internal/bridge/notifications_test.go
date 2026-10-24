@@ -3,9 +3,12 @@ package bridge
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net"
+	"runtime"
 	"strconv"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -174,10 +177,33 @@ func TestWatchSessionHandshakeOwnershipAndClose(t *testing.T) {
 		t.Fatal("foreign session saw events")
 	}
 	e.CloseSession(id)
-	if _, err = conn.Read(make([]byte, 1)); err != io.EOF {
+	if _, err = conn.Read(make([]byte, 1)); !errors.Is(err, syscall.ECONNRESET) && !(runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(10054))) {
 		t.Fatal("connection not closed", err)
 	}
 	if _, err = e.SessionEvents(id); err == nil {
 		t.Fatal("closed session saw events")
 	}
+}
+
+func TestWatchDialFailureRemainsObservable(t *testing.T) {
+	e := New()
+	id, _ := e.CreateSession()
+	defer e.CloseSession(id)
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+	if err := e.WatchSession(id, uint16(port), bytes.Repeat([]byte{1}, 32)); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(4 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := e.SessionEvents(id); err != nil {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("notification dial failure was silently lost")
 }

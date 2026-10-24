@@ -26,7 +26,13 @@ class AsyncNotifier:
             port = self.server.sockets[0].getsockname()[1]
             self.owner._native.call("fastls_session_watch", self.owner._session, port, self.token, len(self.token))
             self.registered = True
-            await asyncio.wait_for(asyncio.shield(self.ready), 3)
+            try:
+                await asyncio.wait_for(asyncio.shield(self.ready), 3)
+            except asyncio.TimeoutError:
+                # Preserve a native dial/write failure rather than replacing
+                # it with an empty asyncio timeout message.
+                self.owner._native.call("fastls_session_events", self.owner._session)
+                raise FastlsError("could not start native notifications: handshake timed out after 3 seconds")
             self.check()
         except BaseException as error:
             await self.aclose()
