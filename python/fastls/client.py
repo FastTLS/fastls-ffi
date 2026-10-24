@@ -12,7 +12,7 @@ from ._native import Native, FastlsError, raise_response_error
 from .headers import Headers
 from .cookies import Cookies
 from .timeout import Timeout
-from .request_options import prepare, response_encoding
+from .request_options import Multipart, prepare, response_encoding
 
 
 class FastlsHTTPError(FastlsError):
@@ -292,12 +292,13 @@ class Session:
                 if not ended:
                     if pending is None:
                         pending = next(source, None)
-                    code = self._native.write(handle, pending or b"", end=pending is None)
+                    end = pending is None or (isinstance(data, Multipart) and data.final_chunk)
+                    code = self._native.write(handle, pending or b"", end=end)
                     if code == 2:
                         ended = True
                         continue
                     if code == 0:
-                        ended = pending is None
+                        ended = end
                         pending = None
                         continue
                 self._wait(handle, 1 if ended else 5)
@@ -502,12 +503,15 @@ class AsyncSession(Session):
         source = async_chunks(data)
         try:
             async for chunk in source:
+                end = isinstance(data, Multipart) and data.final_chunk
                 while True:
                     generation = self._generation(handle)
-                    code = self._upload_step(handle, chunk, duplex=duplex)
+                    code = self._upload_step(handle, chunk, end=end, duplex=duplex)
                     if code == 2:
                         return
                     if code == 0:
+                        if end:
+                            return True
                         break
                     await self._await_change(handle, generation)
                 await asyncio.sleep(0)
