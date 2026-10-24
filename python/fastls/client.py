@@ -109,10 +109,13 @@ def _collect(chunks):
 class Session:
     """Configuration, request ownership and isolated reusable connection pools."""
     def __init__(self, *, profile="chrome/156/windows", headers=None, timeout=30, library=None, ca_file=None, cookies=True,
-                 decode_content=True, max_decoded_bytes=256 * 1024 * 1024, notifications="auto", proxy=None):
+                 decode_content=True, max_decoded_bytes=256 * 1024 * 1024, notifications="auto", proxy=None, proxy_ca_file=None):
         if proxy is not None and not isinstance(proxy, str):
             raise TypeError("proxy must be a URL string or None")
         self.proxy = proxy
+        self._proxy_ca_pem = Path(proxy_ca_file).read_text(encoding="utf-8") if proxy_ca_file is not None else None
+        if self._proxy_ca_pem is not None and not self._proxy_ca_pem.strip():
+            raise ValueError("proxy_ca_file is empty")
         if notifications not in ("auto", "required", "poll"):
             raise ValueError("notifications must be auto, required or poll")
         if not isinstance(cookies, bool):
@@ -171,12 +174,20 @@ class Session:
             time.sleep(POLL_INTERVAL)
 
     def _begin(self, method, url, *, profile=None, headers=None, data=None, timeout=None, allow_redirects=True,
-               decode_content=None, max_decoded_bytes=None, duplex=False, proxy=_INHERIT_PROXY):
+               decode_content=None, max_decoded_bytes=None, duplex=False, proxy=_INHERIT_PROXY, proxy_ca_file=_INHERIT_PROXY):
         selected_proxy = self.proxy if proxy is _INHERIT_PROXY else proxy
         if selected_proxy is not None and not isinstance(selected_proxy, str):
             raise TypeError("proxy must be a URL string or None")
         if selected_proxy and "proxy_tunnels" not in self._native.call("fastls_features"):
             raise FastlsError("proxy support requires a newer Fastls native library")
+        https_proxy = bool(selected_proxy and selected_proxy.lower().startswith("https://"))
+        if https_proxy and "https_proxy_tls" not in self._native.call("fastls_features"):
+            raise FastlsError("HTTPS proxy support requires a newer Fastls native library")
+        proxy_pem = self._proxy_ca_pem
+        if https_proxy and proxy_ca_file is not _INHERIT_PROXY:
+            proxy_pem = Path(proxy_ca_file).read_text(encoding="utf-8") if proxy_ca_file is not None else None
+            if proxy_pem is not None and not proxy_pem.strip():
+                raise ValueError("proxy_ca_file is empty")
         if not isinstance(duplex, bool):
             raise TypeError("duplex must be a boolean")
         if duplex and "duplex_h2" not in self._native.call("fastls_features"):
@@ -203,6 +214,8 @@ class Session:
             request["ca_pem"] = self._ca_pem
         if selected_proxy:
             request["proxy"] = selected_proxy
+        if https_proxy and proxy_pem is not None:
+            request["proxy_ca_pem"] = proxy_pem
         streaming = duplex or is_stream(data)
         if streaming:
             if "stream_upload" not in self._native.call("fastls_features"):

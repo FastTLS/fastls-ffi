@@ -37,6 +37,7 @@ const (
 
 type Input struct {
 	Proxy            string            `json:"proxy"`
+	ProxyCAPEM       string            `json:"proxy_ca_pem"`
 	Duplex           bool              `json:"duplex"`
 	WriteTimeoutMS   int64             `json:"write_timeout_ms"`
 	StreamBody       bool              `json:"stream_body"`
@@ -276,6 +277,17 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 	}
 	opts := fastls.Options{Proxy: in.Proxy, Headers: in.Headers, Body: in.Body, VerifyTLS: true,
 		Timeout: int((in.TimeoutMS + 999) / 1000), DisableRedirect: in.DisableRedirect}
+	if in.ProxyCAPEM != "" {
+		proxyURL, _ := url.Parse(in.Proxy)
+		if proxyURL == nil || proxyURL.Scheme != "https" {
+			return 0, errors.New("proxy_ca_pem requires an HTTPS proxy")
+		}
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM([]byte(in.ProxyCAPEM)) {
+			return 0, errors.New("proxy_ca_pem contains no valid CA certificates")
+		}
+		opts.ProxyTLSRootCAs = roots
+	}
 	if in.CAPEM != "" {
 		roots := x509.NewCertPool()
 		if !roots.AppendCertsFromPEM([]byte(in.CAPEM)) {
@@ -305,7 +317,7 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 			cancel()
 			return 0, errors.New("invalid or closed session handle")
 		}
-		identity, _ := json.Marshal([]string{in.Profile, in.CAPEM, in.Proxy})
+		identity, _ := json.Marshal([]string{in.Profile, in.CAPEM, in.Proxy, in.ProxyCAPEM})
 		key := fmt.Sprintf("%x", sha256.Sum256(identity))
 		pool := s.pools[key]
 		if pool == nil {
