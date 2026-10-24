@@ -291,6 +291,19 @@ class Notifications(FixtureCase):
                 await session.aclose()
         asyncio.run(run())
 
+    def test_concurrent_independent_session_churn(self):
+        async def run():
+            async def worker():
+                for _ in range(32):
+                    async with self.session(async_=True, notifications="required") as session:
+                        response = await session.get(self.fixture["https1"] + "/bytes?n=4")
+                        self.assertEqual(response.status_code, 200)
+            await asyncio.wait_for(asyncio.gather(*(worker() for _ in range(32))), 90)
+        asyncio.run(run())
+        final = self.idle()
+        self.assertEqual(final["notifiers"], 0)
+        self.assertEqual(final["open_requests"], 0)
+
     def test_overflow_hint_rescans_all_owned_handles(self):
         async def run():
             async with self.session(async_=True, notifications="required") as session:

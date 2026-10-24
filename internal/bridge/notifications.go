@@ -116,6 +116,7 @@ type watcher struct {
 	ctx              context.Context
 	cancel           context.CancelFunc
 	conn             net.Conn
+	failure          error
 }
 
 func (w *watcher) signal(id uint64) {
@@ -166,6 +167,15 @@ func (w *watcher) run(port uint16, token []byte) {
 	dialer := net.Dialer{Timeout: 2 * time.Second}
 	conn, err := dialer.DialContext(w.ctx, "tcp4", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
+		w.fail(err)
+		return
+	}
+	// This dedicated loopback stream contains only disposable readiness hints.
+	// Session teardown must not accumulate ephemeral ports in TIME_WAIT when
+	// applications rapidly create independent sessions (especially on Windows).
+	if err := conn.(*net.TCPConn).SetLinger(0); err != nil {
+		conn.Close()
+		w.fail(err)
 		return
 	}
 	w.mu.Lock()
@@ -177,6 +187,7 @@ func (w *watcher) run(port uint16, token []byte) {
 	w.conn = conn
 	w.mu.Unlock()
 	if _, err := conn.Write(token); err != nil {
+		w.fail(err)
 		return
 	}
 	for {
@@ -185,9 +196,18 @@ func (w *watcher) run(port uint16, token []byte) {
 			return
 		case <-w.wake:
 			if _, err := conn.Write([]byte{1}); err != nil {
+				w.fail(err)
 				return
 			}
 		}
+	}
+}
+
+func (w *watcher) fail(err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.closed && w.failure == nil {
+		w.failure = fmt.Errorf("native notification transport: %w", err)
 	}
 }
 
@@ -240,5 +260,11 @@ func (e *Engine) SessionEvents(id uint64) (eventBatch, error) {
 	}
 	w := s.watch
 	e.mu.Unlock()
+	w.mu.Lock()
+	err := w.failure
+	w.mu.Unlock()
+	if err != nil {
+		return eventBatch{}, err
+	}
 	return w.drain(), nil
 }
