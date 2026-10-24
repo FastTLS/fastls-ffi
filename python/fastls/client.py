@@ -17,6 +17,7 @@ from .timeout import Timeout
 # A delay shorter than that tick can repeatedly complete without yielding time.
 POLL_INTERVAL = max(0.01, 2 * time.get_clock_info("monotonic").resolution)
 MAX_BUFFERED_BODY = 32 * 1024 * 1024
+_INHERIT_PROXY = object()
 
 
 def _cancel_task(task):
@@ -108,7 +109,10 @@ def _collect(chunks):
 class Session:
     """Configuration, request ownership and isolated reusable connection pools."""
     def __init__(self, *, profile="chrome/156/windows", headers=None, timeout=30, library=None, ca_file=None, cookies=True,
-                 decode_content=True, max_decoded_bytes=256 * 1024 * 1024, notifications="auto"):
+                 decode_content=True, max_decoded_bytes=256 * 1024 * 1024, notifications="auto", proxy=None):
+        if proxy is not None and not isinstance(proxy, str):
+            raise TypeError("proxy must be a URL string or None")
+        self.proxy = proxy
         if notifications not in ("auto", "required", "poll"):
             raise ValueError("notifications must be auto, required or poll")
         if not isinstance(cookies, bool):
@@ -167,7 +171,12 @@ class Session:
             time.sleep(POLL_INTERVAL)
 
     def _begin(self, method, url, *, profile=None, headers=None, data=None, timeout=None, allow_redirects=True,
-               decode_content=None, max_decoded_bytes=None, duplex=False):
+               decode_content=None, max_decoded_bytes=None, duplex=False, proxy=_INHERIT_PROXY):
+        selected_proxy = self.proxy if proxy is _INHERIT_PROXY else proxy
+        if selected_proxy is not None and not isinstance(selected_proxy, str):
+            raise TypeError("proxy must be a URL string or None")
+        if selected_proxy and "proxy_tunnels" not in self._native.call("fastls_features"):
+            raise FastlsError("proxy support requires a newer Fastls native library")
         if not isinstance(duplex, bool):
             raise TypeError("duplex must be a boolean")
         if duplex and "duplex_h2" not in self._native.call("fastls_features"):
@@ -192,6 +201,8 @@ class Session:
                        decode_content=decode, max_decoded_bytes=maximum, **limit.native_fields())
         if self._ca_pem is not None:
             request["ca_pem"] = self._ca_pem
+        if selected_proxy:
+            request["proxy"] = selected_proxy
         streaming = duplex or is_stream(data)
         if streaming:
             if "stream_upload" not in self._native.call("fastls_features"):
