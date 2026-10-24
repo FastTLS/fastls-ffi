@@ -38,6 +38,7 @@ export interface NativeInfo {
   decoded?: boolean;
   wire_header_values?: Record<string, string[]>;
   upload_discarded?: boolean;
+  websocket?: { subprotocol: string; write_pending: boolean; close_code: number; close_reason: string; close_received: boolean; pings: number; pongs: number; last_pong_base64: string; max_message_bytes: number; alpn_policy: string };
 }
 
 // Keep successful and partially loaded libraries alive until process exit.
@@ -70,6 +71,7 @@ function pinLibrary(path: string): void {
 export class Native {
   private functions: Record<string, NativeFunction> = {};
   readonly notificationsAvailable: boolean;
+  readonly websocketAvailable: boolean;
   readonly path: string;
 
   static load(library?: string): Native {
@@ -110,6 +112,17 @@ export class Native {
       this.functions.read = lib.func("int fastls_read(uint64_t handle, _Out_ void *buffer, size_t capacity, _Out_ size_t *length)");
       this.functions.write = lib.func("int fastls_write(uint64_t handle, const void *buffer, size_t length, int end)");
       const features = new Set(this.call<string[]>("features"));
+      let websocketAvailable = false;
+      if (features.has("websocket_v1")) {
+        try {
+          const start = lib.func("void *fastls_ws_start(void *json, size_t length)");
+          const send = lib.func("int fastls_ws_send(uint64_t handle, int opcode, const void *data, size_t length)");
+          const read = lib.func("int fastls_ws_read(uint64_t handle, _Out_ void *buffer, size_t capacity, _Out_ size_t *length, _Out_ int *opcode, _Out_ int *end)");
+          Object.assign(this.functions, { ws_start: start, ws_send: send, ws_read: read });
+          websocketAvailable = true;
+        } catch { /* Optional as a group; HTTP stays available with old libraries. */ }
+      }
+      this.websocketAvailable = websocketAvailable;
       let notificationsAvailable = false;
       if (features.has("session_notifications")) {
         try {
@@ -138,7 +151,7 @@ export class Native {
       // Starts, sessions and notification batches contain uint64 handles. Catalogs, headers
       // and info metadata use strings and bounded numeric fields; avoid the
       // allocating JS numeric parser on every poll and catalog lookup.
-      envelope = (name === "start" || name === "session_create" || name === "session_events" ? parseNativeJSON(json) : JSON.parse(json)) as typeof envelope;
+      envelope = (name === "start" || name === "ws_start" || name === "session_create" || name === "session_events" ? parseNativeJSON(json) : JSON.parse(json)) as typeof envelope;
     } finally {
       this.functions.free(pointer);
     }
@@ -149,6 +162,22 @@ export class Native {
   start(input: unknown): bigint {
     const raw = encodeNativeJSON(input);
     return asHandle(this.call("start", raw, raw.length));
+  }
+
+  wsStart(input: unknown): bigint {
+    if (!this.websocketAvailable) throw new FastlsError("WebSocket requires a newer Fastls native library");
+    const raw = encodeNativeJSON(input);
+    return asHandle(this.call("ws_start", raw, raw.length));
+  }
+  wsSend(handle: bigint, opcode: number, data: Uint8Array): number {
+    return this.functions.ws_send(handle, opcode, data, data.byteLength);
+  }
+  wsRead(handle: bigint, buffer: Buffer): { code: number; length: number; opcode: number; end: boolean } {
+    const length = [0], opcode = [0], end = [0];
+    const code = this.functions.ws_read(handle, buffer, buffer.length, length, opcode, end);
+    if (![0,1,2].includes(code) && code >= 0) throw new FastlsError("invalid WebSocket read status");
+    if (!Number.isSafeInteger(Number(length[0])) || Number(length[0]) < 0 || Number(length[0]) > buffer.length || ![0,1].includes(end[0])) throw new FastlsError("invalid WebSocket read result");
+    return { code, length: Number(length[0]), opcode: opcode[0], end: end[0] === 1 };
   }
 
   read(handle: bigint, buffer: Buffer): { code: number; length: number } {

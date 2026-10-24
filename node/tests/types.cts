@@ -6,6 +6,8 @@ function consume(session: fastls.Session): Promise<fastls.Response> {
 }
 void options;
 void consume;
+async function socket(session: fastls.Session) { const ws: fastls.WebSocket = await session.websocket('wss://example.com'); await ws.ping(Buffer.alloc(0)); await ws.closeAsync(); }
+void socket;
 async function encoded(session: fastls.Session) {
   const files: fastls.MultipartFiles = [['file', ['a.bin', Buffer.from('content')]]];
   const response = await session.post('https://example.com', { params: new Map([['tag', ['a', 'b']]]), form: { value: '中文' }, files });

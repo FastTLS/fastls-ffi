@@ -24,6 +24,13 @@ async function consume(session: Session): Promise<void> {
   new Session({ notifications: true });
   const options: RequestOptions = { body: Buffer.from([0, 255]), signal: AbortSignal.timeout(1000) };
   const response: Response = await session.post('https://example.com', options);
+  const ws = await session.websocket('wss://example.com', { subprotocols: ['chat'], readTimeoutMs: null, maxMessageBytes: 1048576 });
+  await ws.send('hello');
+  const message: string | Buffer = await ws.recv();
+  void message;
+  await ws.closeAsync(1000, 'done');
+  // @ts-expect-error WebSocket timeouts are explicit millisecond fields.
+  session.websocket('wss://example.com', { timeoutMs: 1000 });
   await session.post('https://example.com', { params: [['tag', ['中文', 'a b']]], json: null });
   await session.post('https://example.com', { form: { tag: ['a', 'b'], empty: '' } });
   await session.post('https://example.com', { files: { file: ['a.bin', { read: async (maximum: number) => Buffer.alloc(maximum) }, 'application/octet-stream'] } });

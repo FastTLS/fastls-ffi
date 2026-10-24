@@ -9,6 +9,8 @@ import shlex
 import shutil
 import subprocess
 import sys
+import threading
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 REFS = ("fastls_ref", "fhttp_ref", "imitate_ref")
@@ -76,7 +78,7 @@ def preflight(env):
     return target
 
 
-def run():
+def run(build_only=False, reuse_build=False):
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
@@ -98,23 +100,48 @@ def run():
         sources[name] = revision.stdout.strip() if revision.returncode == 0 else None
 
     def execute(name, args, cwd=ROOT, command_env=None):
+        started = time.monotonic()
+        print(f"START {name}", flush=True)
+        chunks = []
         try:
-            process = subprocess.run(args, cwd=cwd, env=command_env or env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", timeout=600)
-            code, log = process.returncode, process.stdout
-        except (OSError, subprocess.TimeoutExpired) as error:
+            with (evidence / (name + ".log")).open("w", encoding="utf-8") as output:
+                with subprocess.Popen(args, cwd=cwd, env=command_env or env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", bufsize=1) as process:
+                    timer = threading.Timer(600, process.kill)
+                    timer.daemon = True
+                    timer.start()
+                    try:
+                        for line in process.stdout:
+                            output.write(line); output.flush()
+                            print(line, end="", flush=True)
+                            chunks.append(line)
+                        code = process.wait()
+                    finally:
+                        timer.cancel()
+            log = "".join(chunks)
+        except OSError as error:
             code, log = 1, str(error)
-        (evidence / (name + ".log")).write_text(log, encoding="utf-8")
-        results.append({"name": name, "exit_code": code, "command": args})
-        print(log, flush=True)
+            (evidence / (name + ".log")).write_text(log, encoding="utf-8")
+        results.append({"name": name, "exit_code": code, "command": args, "seconds": time.monotonic() - started})
+        (evidence / "progress.json").write_text(json.dumps({"success": False, "target": target, "sources": sources, "checks": results}, indent=2)+"\n", encoding="utf-8")
+        print(f"END {name}: {code}", flush=True)
         if code:
             raise RuntimeError(f"{name} failed")
         return log
 
     try:
-        execute("build", [sys.executable, "scripts/build.py", "--local"])
+        if not reuse_build:
+            execute("build", [sys.executable, "scripts/build.py", "--local"])
+        else:
+            execute("verify-build", [sys.executable, "scripts/ci_artifact.py"])
         env["GOWORK"] = str(ROOT / "go.work")
-        execute("fixture-build", ["go", "build", "-o", "build/ffi-fixture.exe" if os.name == "nt" else "build/ffi-fixture", "./cmd/ffi-fixture"])
+        if not reuse_build:
+            execute("fixture-build", ["go", "build", "-o", "build/ffi-fixture.exe" if os.name == "nt" else "build/ffi-fixture", "./cmd/ffi-fixture"])
+        if build_only:
+            execute("manifest", [sys.executable, "scripts/ci_artifact.py", "--write"])
+            success = True
+            return 0
         execute("dependency-gate-tests", [sys.executable, "tests/test_ci.py"])
+        execute("artifact-gate-tests", [sys.executable, "tests/test_ci_artifact.py"])
         execute("core-bridge-python", [sys.executable, "scripts/check.py"])
         execute("stability-source", [sys.executable, "tests/test_stability.py"])
         execute("network-source", [sys.executable, "tests/test_network.py"])
@@ -168,7 +195,7 @@ def run():
         ws_consumer = dist / ("c-websocket.exe" if os.name == "nt" else "c-websocket")
         execute("c-websocket-build", compiler + ["examples/c/websocket.c", "-I", str(dist), str(dist / library), "-o", str(ws_consumer)])
         execute("c-websocket-execute", [sys.executable, "tests/test_c_websocket.py"], command_env=runtime_env)
-        if env.get("FASTLS_CI_RACE", "").lower() == "true":
+        if env.get("FASTLS_CI_RACE", "").lower() == "true" and env.get("FASTLS_CI_EXTENDED", "true").lower() == "true":
             soak_env = dict(env, FASTLS_STABILITY_SECONDS="300", FASTLS_TEST_LABEL="extended")
             execute("extended-soak", [sys.executable, "tests/test_stability.py", "Stability.test_soak_and_resource_recovery"], command_env=soak_env)
         if env.get("FASTLS_FULL_FHTTP_TESTS", "").lower() == "true":
@@ -185,6 +212,7 @@ def run():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("resolve", "run"))
+    parser.add_argument("command", choices=("resolve", "build", "run"))
+    parser.add_argument("--reuse-build", action="store_true")
     args = parser.parse_args()
-    raise SystemExit(resolve() if args.command == "resolve" else run())
+    raise SystemExit(resolve() if args.command == "resolve" else run(build_only=args.command=="build", reuse_build=args.reuse_build))

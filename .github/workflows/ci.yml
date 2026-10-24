@@ -1,8 +1,623 @@
 name: Native library, Python and Node.js SDKs
+permissions:
+  contents: read
+concurrency:
+  group: ffi-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  dependencies:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      fastls_ref: ${{ steps.refs.outputs.fastls_ref }}
+      fhttp_ref: ${{ steps.refs.outputs.fhttp_ref }}
+      imitate_ref: ${{ steps.refs.outputs.imitate_ref }}
+    steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        persist-credentials: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: '3.11'
+    - name: Require reviewed dependency commits
+      id: refs
+      env:
+        FASTLS_REF: ${{ inputs.fastls_ref || vars.FASTLS_REF }}
+        FHTTP_REF: ${{ inputs.fhttp_ref || vars.FHTTP_REF }}
+        IMITATE_REF: ${{ inputs.imitate_ref || vars.IMITATE_REF }}
+      run: python scripts/ci.py resolve
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - runner: windows-2022
+          target: windows-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: true
+        - runner: ubuntu-24.04-arm
+          target: linux-arm64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: macos-15-intel
+          target: darwin-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: macos-15
+          target: darwin-arm64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.24.11
+          python: '3.10'
+          node: '22'
+          race: false
+    runs-on: ${{ matrix.runner }}
+    env:
+      CGO_ENABLED: '1'
+      FASTLS_CI_RACE: ${{ matrix.race }}
+      FASTLS_CI_TARGET: ${{ matrix.target }}
+      FASTLS_FULL_FHTTP_TESTS: ${{ inputs.full_fhttp_tests || false }}
+      FASTLS_STABILITY_SECONDS: '30'
+      FASTLS_REF: ${{ needs.dependencies.outputs.fastls_ref }}
+      FHTTP_REF: ${{ needs.dependencies.outputs.fhttp_ref }}
+      IMITATE_REF: ${{ needs.dependencies.outputs.imitate_ref }}
+    defaults:
+      run:
+        working-directory: workspace/fastls-ffi
+    timeout-minutes: 30
+    needs: dependencies
+    name: Build / ${{ matrix.target }} / Go ${{ matrix.go }} / Python ${{ matrix.python }} / Node ${{ matrix.node }}
+    steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        path: workspace/fastls-ffi
+        persist-credentials: false
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: FastTLS/fastls
+        ref: ${{ needs.dependencies.outputs.fastls_ref }}
+        path: workspace/fastls
+        persist-credentials: false
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: FastTLS/fhttp
+        ref: ${{ needs.dependencies.outputs.fhttp_ref }}
+        path: workspace/fhttp
+        persist-credentials: false
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: FastTLS/imitate
+        ref: ${{ needs.dependencies.outputs.imitate_ref }}
+        path: workspace/imitate
+        persist-credentials: false
+    - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+      with:
+        go-version: ${{ matrix.go }}
+        cache: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ matrix.python }}
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      with:
+        node-version: ${{ matrix.node }}
+    - name: Build native library and fixture once
+      run: python scripts/ci.py build
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: native-build-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
+        path: 'workspace/fastls-ffi/dist/
 
-on:
-  push:
-  pull_request:
+          workspace/fastls-ffi/go.work
+
+          workspace/fastls-ffi/build/ffi-fixture*
+
+          workspace/fastls-ffi/build/native-artifact.json'
+        if-no-files-found: error
+        retention-days: 14
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - runner: windows-2022
+          target: windows-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: true
+        - runner: ubuntu-24.04-arm
+          target: linux-arm64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: macos-15-intel
+          target: darwin-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: macos-15
+          target: darwin-arm64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.24.11
+          python: '3.10'
+          node: '22'
+          race: false
+    runs-on: ${{ matrix.runner }}
+    env:
+      CGO_ENABLED: '1'
+      FASTLS_CI_RACE: ${{ matrix.race }}
+      FASTLS_CI_TARGET: ${{ matrix.target }}
+      FASTLS_FULL_FHTTP_TESTS: ${{ inputs.full_fhttp_tests || false }}
+      FASTLS_STABILITY_SECONDS: '30'
+      FASTLS_CI_EXTENDED: 'false'
+      FASTLS_REF: ${{ needs.dependencies.outputs.fastls_ref }}
+      FHTTP_REF: ${{ needs.dependencies.outputs.fhttp_ref }}
+      IMITATE_REF: ${{ needs.dependencies.outputs.imitate_ref }}
+    defaults:
+      run:
+        working-directory: workspace/fastls-ffi
+    timeout-minutes: 30
+    needs:
+    - dependencies
+    - build
+    name: Native/Python/C / ${{ matrix.target }} / Go ${{ matrix.go }} / Python ${{ matrix.python }} / Node ${{ matrix.node }}
+    steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        path: workspace/fastls-ffi
+        persist-credentials: false
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: FastTLS/fastls
+        ref: ${{ needs.dependencies.outputs.fastls_ref }}
+        path: workspace/fastls
+        persist-credentials: false
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: FastTLS/fhttp
+        ref: ${{ needs.dependencies.outputs.fhttp_ref }}
+        path: workspace/fhttp
+        persist-credentials: false
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: FastTLS/imitate
+        ref: ${{ needs.dependencies.outputs.imitate_ref }}
+        path: workspace/imitate
+        persist-credentials: false
+    - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+      with:
+        go-version: ${{ matrix.go }}
+        cache: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ matrix.python }}
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      with:
+        node-version: ${{ matrix.node }}
+    - name: Download verified build inputs
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: native-build-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
+        path: workspace/fastls-ffi
+    - name: Restore fixture executable permission
+      if: runner.os != 'Windows'
+      run: chmod +x build/ffi-fixture
+    - name: Run native, Python, wheel and C tests using verified build
+      run: python scripts/ci.py run --reuse-build
+    - name: Save binaries and evidence
+      if: always()
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: native-evidence-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
+        path: 'workspace/fastls-ffi/dist/
+
+          workspace/fastls-ffi/build/
+
+          workspace/fastls-ffi/node/dist/
+
+          '
+        if-no-files-found: warn
+        retention-days: 14
+  node:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - runner: windows-2022
+          target: windows-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: true
+        - runner: ubuntu-24.04-arm
+          target: linux-arm64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: macos-15-intel
+          target: darwin-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: macos-15
+          target: darwin-arm64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.24.11
+          python: '3.10'
+          node: '22'
+          race: false
+    runs-on: ${{ matrix.runner }}
+    env:
+      CGO_ENABLED: '1'
+      FASTLS_CI_RACE: ${{ matrix.race }}
+      FASTLS_CI_TARGET: ${{ matrix.target }}
+      FASTLS_FULL_FHTTP_TESTS: ${{ inputs.full_fhttp_tests || false }}
+      FASTLS_STABILITY_SECONDS: '30'
+      FASTLS_REF: ${{ needs.dependencies.outputs.fastls_ref }}
+      FHTTP_REF: ${{ needs.dependencies.outputs.fhttp_ref }}
+      IMITATE_REF: ${{ needs.dependencies.outputs.imitate_ref }}
+    defaults:
+      run:
+        working-directory: workspace/fastls-ffi
+    timeout-minutes: 30
+    needs:
+    - dependencies
+    - build
+    name: Node / ${{ matrix.target }} / Go ${{ matrix.go }} / Python ${{ matrix.python }} / Node ${{ matrix.node }}
+    steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        path: workspace/fastls-ffi
+        persist-credentials: false
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: FastTLS/fastls
+        ref: ${{ needs.dependencies.outputs.fastls_ref }}
+        path: workspace/fastls
+        persist-credentials: false
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: FastTLS/fhttp
+        ref: ${{ needs.dependencies.outputs.fhttp_ref }}
+        path: workspace/fhttp
+        persist-credentials: false
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: FastTLS/imitate
+        ref: ${{ needs.dependencies.outputs.imitate_ref }}
+        path: workspace/imitate
+        persist-credentials: false
+    - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+      with:
+        go-version: ${{ matrix.go }}
+        cache: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ matrix.python }}
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      with:
+        node-version: ${{ matrix.node }}
+    - name: Download verified build inputs
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: native-build-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
+        path: workspace/fastls-ffi
+    - name: Restore fixture executable permission
+      if: runner.os != 'Windows'
+      run: chmod +x build/ffi-fixture
+    - name: Verify build provenance before consuming binaries
+      run: python scripts/ci_artifact.py
+    - name: Install locked Node dependencies
+      run: npm ci --prefix node
+    - name: Quick WebSocket and type feedback
+      run: npm run test:quick --prefix node
+    - name: Full Node source suite
+      run: npm test --prefix node
+    - name: Full installed native package suite
+      run: npm run test:package --prefix node
+    - name: Save binaries and evidence
+      if: always()
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: node-functional-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
+        path: 'workspace/fastls-ffi/dist/
+
+          workspace/fastls-ffi/build/
+
+          workspace/fastls-ffi/node/dist/
+
+          '
+        if-no-files-found: warn
+        retention-days: 14
+  soak:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: true
+          kind: generic
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: true
+          kind: duplex
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: true
+          kind: sse
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: true
+          kind: proxy
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: true
+          kind: ws
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: true
+          kind: python
+    runs-on: ${{ matrix.runner }}
+    env:
+      CGO_ENABLED: '1'
+      FASTLS_CI_RACE: ${{ matrix.race }}
+      FASTLS_CI_TARGET: ${{ matrix.target }}
+      FASTLS_FULL_FHTTP_TESTS: ${{ inputs.full_fhttp_tests || false }}
+      FASTLS_STABILITY_SECONDS: '300'
+      FASTLS_NODE_SOAK_SECONDS: '300'
+      FASTLS_NODE_DUPLEX_SOAK_SECONDS: '60'
+      FASTLS_NODE_SSE_SOAK_SECONDS: '60'
+      FASTLS_NODE_PROXY_SOAK_SECONDS: '60'
+      FASTLS_NODE_WS_SOAK_SECONDS: '60'
+      FASTLS_TEST_LABEL: extended
+      FASTLS_REF: ${{ needs.dependencies.outputs.fastls_ref }}
+      FHTTP_REF: ${{ needs.dependencies.outputs.fhttp_ref }}
+      IMITATE_REF: ${{ needs.dependencies.outputs.imitate_ref }}
+    defaults:
+      run:
+        working-directory: workspace/fastls-ffi
+    timeout-minutes: 15
+    needs:
+    - dependencies
+    - build
+    name: Resource recovery / ${{ matrix.kind }}
+    steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        path: workspace/fastls-ffi
+        persist-credentials: false
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: FastTLS/fastls
+        ref: ${{ needs.dependencies.outputs.fastls_ref }}
+        path: workspace/fastls
+        persist-credentials: false
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: FastTLS/fhttp
+        ref: ${{ needs.dependencies.outputs.fhttp_ref }}
+        path: workspace/fhttp
+        persist-credentials: false
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        repository: FastTLS/imitate
+        ref: ${{ needs.dependencies.outputs.imitate_ref }}
+        path: workspace/imitate
+        persist-credentials: false
+    - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+      with:
+        go-version: ${{ matrix.go }}
+        cache: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: ${{ matrix.python }}
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      with:
+        node-version: ${{ matrix.node }}
+    - name: Download verified build inputs
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: native-build-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
+        path: workspace/fastls-ffi
+    - name: Restore fixture executable permission
+      if: runner.os != 'Windows'
+      run: chmod +x build/ffi-fixture
+    - name: Verify build provenance
+      run: python scripts/ci_artifact.py
+    - name: Install locked Node dependencies
+      if: matrix.kind != 'python'
+      run: npm ci --prefix node
+    - name: Build Node SDK
+      if: matrix.kind != 'python'
+      run: npm run build --prefix node
+    - name: Run generic resource recovery
+      if: matrix.kind == 'generic'
+      run: npm run test:soak --prefix node
+    - name: Run duplex resource recovery
+      if: matrix.kind == 'duplex'
+      run: npm run test:duplex:soak --prefix node
+    - name: Run sse resource recovery
+      if: matrix.kind == 'sse'
+      run: npm run test:sse:soak --prefix node
+    - name: Run proxy resource recovery
+      if: matrix.kind == 'proxy'
+      run: npm run test:proxy:soak --prefix node
+    - name: Run ws resource recovery
+      if: matrix.kind == 'ws'
+      run: npm run test:ws:soak --prefix node
+    - name: Run python resource recovery
+      if: matrix.kind == 'python'
+      run: python tests/test_stability.py Stability.test_soak_and_resource_recovery
+    - name: Save independent resource evidence
+      if: always()
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: node-soak-${{ matrix.kind }}
+        path: workspace/fastls-ffi/build/*.json
+        if-no-files-found: error
+        retention-days: 14
+  candidates:
+    needs:
+    - node
+    - soak
+    name: Candidate / ${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - runner: windows-2022
+          target: windows-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: true
+        - runner: ubuntu-24.04-arm
+          target: linux-arm64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: macos-15-intel
+          target: darwin-amd64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: macos-15
+          target: darwin-arm64
+          go: 1.26.10
+          python: '3.11'
+          node: '24'
+          race: false
+        - runner: ubuntu-24.04
+          target: linux-amd64
+          go: 1.24.11
+          python: '3.10'
+          node: '22'
+          race: false
+    steps:
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: node-functional-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
+        path: candidate
+    - if: matrix.race
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        pattern: node-soak-*
+        merge-multiple: true
+        path: candidate/build
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: fastls-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
+        path: candidate/
+        if-no-files-found: error
+        retention-days: 14
+  required:
+    name: All native tests
+    if: always()
+    needs:
+    - dependencies
+    - build
+    - native
+    - node
+    - soak
+    - candidates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+    - name: Reject failed, cancelled or skipped matrix jobs
+      env:
+        DEPENDENCIES_RESULT: ${{ needs.dependencies.result }}
+        BUILD_RESULT: ${{ needs.build.result }}
+        NATIVE_RESULT: ${{ needs.native.result }}
+        NODE_RESULT: ${{ needs.node.result }}
+        SOAK_RESULT: ${{ needs.soak.result }}
+        CANDIDATES_RESULT: ${{ needs.candidates.result }}
+      run: 'test "$DEPENDENCIES_RESULT" = success
+
+        test "$BUILD_RESULT" = success
+
+        test "$NATIVE_RESULT" = success
+
+        test "$NODE_RESULT" = success
+
+        test "$SOAK_RESULT" = success
+
+        test "$CANDIDATES_RESULT" = success
+
+        '
+'on':
+  push: null
+  pull_request: null
   workflow_dispatch:
     inputs:
       fastls_ref:
@@ -18,175 +633,3 @@ on:
         description: Also run the full upstream HTTP2 suite (known legacy failures)
         type: boolean
         default: false
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ffi-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  dependencies:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      fastls_ref: ${{ steps.refs.outputs.fastls_ref }}
-      fhttp_ref: ${{ steps.refs.outputs.fhttp_ref }}
-      imitate_ref: ${{ steps.refs.outputs.imitate_ref }}
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.11'
-      - name: Require reviewed dependency commits
-        id: refs
-        env:
-          FASTLS_REF: ${{ inputs.fastls_ref || vars.FASTLS_REF }}
-          FHTTP_REF: ${{ inputs.fhttp_ref || vars.FHTTP_REF }}
-          IMITATE_REF: ${{ inputs.imitate_ref || vars.IMITATE_REF }}
-        run: python scripts/ci.py resolve
-
-  native:
-    needs: dependencies
-    name: ${{ matrix.target }} / Go ${{ matrix.go }} / Python ${{ matrix.python }} / Node ${{ matrix.node }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: windows-2022
-            target: windows-amd64
-            go: '1.26.10'
-            python: '3.11'
-            node: '24'
-            race: false
-          - runner: ubuntu-24.04
-            target: linux-amd64
-            go: '1.26.10'
-            python: '3.11'
-            node: '24'
-            race: true
-          - runner: ubuntu-24.04-arm
-            target: linux-arm64
-            go: '1.26.10'
-            python: '3.11'
-            node: '24'
-            race: false
-          - runner: macos-15-intel
-            target: darwin-amd64
-            go: '1.26.10'
-            python: '3.11'
-            node: '24'
-            race: false
-          - runner: macos-15
-            target: darwin-arm64
-            go: '1.26.10'
-            python: '3.11'
-            node: '24'
-            race: false
-          - runner: ubuntu-24.04
-            target: linux-amd64
-            go: '1.24.11'
-            python: '3.10'
-            node: '22'
-            race: false
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
-    env:
-      CGO_ENABLED: '1'
-      FASTLS_CI_RACE: ${{ matrix.race }}
-      FASTLS_CI_TARGET: ${{ matrix.target }}
-      FASTLS_FULL_FHTTP_TESTS: ${{ inputs.full_fhttp_tests || false }}
-      FASTLS_STABILITY_SECONDS: '30'
-    defaults:
-      run:
-        working-directory: workspace/fastls-ffi
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          path: workspace/fastls-ffi
-          persist-credentials: false
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: FastTLS/fastls
-          ref: ${{ needs.dependencies.outputs.fastls_ref }}
-          path: workspace/fastls
-          persist-credentials: false
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: FastTLS/fhttp
-          ref: ${{ needs.dependencies.outputs.fhttp_ref }}
-          path: workspace/fhttp
-          persist-credentials: false
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: FastTLS/imitate
-          ref: ${{ needs.dependencies.outputs.imitate_ref }}
-          path: workspace/imitate
-          persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: ${{ matrix.go }}
-          cache: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: ${{ matrix.python }}
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: ${{ matrix.node }}
-      - name: Build and execute native, source SDK, wheel and C tests
-        run: python scripts/ci.py run
-      - name: Install locked Node.js SDK dependencies
-        run: npm ci --prefix node
-      - name: Build and test Node.js SDK
-        run: npm test --prefix node
-      - name: Install and test bundled native npm candidate without build tools
-        run: npm run test:package --prefix node
-      - name: Extended Node.js resource recovery soak
-        if: matrix.race
-        env:
-          FASTLS_NODE_SOAK_SECONDS: '300'
-        run: npm run test:soak --prefix node
-      - name: Mixed HTTP/2 duplex recovery soak
-        if: matrix.race
-        env:
-          FASTLS_NODE_DUPLEX_SOAK_SECONDS: '60'
-        run: npm run test:duplex:soak --prefix node
-      - name: Mixed SSE recovery soak
-        if: matrix.race
-        env:
-          FASTLS_NODE_SSE_SOAK_SECONDS: '60'
-        run: npm run test:sse:soak --prefix node
-      - name: Mixed proxy tunnel recovery soak
-        if: matrix.race
-        env:
-          FASTLS_NODE_PROXY_SOAK_SECONDS: '60'
-        run: npm run test:proxy:soak --prefix node
-      - name: Save binaries and evidence
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: fastls-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
-          path: |
-            workspace/fastls-ffi/dist/
-            workspace/fastls-ffi/build/
-            workspace/fastls-ffi/node/dist/
-          if-no-files-found: warn
-          retention-days: 14
-
-  required:
-    name: All native tests
-    if: always()
-    needs: [dependencies, native]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 2
-    steps:
-      - name: Reject failed, cancelled or skipped matrix jobs
-        env:
-          DEPENDENCIES_RESULT: ${{ needs.dependencies.result }}
-          NATIVE_RESULT: ${{ needs.native.result }}
-        run: |
-          test "$DEPENDENCIES_RESULT" = success
-          test "$NATIVE_RESULT" = success
