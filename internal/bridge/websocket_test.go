@@ -98,3 +98,33 @@ func TestWebSocketEngineInvalidContracts(t *testing.T) {
 		t.Fatal("accepted invalid reader")
 	}
 }
+
+func TestWebSocketCancelRejectsQueuedMessages(t *testing.T) {
+	u := websocket.Upgrader{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := u.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		c.WriteMessage(websocket.TextMessage, []byte("queued"))
+		c.ReadMessage()
+	}))
+	defer srv.Close()
+	e := New()
+	raw, _ := json.Marshal(WebSocketInput{URL: strings.Replace(srv.URL, "http", "ws", 1)})
+	id, err := e.StartWebSocket(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close(id)
+	if e.Wait(id, WaitHeaders, 3*time.Second) != Data || e.Wait(id, WaitRead, 3*time.Second) != Data {
+		t.Fatal("message never became ready")
+	}
+	if err = e.Cancel(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, status := e.WebSocketRead(id, make([]byte, 32)); status != Failed {
+		t.Fatal("cancelled connection delivered queued data", status)
+	}
+}

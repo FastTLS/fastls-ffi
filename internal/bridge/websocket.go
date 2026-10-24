@@ -290,7 +290,9 @@ func (r *request) runWebSocket(e *Engine, in WebSocketInput, opts fastls.Options
 				w.info.CloseCode, w.info.CloseReason, w.info.CloseReceived = closed.Code, closed.Text, true
 				w.mu.Unlock()
 				r.mu.Lock()
-				r.info.State = "eof"
+				if r.info.State != "error" {
+					r.info.State = "eof"
+				}
 				r.mu.Unlock()
 				r.signal()
 			} else {
@@ -319,6 +321,13 @@ func (r *request) runWebSocket(e *Engine, in WebSocketInput, opts fastls.Options
 func (r *request) wsWriter(c *websocket.Conn, timeout time.Duration) {
 	w := r.ws
 	defer func() {
+		w.mu.Lock()
+		select {
+		case <-w.outgoing:
+		default:
+		}
+		w.info.WritePending = false
+		w.mu.Unlock()
 		w.bufferedWrite.Store(0)
 		if recover() != nil {
 			r.setError(errors.New("internal WebSocket writer failure"))
@@ -332,16 +341,27 @@ func (r *request) wsWriter(c *websocket.Conn, timeout time.Duration) {
 		case msg := <-w.outgoing:
 			c.SetWriteDeadline(time.Now().Add(timeout))
 			err := c.WriteMessage(msg.kind, msg.data)
-			w.bufferedWrite.Store(0)
 			w.mu.Lock()
-			w.info.WritePending = false
 			remoteClosed := w.info.CloseReceived
 			w.mu.Unlock()
-			if err != nil && !remoteClosed {
-				r.wsError(err, "write")
+			if err != nil {
+				if remoteClosed {
+					r.mu.Lock()
+					if r.info.State != "error" {
+						r.info.State = "eof"
+					}
+					r.mu.Unlock()
+					r.signal()
+				} else {
+					r.wsError(err, "write")
+				}
 				r.cancel()
 				return
 			}
+			w.bufferedWrite.Store(0)
+			w.mu.Lock()
+			w.info.WritePending = false
+			w.mu.Unlock()
 			r.signal()
 		}
 	}
@@ -380,6 +400,9 @@ func (e *Engine) WebSocketSend(id uint64, kind int, data []byte) int {
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if r.ctx.Err() != nil {
+		return Failed
+	}
 	if w.info.WritePending {
 		return Pending
 	}
@@ -410,6 +433,12 @@ func (e *Engine) WebSocketRead(id uint64, dst []byte) (n, kind int, end bool, st
 	r.readMu.Lock()
 	defer r.readMu.Unlock()
 	w := r.ws
+	r.mu.Lock()
+	state := r.info.State
+	r.mu.Unlock()
+	if r.ctx.Err() != nil && state != "eof" {
+		return 0, 0, false, Failed
+	}
 	if w.rest == nil {
 		select {
 		case msg := <-w.incoming:
@@ -429,7 +458,7 @@ func (e *Engine) WebSocketRead(id uint64, dst []byte) (n, kind int, end bool, st
 		return n, kind, end, Data
 	}
 	r.mu.Lock()
-	state := r.info.State
+	state = r.info.State
 	r.mu.Unlock()
 	if state == "eof" {
 		return 0, 0, false, EOF
