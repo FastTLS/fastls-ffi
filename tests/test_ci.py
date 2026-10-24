@@ -11,6 +11,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from ci_runtime import EvidenceRunner
 import ci
+import development_snapshot
+from package_version import package_version, require_development_version
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -49,6 +51,40 @@ class DependencyGate(unittest.TestCase):
             self.assertEqual(output, "")
 
 
+class PackageVersion(unittest.TestCase):
+    def test_development_override_is_validated(self):
+        self.assertEqual(package_version({"FASTLS_PACKAGE_VERSION": "0.1.0.dev123"}), "0.1.0.dev123")
+        self.assertEqual(require_development_version({"FASTLS_PACKAGE_VERSION": "0.1.0.dev123+gabc"}), "0.1.0.dev123+gabc")
+        for value in ("0.1.0", "main", "0.1.0.dev1\nother"):
+            with self.assertRaises(RuntimeError):
+                require_development_version({"FASTLS_PACKAGE_VERSION": value})
+
+    def test_snapshot_manifest_is_non_publishing_and_hashed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            dist = root / "dist"
+            dist.mkdir()
+            sources = {"fastls-ffi": "a" * 40, "fastls": "b" * 40}
+            (dist / "ci-inputs.json").write_text(json.dumps({
+                "target": "windows-amd64", "sources": sources,
+                "package_version": "0.1.0.dev123",
+            }))
+            for name in ("fastls_ffi-0.1.0.dev123-py3-none-win_amd64.whl",
+                         "fastls_ffi-0.1.0.dev123.tar.gz", "native-audit.json"):
+                (dist / name).write_bytes(name.encode())
+            (dist / "build-info.json").write_text(json.dumps({"package_version": "0.1.0.dev123"}))
+            destination = development_snapshot.create_manifest(
+                root, {"FASTLS_PACKAGE_VERSION": "0.1.0.dev123"})
+            manifest = json.loads(destination.read_text())
+            self.assertEqual(manifest["status"], "development-only")
+            self.assertFalse(manifest["publishable"])
+            self.assertEqual(manifest["sources"], sources)
+            self.assertEqual(set(manifest["files"]), {
+                "fastls_ffi-0.1.0.dev123-py3-none-win_amd64.whl",
+                "fastls_ffi-0.1.0.dev123.tar.gz", "build-info.json", "native-audit.json",
+            })
+
+
 class ExecutionEvidence(unittest.TestCase):
     def test_failure_preserves_earlier_results_and_partial_log(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -71,7 +107,8 @@ class ExecutionEvidence(unittest.TestCase):
 
     def test_changed_sdk_artifact_or_commit_is_rejected(self):
         sources = {"fastls-ffi": "a" * 40}
-        record = dict(target="windows-amd64", sources=sources, sdk={"sdk.py": "one"}, artifacts={"lib": "one"})
+        record = dict(target="windows-amd64", sources=sources, package_version=package_version(),
+                      sdk={"sdk.py": "one"}, artifacts={"lib": "one"})
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "dist").mkdir()
@@ -85,6 +122,9 @@ class ExecutionEvidence(unittest.TestCase):
                 sdk.return_value = record["sdk"]
                 artifacts.return_value = {"lib": "changed"}
                 with self.assertRaises(RuntimeError): ci.verify_inputs("windows-amd64", sources)
+                artifacts.return_value = record["artifacts"]
+                with patch.dict(os.environ, {"FASTLS_PACKAGE_VERSION": "0.1.0.dev999"}):
+                    with self.assertRaises(RuntimeError): ci.verify_inputs("windows-amd64", sources)
 
 
 if __name__ == "__main__":
