@@ -32,6 +32,7 @@ def main():
         bootstrap = '''
 import hashlib, json, os, pathlib, queue, runpy, subprocess, sys, threading
 target, root, suite = map(pathlib.Path, sys.argv[1:])
+target, root = target.resolve(), root.resolve()
 sys.path.insert(0, str(target))
 import fastls
 from fastls._native import Native
