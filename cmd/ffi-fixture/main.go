@@ -54,6 +54,9 @@ func connectionContext(ctx context.Context, conn net.Conn) context.Context {
 }
 
 func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if requestOptionsRoute(w, r) {
+		return
+	}
 	if benchmarkRoute(w, r) {
 		return
 	}
@@ -416,7 +419,7 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"method": r.Method, "body": body, "headers": r.Header, "protocol": r.Proto, "host": r.Host})
+		json.NewEncoder(w).Encode(map[string]any{"method": r.Method, "body": body, "headers": r.Header, "protocol": r.Proto, "host": r.Host, "query": r.URL.Query(), "raw_query": r.URL.RawQuery})
 	case "/wait":
 		select {
 		case <-o.release:

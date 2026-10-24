@@ -125,6 +125,7 @@ def run():
         execute("sse-source", [sys.executable, "tests/test_sse.py"])
         execute("notifications-source", [sys.executable, "tests/test_notifications.py"])
         execute("proxy-source", [sys.executable, "tests/test_proxy.py"])
+        execute("request-options-source", [sys.executable, "tests/test_request_options.py"])
         execute("cookiejar", ["go", "test", "./cookiejar"], ROOT.parent / "fhttp")
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
@@ -146,6 +147,7 @@ def run():
         execute("sse-wheel", [sys.executable, "scripts/test_wheel.py", "--sse"])
         execute("notifications-wheel", [sys.executable, "scripts/test_wheel.py", "--notifications"])
         execute("proxy-wheel", [sys.executable, "scripts/test_wheel.py", "--proxy"])
+        execute("request-options-wheel", [sys.executable, "scripts/test_wheel.py", "--request-options"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")
