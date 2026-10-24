@@ -5,7 +5,7 @@ export function decodeText(bytes: Uint8Array, encoding: string): string {
   // WHATWG aliases ISO-8859-1 to Windows-1252. Preserve the declared Latin-1
   // byte mapping, matching Python for the full 0..255 range.
   if (/^(?:iso-8859-1|latin-?1)$/i.test(encoding)) return Buffer.from(bytes.buffer,bytes.byteOffset,bytes.byteLength).toString("latin1");
-  return new TextDecoder(encoding).decode(bytes);
+  return new TextDecoder(encoding, { ignoreBOM: true }).decode(bytes);
 }
 export function decodeJSON(bytes: Buffer): string {
   let encoding = "utf-8", start=0;
