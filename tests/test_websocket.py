@@ -249,10 +249,15 @@ class WebSockets(FixtureCase):
     def test_async_handshake_cancel_session_close_and_poll_fallback(self):
         async def run():
             async with self.session(async_=True) as s:
-                task = asyncio.create_task(s.ws_connect(self.url(mode="handshake-stall")))
-                await asyncio.sleep(.05)
+                identifier = uuid.uuid4().hex
+                task = asyncio.create_task(s.ws_connect(self.url(mode="handshake-stall")+"&id="+identifier))
+                await self.wait_state(identifier, "started")
                 task.cancel()
                 with self.assertRaises(asyncio.CancelledError): await task
+                for _ in range(100):
+                    if s.stats()["workers"] == 0: break
+                    await asyncio.sleep(.01)
+                self.assertEqual(s.stats()["workers"], 0)
                 ws = await s.ws_connect(self.url())
                 task = asyncio.create_task(ws.recv())
                 await asyncio.sleep(.03)
