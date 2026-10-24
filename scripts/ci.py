@@ -47,6 +47,7 @@ def preflight(env):
         "fhttp/http2/explicit_settings_test.go": ("func TestExplicitZeroDoesNotSelectNavigatorDefaults", "func TestExplicitEmptySettings"),
         "fhttp/http2/receive_window_test.go": ("func TestReceiveWindowMatchesWire", "func TestReceiveWindowClosedStreamDataRefund", "func TestReceiveWindowClosedStreamDataOverrun"),
         "fastls/session.go": ("func NewSession", "Duplex"),
+        "fastls/proxy_transport.go": ("func ValidateProxy", "type tunnelProxyDialer"),
         "fastls/duplex_test.go": ("func TestDuplexEarlyHeadersUploadLifetime",),
         "fastls/cookie_store.go": ("func NewCookieStore",),
         "fastls/timeouts.go": ("type Timeouts struct",),
@@ -123,6 +124,7 @@ def run():
         execute("duplex-source", [sys.executable, "tests/test_duplex.py"])
         execute("sse-source", [sys.executable, "tests/test_sse.py"])
         execute("notifications-source", [sys.executable, "tests/test_notifications.py"])
+        execute("proxy-source", [sys.executable, "tests/test_proxy.py"])
         execute("cookiejar", ["go", "test", "./cookiejar"], ROOT.parent / "fhttp")
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
@@ -143,6 +145,7 @@ def run():
         execute("duplex-wheel", [sys.executable, "scripts/test_wheel.py", "--duplex"])
         execute("sse-wheel", [sys.executable, "scripts/test_wheel.py", "--sse"])
         execute("notifications-wheel", [sys.executable, "scripts/test_wheel.py", "--notifications"])
+        execute("proxy-wheel", [sys.executable, "scripts/test_wheel.py", "--proxy"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")
