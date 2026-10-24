@@ -34,9 +34,10 @@ export class ProxyLab {
   methods = [];
   accepted = 0;
   cancelledHandshakes = 0;
+  stallStarted = 0;
   failures = [];
   tlsProtocols = [];
-  static async open(scheme = 'http', { auth = false, mode = 'normal', certFile, keyFile } = {}) {
+  static async open(scheme = 'http', { auth = false, mode = 'normal', certFile, keyFile, connectDelayMs = 0 } = {}) {
     const lab = new ProxyLab(); Object.assign(lab, { scheme, auth, mode });
     const handle = socket => {
       void lab.handle(socket).catch(error => {
@@ -54,7 +55,11 @@ export class ProxyLab {
       lab.server.on('secureConnection', socket => {
         // Replace the raw socket in the live-connection inventory after TLS.
         lab.sockets.delete(pending.get(socket.remotePort)); pending.delete(socket.remotePort); lab.own(socket);
-        lab.tlsProtocols.push(socket.alpnProtocol); handle(socket);
+        lab.tlsProtocols.push(socket.alpnProtocol);
+        if (connectDelayMs) {
+          const timer=setTimeout(()=>{if(!socket.destroyed)handle(socket);},connectDelayMs);
+          socket.once('close',()=>clearTimeout(timer));
+        } else handle(socket);
       });
       lab.server.on('tlsClientError', (_error, socket) => socket.destroy());
     } else {
@@ -73,6 +78,7 @@ export class ProxyLab {
     socket.once('close', () => this.sockets.delete(socket));
   }
   async stall(socket) {
+    this.stallStarted++;
     try { for await (const chunk of socket) void chunk; } finally { this.cancelledHandshakes++; socket.destroy(); }
   }
   async handle(socket) {

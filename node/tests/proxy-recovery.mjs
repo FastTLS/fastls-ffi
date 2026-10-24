@@ -13,15 +13,16 @@ test('proxy tunnels recover after shared H2 cancellation, failed auth and cancel
   const normal=[], stalled=[];
   for (const scheme of ['http','https','socks5','socks5h']) {
     for (const [target, mode] of [[normal,'normal'],[stalled,'stall']]) {
-      const proxy=await ProxyLab.open(scheme,{auth:true,mode,certFile:fixture.proxy_cert_file,keyFile:fixture.proxy_key_file}); target.push(proxy); t.after(()=>proxy.close());
+      const proxy=await ProxyLab.open(scheme,{auth:true,mode,certFile:fixture.proxy_cert_file,keyFile:fixture.proxy_key_file,connectDelayMs:scheme==='https'&&mode==='stall'?50:0}); target.push(proxy); t.after(()=>proxy.close());
     }
   }
   const s=session(t,{proxy:normal[0].url,proxyCaFile:fixture.proxy_ca_file,timeoutMs:10000});
   const proof={node:process.version,platform:process.platform,arch:process.arch,runtime_args:process.execArgv,concurrency:32,passed:false,
-    requests:0,completed:0,cancelled_body:0,rejected:0,cancelled_handshake:0,warmup_requests:100,samples:[]};
+    requests:0,completed:0,cancelled_body:0,rejected:0,cancelled_handshake:0,warmup_requests:100,tls_fixture_connect_delay_ms:50,samples:[]};
   let started;
   const batch=async()=>{
-    await Promise.all(Array.from({length:32},async(_,index)=>{
+    const initialStalls=stalled.map(p=>p.stallStarted);
+    const outcomes=await Promise.allSettled(Array.from({length:32},async(_,index)=>{
       const schemeIndex=Math.floor(index/4)%normal.length,proxy=normal[schemeIndex];
       if (index%4===0) {
         assert.equal((await s.get(fixture.https2+'/bytes?n=1024',{proxy:proxy.url})).content.length,1024);proof.completed++;
@@ -33,10 +34,17 @@ test('proxy tunnels recover after shared H2 cancellation, failed auth and cancel
       } else {
         const controller=new AbortController();
         const pending=assert.rejects(s.get(fixture.https2,{proxy:stalled[schemeIndex].url,signal:controller.signal}),sdk.AbortError);
-        const timer=setTimeout(()=>controller.abort(),10);
-        try{await pending;}finally{clearTimeout(timer);}proof.cancelled_handshake++;
+        void pending.catch(()=>{});
+        // H2 can share a pending dial between the two requests per scheme.
+        // Require an actual stalled handshake for each scheme before aborting
+        // its waiters; a timer may fire before TLS starts on a busy runner.
+        try{
+          await eventually(()=>stalled.every((p,i)=>p.stallStarted>initialStalls[i]));
+          controller.abort();await pending;
+        }finally{controller.abort();await pending;}proof.cancelled_handshake++;
       }
     }));
+    const failure=outcomes.find(result=>result.status==='rejected');if(failure)throw failure.reason;
     await eventually(()=>s.stats().workers===0&&stalled.every(p=>p.sockets.size===0)&&normal.every(p=>p.sockets.size<=2));
     assert.equal(s.stats().open_requests,0);proof.requests+=32;
   };
@@ -56,8 +64,8 @@ test('proxy tunnels recover after shared H2 cancellation, failed auth and cancel
     while(performance.now()-started<seconds*1000){await batch();proof.samples.push(resources());await delay(50);}
     for(const key of ['completed','cancelled_body','rejected','cancelled_handshake'])assert.equal(proof[key],proof.requests/4);
     await s.closeAsync();for(const p of [...normal,...stalled])await p.waitIdle();
-    proof.proxy_connections=normal.map((p,i)=>({scheme:p.scheme,accepted:p.accepted,stalled_accepted:stalled[i].accepted,cancelled_handshakes:stalled[i].cancelledHandshakes}));
-    assert.ok(proof.proxy_connections.every(p=>p.accepted>0&&p.cancelled_handshakes>0));
+    proof.proxy_connections=normal.map((p,i)=>({scheme:p.scheme,accepted:p.accepted,stalled_accepted:stalled[i].accepted,stall_started:stalled[i].stallStarted,cancelled_handshakes:stalled[i].cancelledHandshakes}));
+    assert.ok(proof.proxy_connections.every(p=>p.accepted>0&&p.cancelled_handshakes>=proof.requests/32&&p.cancelled_handshakes<=proof.requests/16&&p.stall_started===p.cancelled_handshakes));
     proof.final=resources();proof.final_v8=getHeapSpaceStatistics();
     assert.ok(proof.final.goroutines<=proof.baseline.goroutines+16);
     assert.ok(proof.final.descriptors_or_handles<=proof.baseline.descriptors_or_handles+64);
