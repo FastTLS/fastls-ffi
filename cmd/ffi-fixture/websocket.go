@@ -94,6 +94,15 @@ func (f *fixture) websocketRoute(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 	if mode == "handshake-stall" {
+		id := r.URL.Query().Get("id")
+		f.mu.Lock()
+		o := f.entries[id]
+		if o == nil {
+			o = &observation{release: make(chan struct{})}
+			f.entries[id] = o
+		}
+		o.Started = true
+		f.mu.Unlock()
 		select {
 		case <-r.Context().Done():
 		case <-time.After(10 * time.Second):
