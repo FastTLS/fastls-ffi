@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 const root=resolve(import.meta.dirname,'../..');
-const sources=['test_python.py','test_stability.py','test_network.py','test_pooling.py','test_cookies.py','test_decode_timeouts.py','test_upload.py','test_duplex.py','test_sse.py','test_notifications.py','test_proxy.py','test_request_options.py','test_websocket.py'];
+const sources=['test_python.py','test_stability.py','test_network.py','test_pooling.py','test_cookies.py','test_decode_timeouts.py','test_upload.py','test_duplex.py','test_sse.py','test_notifications.py','test_proxy.py','test_request_options.py','test_websocket.py','test_websocket_cookies.py'];
 const deferred=[];
 const infrastructure=['test_ci.py','test_ci_artifact.py','test_benchmarks.py','test_c_wait.py','test_c_websocket.py'];
 const unreviewed=readdirSync(resolve(root,'tests')).filter(file=>/^test_.*\.py$/.test(file)&&![...sources,...deferred,...infrastructure].includes(file));

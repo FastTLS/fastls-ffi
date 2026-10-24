@@ -155,6 +155,7 @@ def run(build_only=False, reuse_build=False):
         execute("proxy-source", [sys.executable, "tests/test_proxy.py"])
         execute("request-options-source", [sys.executable, "tests/test_request_options.py"])
         execute("websocket-source", [sys.executable, "tests/test_websocket.py"])
+        execute("websocket-cookies-source", [sys.executable, "tests/test_websocket_cookies.py"])
         execute("cookiejar", ["go", "test", "./cookiejar"], ROOT.parent / "fhttp")
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
@@ -178,6 +179,7 @@ def run(build_only=False, reuse_build=False):
         execute("proxy-wheel", [sys.executable, "scripts/test_wheel.py", "--proxy"])
         execute("request-options-wheel", [sys.executable, "scripts/test_wheel.py", "--request-options"])
         execute("websocket-wheel", [sys.executable, "scripts/test_wheel.py", "--websocket"])
+        execute("websocket-cookies-wheel", [sys.executable, "scripts/test_wheel.py", "--websocket-cookies"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")

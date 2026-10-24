@@ -29,6 +29,9 @@ async function consume(session: Session): Promise<void> {
   const message: string | Buffer = await ws.recv();
   void message;
   await ws.closeAsync(1000, 'done');
+  await session.websocket('wss://example.com', { cookieMode: 'manual' });
+  // @ts-expect-error Cookie modes are explicit strings.
+  session.websocket('wss://example.com', { cookieMode: 'automatic' });
   // @ts-expect-error WebSocket timeouts are explicit millisecond fields.
   session.websocket('wss://example.com', { timeoutMs: 1000 });
   await session.post('https://example.com', { params: [['tag', ['中文', 'a b']]], json: null });

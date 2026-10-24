@@ -242,7 +242,7 @@ npm run test:package
 测试使用真实动态库和本地靶场，覆盖 H1/H2、证书、连接池、Cookie、多值头、二进制、取消、超时、
 异常正文、64 MiB 下载、32 MiB 缓存限制和 128 路并发。安装包测试在临时项目安装 npm tarball，
 重新执行全部测试并检查包名导入和 TypeScript 声明。证据写入仓库 build/node-*.json。
-十三组Python套件的187个场景已有对应项，包含13项双工、23项SSE、21项通知和14项代理验收，连同原有16项，共203项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
+十四组Python套件的201个场景已有对应项，包含13项双工、23项SSE、21项通知和14项代理验收，连同原有16项，共217项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
 持续测试默认30秒，检查RSS、操作系统句柄/描述符、Go堆和goroutine回收。Linux当前Go/Node组合另跑300秒；设置 `FASTLS_NODE_SOAK_SECONDS=300` 后执行 `npm run test:soak` 可复现。
 
 ## 与Python的语言差异
@@ -259,7 +259,7 @@ CI 运行时还记录提交 SHA。测试前后会核对动态库未被替换。�
 构建本平台Go动态库后，运行 `npm run pack:native`，产物位于上级 `dist/`。
 例如Windows x64：`fasttls-fastls-0.6.0-dev.0-win32-x64.tgz`；Linux包名另带`-glibc`。
 在目标项目执行 `npm install <候选包绝对路径> --ignore-scripts`，随后即可 `new Session()`，无需Go、Python、编译器或FASTLS_LIBRARY。
-安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整203项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
+安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整217项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
 
 当前候选覆盖Windows x64、Linux glibc x64/arm64、macOS x64/arm64，Node22+。每个tarball只含一个系统/架构，不能将同名版本的这些变体当成可直接发布到npm的通用包。npm的os/cpu/libc字段限制安装目标；首次使用还检查平台、ABI声明、库SHA256及Linux的glibc版本。Linux最低glibc从ELF符号版本提取，macOS最低版本从Mach-O提取，具体要求及系统动态依赖见包内`native/manifest.json`，不将CI宿主机上的通过扩大为所有旧系统均已测试。musl不在当前范围。
 
@@ -289,7 +289,7 @@ Session和请求的`proxy`接受URL字符串或null。请求省略或undefined�
 
 代理测试使用Node测试进程中的独立、仅访问loopback的CONNECT/RFC1928/RFC1929靶场；SDK本身不依赖Python或代理辅助进程。十三组Python行为映射、源码及内置库安装包统一验收；语言适配见PARITY.md。
 
-`npm run test:proxy:soak`默认以32路并发运行60秒，轮换正常请求、共享H2流取消、错误认证和停滞握手取消；四种scheme分别使用真实loopback代理。FASTLS_NODE_PROXY_SOAK_SECONDS可设为1..300。Linux当前Go/Node组合执行该独立测试，沿用现有RSS、Go堆、goroutine及句柄阈值，逐批记录写入build/node-proxy-recovery-*.json，不计入203项主套件。
+`npm run test:proxy:soak`默认以32路并发运行60秒，轮换正常请求、共享H2流取消、错误认证和停滞握手取消；四种scheme分别使用真实loopback代理。FASTLS_NODE_PROXY_SOAK_SECONDS可设为1..300。Linux当前Go/Node组合执行该独立测试，沿用现有RSS、Go堆、goroutine及句柄阈值，逐批记录写入build/node-proxy-recovery-*.json，不计入217项主套件。
 
 代理独立长测与SSE长测一样，显式使用`--max-semi-space-size=16`固定测试进程的V8半空间上限。本机Windows Node24默认策略在持续分配时将new_space保留空间从4MiB扩大至128MiB，而Go堆、原生请求和隧道已回收。该参数仅作用于独立测试进程，不修改SDK用户进程的运行配置，也不放宽RSS或句柄阈值。证据保存运行参数、V8空间快照，以及阈值判定之后的完整GC诊断；判定使用GC前的最终采样。
 
@@ -355,6 +355,6 @@ send/ping/pong等到原生写入完成；同时最多一名读者和一名写入
 
 复用Session的profile、头、CA、代理与代理CA；params、请求级覆盖/显式直连沿用HTTP规则。wss始终验证证书和主机名，ALPN适配HTTP/1.1；不承诺适配后的Upgrade头序与浏览器完全一致。使用websocket_v1和三个可选ABI符号，旧库的HTTP继续可用。通知默认共享一条会话连接，poll可显式选择，不阻塞主线程或增加网络线程。
 
-首版不自动同步Cookie罐，请显式设置Cookie/Authorization/Origin。无压缩、H2/H3 CONNECT、握手重定向、自动心跳/重连或消息重放。ping只证明写入完成，可用info.websocket.pongs/last_pong_base64观察响应。协议细节与原生资源限制见根目录WEBSOCKET.md。
+0.10默认与HTTP共享Cookie罐，要求原生库提供websocket_cookies能力。cookieMode:"manual"可禁用本次握手的自动收发，并兼容旧库。显式Cookie头（包括空值）优先，默认仍接受握手Set-Cookie；Session的cookies:false禁用自动收发。域/路径/Secure/过期规则与HTTP一致。有效101及普通HTTP拒绝/重定向响应可写回；无效101或TLS失败不写回。Authorization/Origin由调用方设置。无压缩、H2/H3 CONNECT、握手重定向、自动心跳/重连或消息重放。ping只证明写入完成，可用info.websocket.pongs/last_pong_base64观察响应。协议细节与原生资源限制见根目录WEBSOCKET.md。
 
-npm run test:quick先运行类型、清单及WS/原生用例；test:ws针对21项WS；test:ws:soak运行独立60秒/32路资源回收。快速反馈不能替代203项源码/安装包完整回归与六组平台验收。
+npm run test:quick先运行类型、清单及WS/原生用例；test:ws针对21项WS和14项共享Cookie；test:ws:soak运行独立60秒/32路资源回收。快速反馈不能替代217项源码/安装包完整回归与六组平台验收。

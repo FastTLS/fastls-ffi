@@ -5,10 +5,13 @@ const seconds=Number(process.env.FASTLS_NODE_WS_SOAK_SECONDS??60);
 assert.ok(Number.isInteger(seconds)&&seconds>=1&&seconds<=300);
 test('mixed WebSocket messages, read cancellation, protocol rejection and close recover resources',{timeout:seconds*1000+45000},async t=>{
   const s=session(t),base=fixture.https2.replace(/^http/,'ws')+'/ws',proof={passed:false,node:process.version,platform:process.platform,arch:process.arch,runtime_args:process.execArgv,concurrency:32,requests:0,completed:0,cancelled:0,rejected:0,closed:0,samples:[]};let started;
+  await s.get(fixture.https2+'/cookie-set',{params:{name:'login',value:'yes'}});
+  proof.session_cookies=true;
   const batch=async()=>{
     const results=await Promise.allSettled(Array.from({length:32},async(_,i)=>{
-      if(i%4===2){await assert.rejects(s.websocket(base+'?mode=hidden-compression'),/./);proof.rejected++;return;}
-      const controller=new AbortController(),ws=await s.websocket(base,{signal:controller.signal,maxMessageBytes:65536});
+      if(i%4===2){await assert.rejects(s.websocket(base,{params:{mode:'hidden-compression',set_cookie:'poison=no; Path=/'}}),/./);assert.equal(s.cookies.get('poison',fixture.https2),undefined);proof.rejected++;return;}
+      const controller=new AbortController(),ws=await s.websocket(base,{params:{mode:'cookie-auth',set_cookie:'roundtrip=yes; Path=/'},signal:controller.signal,maxMessageBytes:65536});
+      assert.equal(s.cookies.get('roundtrip',fixture.https2),'yes');
       try{
         if(i%4===1){const rejected=assert.rejects(ws.recv(),/aborted/);controller.abort();await rejected;proof.cancelled++;}
         else if(i%4===3){await ws.closeAsync(4001,'done');assert.equal(ws.closeCode,4001);proof.closed++;}

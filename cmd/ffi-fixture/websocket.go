@@ -81,15 +81,30 @@ func readWS(reader *bufio.Reader) (byte, []byte, error) {
 }
 
 func (f *fixture) websocketRoute(w http.ResponseWriter, r *http.Request) bool {
-	if r.URL.Path != "/ws" {
+	if r.URL.Path != "/ws" && r.URL.Path != "/private/ws" && r.URL.Path != "/ws/deep" {
 		return false
 	}
 	mode := r.URL.Query().Get("mode")
-	if mode == "reject" {
+	setCookies := r.URL.Query()["set_cookie"]
+	for _, value := range setCookies {
+		if strings.ContainsAny(value, "\r\n") {
+			http.Error(w, "bad fixture cookie", 400)
+			return true
+		}
+		w.Header().Add("Set-Cookie", value)
+	}
+	if mode == "cookie-auth" {
+		cookie, err := r.Cookie("login")
+		if err != nil || cookie.Value != "yes" {
+			http.Error(w, "missing login cookie", 403)
+			return true
+		}
+	}
+	if mode == "reject" || mode == "cookie-reject" {
 		http.Error(w, "not upgraded", 403)
 		return true
 	}
-	if mode == "redirect" {
+	if mode == "redirect" || mode == "cookie-redirect" {
 		http.Redirect(w, r, "/ws", 302)
 		return true
 	}
@@ -128,10 +143,13 @@ func (f *fixture) websocketRoute(w http.ResponseWriter, r *http.Request) bool {
 	c.SetDeadline(time.Now().Add(60 * time.Second))
 	digest := sha1.Sum([]byte(r.Header.Get("Sec-Websocket-Key") + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
 	accept := base64.StdEncoding.EncodeToString(digest[:])
-	if mode == "bad-accept" {
+	if mode == "bad-accept" || mode == "cookie-bad-accept" {
 		accept = "invalid"
 	}
 	fmt.Fprintf(rw, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\nX-WS-Protocol: %s\r\n", accept, r.Proto)
+	for _, value := range setCookies {
+		fmt.Fprintf(rw, "Set-Cookie: %s\r\n", value)
+	}
 	if mode == "bad-subprotocol" {
 		fmt.Fprint(rw, "Sec-WebSocket-Protocol: unoffered\r\n")
 	}
@@ -141,7 +159,7 @@ func (f *fixture) websocketRoute(w http.ResponseWriter, r *http.Request) bool {
 	if r.Header.Get("Sec-Websocket-Protocol") != "" {
 		fmt.Fprintf(rw, "Sec-WebSocket-Protocol: %s\r\n", strings.TrimSpace(strings.Split(r.Header.Get("Sec-Websocket-Protocol"), ",")[0]))
 	}
-	if mode == "compression" {
+	if mode == "compression" || mode == "cookie-compression" {
 		fmt.Fprint(rw, "Sec-WebSocket-Extensions: permessage-deflate\r\n")
 	}
 	if mode == "hidden-compression" {
@@ -239,7 +257,7 @@ func (f *fixture) websocketRoute(w http.ResponseWriter, r *http.Request) bool {
 			return true
 		}
 		if flags&128 != 0 {
-			if mode == "inspect" {
+			if mode == "inspect" || r.URL.Query().Get("inspect") == "1" {
 				alpn := ""
 				if r.TLS != nil {
 					alpn = r.TLS.NegotiatedProtocol

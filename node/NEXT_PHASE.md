@@ -1,5 +1,11 @@
 # Node 下一阶段：WebSocket 与并行验收
 
+## 0.10 当前批次：共享 Cookie
+
+0.9 WebSocket 与并行 CI 已完成。0.10 继续根计划 B：共享桥接层复用原生 CookieStore，Python 与 Node 同时接入；保持 ABI 1 及依赖固定版本。新增 websocket_cookies 能力门禁，默认 session 模式；manual 模式用于显式 Cookie 和旧库兼容。
+
+本地已通过：Go bridge、Python Cookie 源码/wheel 各14项、原 WS 21项、Node 源码217项，以及60秒/32路含 Cookie 认证与污染防护的 WS 长测。安装包、完整跨平台 CI 与候选产物验收分别记录实际结果，不能以本地通过替代。完整映射为201项Python行为、14套件、41项语言适配，加16项Node专有检查共217项。未公开发布。
+
 日期：2026-10-24。本文为实施计划；未实现项和预计耗时不作为验收结果。
 
 ## 已核验的起点
