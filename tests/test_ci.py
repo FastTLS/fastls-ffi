@@ -16,6 +16,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DependencyGate(unittest.TestCase):
+    def test_preflight_can_be_loaded_without_scripts_on_import_path(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            code = "import runpy; assert callable(runpy.run_path(" + repr(str(ROOT / "scripts/ci.py")) + ")[\"preflight\"])"
+            process = subprocess.run([sys.executable, "-I", "-c", code], cwd=temporary, capture_output=True, text=True)
+            self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+
     def resolve(self, overrides):
         env = os.environ.copy()
         env.pop("GITHUB_STEP_SUMMARY", None)

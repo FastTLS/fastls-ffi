@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SUITES = ("python", "stability", "network", "pooling", "cookies", "decode-timeouts",
@@ -21,6 +22,13 @@ def main():
     wheels = list((ROOT / "dist").glob("*.whl"))
     if len(wheels) != 1:
         raise SystemExit("expected exactly one platform wheel in dist/")
+    with zipfile.ZipFile(wheels[0]) as wheel:
+        descriptor = wheel.read(next(n for n in wheel.namelist() if n.endswith(".dist-info/WHEEL"))).decode()
+        if "Root-Is-Purelib: false" not in descriptor or "Tag: py3-none-any" in descriptor:
+            raise SystemExit("native candidate must have a platform tag and non-pure installation layout")
+        library = "fastls.dll" if sys.platform == "win32" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
+        if "fastls/_lib/" + library not in wheel.namelist():
+            raise SystemExit("native candidate is missing its platform library in platlib")
     env = os.environ.copy()
     for name in ("FASTLS_LIBRARY", "PYTHONPATH", "PYTHONHOME", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
         env.pop(name, None)
