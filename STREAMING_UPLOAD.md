@@ -46,4 +46,4 @@ int fastls_write(uint64_t handle, void *buffer, size_t length, int end);
 
 ## 验证范围
 
-tests/test_upload.py共16项真实动态库验收，包含H1/H2的64MiB同步上传及SHA256、64MiB异步上传、文件及大正文、空流/超大块、慢接收方、取消及H2并行请求、生产者异常、提前拒绝、重定向、总时限、写入停顿及进度重置。源码与wheel均纳入六组原生Actions，原有回归及Linux300秒持续测试继续执行。Go队列复制/背压/EOF/取消与阻塞正文关闭回归纳入race。fhttp修复了提前拒绝或取消时仅唤醒流量控制、无法解除Body.Read阻塞的问题；现在在锁外关闭正文，保留提前响应，并保证只关闭一次。证据文件为build/stability-upload-*.json。
+tests/test_upload.py共16项真实动态库验收，包含H1/H2的64MiB同步上传及SHA256、64MiB异步上传、文件及大正文、空流/超大块、慢接收方、取消及H2并行请求、生产者异常、提前拒绝、重定向、总时限、写入停顿及进度重置。源码与wheel均纳入六组原生Actions，原有回归及Linux300秒持续测试继续执行。Go队列复制/背压/EOF/取消与阻塞正文关闭回归纳入race；ftransport在取消或提前响应时关闭正文源并保持请求/响应双向生命周期。证据文件为build/stability-upload-*.json。

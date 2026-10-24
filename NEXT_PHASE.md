@@ -5,7 +5,7 @@
 ## 已验收基线
 
 - fastls-ffi：`7bea602e3326ba478cae70cd512c59fe1041be84`。
-- 上游固定版本：fastls `7dd6fcd9bdc4f47bae145afab52c70a23f7eb701`、fhttp `e027ce786984d3e7e831b0d10c54875dec746b35`、imitate `28b32d452256e3acbdb2e904869e5c4331bf0177`，以 `ci/dependencies.json` 为准。
+- 上游固定版本：fastls、ftransport、imitate 均以 `ci/dependencies.json` 的完整提交 SHA 为准；F3 已移除 fhttp 依赖。
 - 六组原生平台检查：[Actions 40069488878](https://github.com/FastTLS/fastls-ffi/actions/runs/40069488878)。覆盖 Windows/Linux/macOS，amd64/arm64 已有五种组合，以及 Linux 的最低 Go/Python 组合。
 - WebSocket 本轮验收包含源码/wheel 共 252 项 Python 检查、六组独立 C 调用；其 HTTP/1.1、消息大小、压缩及 Cookie 边界见 [WEBSOCKET.md](WEBSOCKET.md)。
 - HTTP 基准短版回归：[Actions 40069488637](https://github.com/FastTLS/fastls-ffi/actions/runs/40069488637)。短版正确性结果不能替代正式性能测量。

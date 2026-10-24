@@ -5,12 +5,12 @@ Fastls 的 C ABI 动态库和 Python SDK。当前是未发布的开发版本。
 
 ## 本地构建
 
-需要 Go 1.24+ 与目标平台的 cgo C 编译器。当前上游依赖是未发布候选，需要本地兄弟仓库：
+需要 Go 1.26+ 与目标平台的 cgo C 编译器。当前上游依赖是未发布候选，需要本地兄弟仓库：
 
 ```text
 workspace/
   fastls/          # 含 profile 子模块与本阶段核心改动
-  fhttp/
+  ftransport/
   imitate/
   fastls-ffi/
 ```

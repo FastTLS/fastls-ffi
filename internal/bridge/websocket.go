@@ -19,8 +19,8 @@ import (
 
 	fastls "github.com/FastTLS/fastls"
 	use "github.com/FastTLS/fastls/imitate"
-	http "github.com/FastTLS/fhttp"
 	"github.com/gorilla/websocket"
+	"net/http"
 )
 
 const MaxWSMessage = 16 * 1024 * 1024

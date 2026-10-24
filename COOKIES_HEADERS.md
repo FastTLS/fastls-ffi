@@ -43,6 +43,6 @@ Set-Cookie、Link等字段不会按逗号或旧的/,/分隔符拆分；每个解
 
 ## 验收
 
-tests/test_cookies.py包含13项真实动态库测试，覆盖H1/H2多值头、发送范围、服务端覆盖删除、Max-Age及Expires、重定向、手动头优先、会话/profile边界、禁用、32路异步更新、流式首块前可用的Cookie及非法输入。核心还检查公共后缀拒绝与并发Clear，并纳入race；底层fhttp/cookiejar完整单元测试为CI必需项。
+tests/test_cookies.py包含13项真实动态库测试，覆盖H1/H2多值头、发送范围、服务端覆盖删除、Max-Age及Expires、重定向、手动头优先、会话/profile边界、禁用、32路异步更新、流式首块前可用的Cookie及非法输入。核心还检查公共后缀拒绝与并发Clear，并纳入race；Cookie实现已迁移到标准库cookiejar。
 
 六组原生CI分别执行源码和wheel套件，并继续运行原有基础、连接池、网络异常、64MiB下载和Linux300秒持续测试；JSON证据随artifact保存到build/stability-cookies-*.json。
