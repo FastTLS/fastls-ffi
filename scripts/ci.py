@@ -118,7 +118,10 @@ def artifact_inputs():
     wheels = list((ROOT / "dist").glob("*.whl"))
     if len(wheels) != 1:
         raise RuntimeError("expected exactly one candidate wheel")
-    return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths + wheels}
+    sdists = list((ROOT / "dist").glob("*.tar.gz"))
+    if len(sdists) != 1:
+        raise RuntimeError("expected exactly one candidate sdist")
+    return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths + wheels + sdists}
 
 
 def save_inputs(target, sources):
@@ -150,7 +153,7 @@ def run(stage="all"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     env["CGO_ENABLED"] = "1"
     try:
-        target = preflight(env) if stage in ("all", "build", "contracts", "race") else host_target()
+        target = preflight(env) if stage in ("all", "build", "contracts", "race", "release") else host_target()
     except (RuntimeError, OSError, subprocess.SubprocessError) as error:
         summary(str(error)); return 1
     evidence = ROOT / "build" / ("ci-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))
@@ -174,12 +177,16 @@ def run(stage="all"):
             sdk_before = sdk_inputs()
             for wheel in (ROOT / "dist").glob("*.whl"):
                 wheel.unlink()
+            for sdist in (ROOT / "dist").glob("*.tar.gz"):
+                sdist.unlink()
             execute("build", [sys.executable, "scripts/build.py", "--local"])
             env["GOWORK"] = str(ROOT / "go.work")
+            execute("release-materials", [sys.executable, "scripts/release_materials.py", "materials"], command_env=env)
             execute("fixture-build", ["go", "build", "-o", "build/ffi-fixture.exe" if os.name == "nt" else "build/ffi-fixture", "./cmd/ffi-fixture"])
             execute("native-audit", [sys.executable, "scripts/native_audit.py", str(ROOT / "dist" / library_name())])
             wheel_env = dict(env, FASTLS_BUNDLE_LIBRARY=str(ROOT / "dist" / library_name()))
             execute("wheel-build", [sys.executable, "-m", "pip", "wheel", "./python", "--no-deps", "-w", "dist"], command_env=wheel_env)
+            execute("sdist-build", [sys.executable, "setup.py", "sdist", "--dist-dir", str(ROOT / "dist")], ROOT / "python")
             if sdk_inputs() != sdk_before:
                 raise RuntimeError("SDK inputs changed during build; rebuild the candidate")
             save_inputs(target, sources)
@@ -228,6 +235,9 @@ def run(stage="all"):
             execute("websocket-source", [sys.executable, "tests/test_websocket.py"])
         if stage in ("all", "wheel"):
             execute("wheel-tests", [sys.executable, "scripts/test_wheel.py", "--all"])
+        if stage in ("all", "release"):
+            execute("release-artifacts", [sys.executable, "scripts/release_materials.py", "artifacts"])
+            execute("release-install", [sys.executable, "scripts/test_release.py"])
         if stage == "race" or (stage == "all" and env.get("FASTLS_CI_RACE", "").lower() == "true"):
             execute("race-bridge", ["go", "test", "-race", "./internal/bridge"])
             execute("race-core", ["go", "test", "-race", "./..."], FASTLS_ROOT)
@@ -250,6 +260,6 @@ def run(stage="all"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=("resolve", "run"))
-    parser.add_argument("--stage", choices=("all", "build", "contracts", "source", "wheel", "race", "soak"), default="all")
+    parser.add_argument("--stage", choices=("all", "build", "contracts", "source", "wheel", "release", "race", "soak"), default="all")
     args = parser.parse_args()
     raise SystemExit(resolve() if args.command == "resolve" else run(args.stage))
