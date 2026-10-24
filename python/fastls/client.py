@@ -357,6 +357,18 @@ class Session:
     def post(self, url, **kwargs):
         return self.request("POST", url, **kwargs)
 
+    def ws_connect(self, url, **kwargs):
+        from .websocket import connect
+        return connect(self, url, **kwargs)
+
+    @contextmanager
+    def websocket(self, url, **kwargs):
+        ws = self.ws_connect(url, **kwargs)
+        try:
+            yield ws
+        finally:
+            ws.close()
+
     def close(self):
         with self._lock:
             if self._closed:
@@ -605,6 +617,18 @@ class AsyncSession(Session):
 
     async def post(self, url, **kwargs):
         return await self.request("POST", url, **kwargs)
+
+    async def ws_connect(self, url, **kwargs):
+        from .websocket import aconnect
+        return await aconnect(self, url, **kwargs)
+
+    @asynccontextmanager
+    async def websocket(self, url, **kwargs):
+        ws = await self.ws_connect(url, **kwargs)
+        try:
+            yield ws
+        finally:
+            await ws.aclose()
 
     async def aclose(self):
         producers = list(self._producers.values())

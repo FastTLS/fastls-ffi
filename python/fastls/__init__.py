@@ -7,3 +7,5 @@ from .sse import ServerSentEvent, SSEStream, AsyncSSEStream
 
 __all__ = ["Session", "AsyncSession", "Response", "AsyncResponse", "FastlsError", "Headers", "Cookies", "Timeout", "FastlsTimeoutError", "FastlsDecodeError", "ServerSentEvent", "SSEStream", "AsyncSSEStream"]
 __all__.append("FastlsHTTPError")
+from .websocket import WebSocket, AsyncWebSocket, WebSocketClosed
+__all__ += ["WebSocket", "AsyncWebSocket", "WebSocketClosed"]
