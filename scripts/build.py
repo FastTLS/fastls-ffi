@@ -58,7 +58,7 @@ def main():
         versions = {
             "github.com/FastTLS/fastls": "v0.1.0-dev.20261023.8",
             "github.com/FastTLS/fastls/profile": "v0.1.0-dev.20261023.8",
-            "github.com/FastTLS/ftransport": "v0.0.0-20261024124311-72f0fe69e21f",
+            "github.com/FastTLS/ftransport": "v0.0.0-20261024124928-a1916e4d2523",
             "github.com/FastTLS/imitate": "v0.1.0-dev.20261023.8",
         }
         for path in modules[1:]:
