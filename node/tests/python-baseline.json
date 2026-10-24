@@ -1,7 +1,7 @@
 {
-  "revision": "e369f1c19f2e7215fea0b0c7be4d12515bb23cb6",
+  "revision": "1990a6bdb59fce5cc3084297777651592b12c76b",
   "files": {
-    "test_python.py": "12e0447545ee40107a88b4cd2208936c90869dacfb53c70927002b78e0af2c73",
+    "test_python.py": "5874e289a751cf28da52683e0657806bfd9d41278b52f74bf1af15b018d21f41",
     "test_stability.py": "0ad5d3277b48eed4edfe5e9b99e333ce9d70b12e1242f18ad1db0b40ee79a13d",
     "test_network.py": "fd2e2bf53b7b3652a2c0514f49f7f168a8b541d8a1b462a4b441a3e833e0eba6",
     "test_pooling.py": "cb067c75a805cce7ba6e46badf9c1cbe5d6489a1b8b871cbb051655196cadfc8",
@@ -11,6 +11,6 @@
     "test_duplex.py": "570df447c0b73acc62875263b9538430e28d2fec91d0e3555ffec2f84ccf6e8d",
     "test_sse.py": "d50638d18da1c22ae9795595c94e0081fbe996849d51f8fc1e8e99d9e21ae09b",
     "test_notifications.py": "1b35c407a5037bacf00391f0ee94b8d6da4daae8cd29f090535d0e3fed184a4e",
-    "test_proxy.py": "462ea92eb4a11432e94b842bb5b9964c83e8a54edb21629c11518d2d6a8c2867"
+    "test_proxy.py": "4278318c2c360edf38a6c80995cd1286a99f627b130fdb97a8e7c3f2a4917212"
   }
 }

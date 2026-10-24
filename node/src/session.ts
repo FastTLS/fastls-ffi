@@ -13,6 +13,8 @@ import { Notifier } from "./notifications.js";
 export interface RequestOptions {
   /** Undefined inherits the session proxy; null or an empty string connects directly. */
   proxy?: string | null;
+  /** Undefined inherits proxy trust; null uses system roots. Only HTTPS proxies use this file. */
+  proxyCaFile?: string | null;
   profile?: string;
   headers?: Record<string, string>;
   /** Total deadline including response body consumption, in milliseconds. */
@@ -29,8 +31,10 @@ export interface RequestOptions {
 export type DuplexOptions = Omit<RequestOptions, "body" | "duplex">;
 
 export interface SessionOptions {
-  /** HTTP CONNECT, socks5 (local DNS), or socks5h (proxy DNS) URL. */
+  /** HTTP/HTTPS CONNECT, socks5 (local DNS), or socks5h (proxy DNS) URL. */
   proxy?: string | null;
+  /** Private roots for proxy TLS, independent of the target's caFile. */
+  proxyCaFile?: string | null;
   notifications?: "auto" | "required" | "poll";
   profile?: string;
   headers?: Record<string, string>;
@@ -68,6 +72,14 @@ function proxyValue(value: unknown): string | null | undefined {
   return value as string | null | undefined;
 }
 
+function proxyTrust(path: string | null | undefined): string | undefined {
+  if (path === null || path === undefined) return undefined;
+  if (typeof path !== "string") throw new TypeError("proxyCaFile must be a path string or null");
+  const pem = readFileSync(path, "utf8");
+  if (!pem.trim()) throw new TypeError("proxyCaFile is empty");
+  return pem;
+}
+
 function mergeHeaders(...sources: (Record<string, string> | undefined)[]): Record<string, string> {
   const merged = Object.create(null) as Record<string, string>;
   for (const source of sources) {
@@ -92,6 +104,7 @@ export class Session {
   private readonly handle: bigint;
   private readonly profile: string;
   private readonly proxy: string | null | undefined;
+  private readonly proxyCaPem: string | undefined;
   private readonly headers: Record<string, string>;
   private readonly timeouts: Record<string, number>;
   private readonly decodeContent: boolean;
@@ -105,6 +118,7 @@ export class Session {
 
   constructor(options: SessionOptions = {}) {
     this.proxy = proxyValue(options.proxy);
+    this.proxyCaPem = proxyTrust(options.proxyCaFile);
     const notifications = options.notifications === undefined ? "auto" : options.notifications;
     if (!["auto", "required", "poll"].includes(notifications)) throw new TypeError("notifications must be auto, required or poll");
     this.profile = options.profile ?? "chrome/156/windows";
@@ -182,6 +196,12 @@ export class Session {
     if (proxy && !this.native.call<string[]>("features").includes("proxy_tunnels")) {
       throw new FastlsError("proxy support requires a newer Fastls native library");
     }
+    const httpsProxy = proxy?.toLowerCase().startsWith("https://") ?? false;
+    if (httpsProxy && !this.native.call<string[]>("features").includes("https_proxy_tls")) {
+      throw new FastlsError("HTTPS proxy support requires a newer Fastls native library");
+    }
+    const proxyCaPem = !httpsProxy ? undefined : options.proxyCaFile === undefined
+      ? this.proxyCaPem : proxyTrust(options.proxyCaFile);
     if (options.duplex !== undefined && typeof options.duplex !== "boolean") throw new TypeError("duplex must be a boolean");
     const duplex = options.duplex ?? false;
     if (duplex && !this.native.call<string[]>("features").includes("duplex_h2")) {
@@ -199,7 +219,7 @@ export class Session {
     }
     const started = performance.now();
     const handle = this.native.start({
-      session: this.handle, url, method, headers, proxy: proxy || undefined,
+      session: this.handle, url, method, headers, proxy: proxy || undefined, proxy_ca_pem: proxyCaPem,
       profile: options.profile ?? this.profile,
       ...timeouts, decode_content: decodeContent, max_decoded_bytes: maxDecodedBytes,
       disable_redirect: duplex || options.allowRedirects === false,

@@ -1,6 +1,6 @@
 import fastls = require('@fasttls/fastls');
 
-const options: fastls.SessionOptions = { timeoutMs: 1000, cookies: false, notifications: 'required', proxy: 'http://127.0.0.1:8080' };
+const options: fastls.SessionOptions = { timeoutMs: 1000, cookies: false, notifications: 'required', proxy: 'https://127.0.0.1:8080', proxyCaFile: '/path/to/proxy-ca.pem' };
 function consume(session: fastls.Session): Promise<fastls.Response> {
   return session.get('https://example.com', { headers: { X: 'value' }, proxy: null });
 }

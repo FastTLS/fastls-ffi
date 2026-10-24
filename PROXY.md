@@ -51,6 +51,8 @@ python scripts/test_wheel.py --proxy
 
 ## Node.js
 
-Node 0.7使用相同的`proxy_tunnels`能力，无新增ABI函数。`new Session({proxy: url})`设置默认代理；`session.get(url, {proxy: null})`显式直连；省略或undefined继承默认值，空字符串也直连。请求覆盖同样适用于stream、sse和duplex。
+Node 0.7使用相同的`proxy_tunnels`及`https_proxy_tls`能力，无新增ABI函数。`new Session({proxy: url})`设置默认代理；`session.get(url, {proxy: null})`显式直连；省略或undefined继承默认值，空字符串也直连。请求覆盖同样适用于stream、sse和duplex。
 
-源码及内置库安装包各执行10项对应代理用例，保留Python原测试ID；Node用同步/异步生产者和即时/慢速消费者覆盖Python的同步/异步组合。代理靶场由Node测试代码独立实现，安装验收继续清除工具搜索路径并禁用安装脚本。完整范围与类型示例见[node/README.md](node/README.md)及[node/PARITY.md](node/PARITY.md)。
+源码及内置库安装包各执行14项对应代理用例，保留Python原测试ID；Node用同步/异步生产者和即时/慢速消费者覆盖Python的同步/异步组合。代理靶场由Node测试代码独立实现，安装验收继续清除工具搜索路径并禁用安装脚本。完整范围与类型示例见[node/README.md](node/README.md)及[node/PARITY.md](node/PARITY.md)。
+
+Node的`proxyCaFile`与Python的`proxy_ca_file`对应：Session默认值在构造时读取；请求undefined继承，路径重新读取，null使用系统根。该信任仅用于HTTPS代理，独立于目标`caFile`；HTTP/SOCKS/直连不发送proxy_ca_pem。Node验收同样包含错误代理CA、错误目标CA、错误代理主机名、禁止明文回退、TLS与CONNECT握手超时取消及无效CA不登记请求。
