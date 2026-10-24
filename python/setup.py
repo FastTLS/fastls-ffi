@@ -11,9 +11,16 @@ from pathlib import Path
 import shutil
 import sys
 
-from setuptools import setup
+from setuptools import Distribution, setup
 from setuptools.command.build_py import build_py
 from wheel.bdist_wheel import bdist_wheel
+
+
+class NativeDistribution(Distribution):
+    def has_ext_modules(self):
+        # Also choose platlib for installation, rather than placing a native
+        # bundle in the wheel's .data/purelib relocation directory.
+        return bool(os.environ.get("FASTLS_BUNDLE_LIBRARY"))
 
 
 class NativeBuild(build_py):
@@ -55,4 +62,4 @@ class PlatformWheel(bdist_wheel):
         return python, abi, tag
 
 
-setup(cmdclass={"build_py": NativeBuild, "bdist_wheel": PlatformWheel})
+setup(distclass=NativeDistribution, cmdclass={"build_py": NativeBuild, "bdist_wheel": PlatformWheel})

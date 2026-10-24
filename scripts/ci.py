@@ -12,8 +12,6 @@ import sys
 import hashlib
 import platform
 
-from ci_runtime import EvidenceRunner
-
 ROOT = Path(__file__).resolve().parents[1]
 REFS = ("fastls_ref", "fhttp_ref", "imitate_ref")
 TARGETS = [
@@ -137,6 +135,10 @@ def verify_inputs(target, sources):
 
 
 def run(stage="all"):
+    # benchmarks/prepare.py loads preflight with runpy, without adding scripts
+    # to sys.path. Keep runner-only imports out of that read-only entry point.
+    from ci_runtime import EvidenceRunner
+
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
