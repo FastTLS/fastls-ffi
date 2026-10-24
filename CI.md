@@ -96,6 +96,6 @@ SSE另增加源码/wheel各23项验收，覆盖逐字节与所有分割位置、
 ## 上游完整测试的范围
 
 本地试跑完整fhttp/http2测试已记录失败，包括依赖用户目录charles_cert.pem的用例、原版Accept-Encoding假设、TLS1.0/1.1默认版本变化及PushPromise的Host断言。
-原始失败日志保留于build/ci-20261023T061821035136Z/fhttp-h2.log。
+原始失败日志保留于build/ci-20261023T061821035135Z/fhttp-h2.log。
 默认必需检查采用现有Fastls验收入口相同的可移植HTTP2契约范围，不宣称fhttp完整测试已通过。
 需要诊断完整上游测试时，可在workflow_dispatch勾选full_fhttp_tests；它会在各组完成封装测试后附加完整HTTP2测试，任何失败都会使该次运行失败。也可本地设置FASTLS_FULL_FHTTP_TESTS=true运行。
