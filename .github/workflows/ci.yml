@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Unique installable development versions; this workflow never publishes.
+  FASTLS_PACKAGE_VERSION: 0.1.0.dev${{ github.run_number }}
+
 concurrency:
   group: ffi-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -173,6 +177,19 @@ jobs:
           path: workspace/fastls-ffi
       - name: Verify inputs and execute selected stage
         run: python scripts/ci.py run --stage ${{ matrix.stage }}
+      - name: Retain certified development snapshot
+        if: matrix.stage == 'release'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: development-snapshot-${{ github.run_number }}-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+          path: |
+            workspace/fastls-ffi/dist/*.whl
+            workspace/fastls-ffi/dist/*.tar.gz
+            workspace/fastls-ffi/dist/build-info.json
+            workspace/fastls-ffi/dist/native-audit.json
+            workspace/fastls-ffi/dist/development-snapshot.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Retain incremental evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

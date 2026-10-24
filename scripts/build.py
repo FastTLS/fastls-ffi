@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import sys
 
+from package_version import package_version
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -83,6 +85,7 @@ def main():
         shutil.copyfile(generated_header, header)
     (out / "build-info.json").write_text(json.dumps({
         "platform": platform.platform(), "machine": platform.machine(), "local_dependencies": args.local,
+        "package_version": package_version(),
         "go": subprocess.check_output(["go", "version"], text=True).strip(),
         "cc": env.get("CC", "gcc"), "abi": 1,
         "workspace_source": before,
