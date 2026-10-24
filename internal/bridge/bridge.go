@@ -59,6 +59,7 @@ type Input struct {
 }
 
 type Info struct {
+	WebSocket        *WebSocketInfo      `json:"websocket,omitempty"`
 	UploadDiscarded  bool                `json:"upload_discarded,omitempty"`
 	WireHeaderValues map[string][]string `json:"wire_header_values,omitempty"`
 	Decoded          bool                `json:"decoded"`
@@ -77,6 +78,7 @@ type chunk struct {
 	err  error
 }
 type request struct {
+	ws       *webSocket
 	id       uint64
 	eventMu  sync.Mutex
 	changed  chan struct{}
@@ -182,8 +184,12 @@ func (e *Engine) Stats() map[string]any {
 		}
 	}
 	var buffered, uploads int64
+	var wsWrites int64
 	for _, r := range e.requests {
 		buffered += r.buffered.Load()
+		if r.ws != nil {
+			wsWrites += r.ws.bufferedWrite.Load()
+		}
 		if r.upload != nil {
 			r.upload.mu.Lock()
 			uploads += int64(len(r.upload.data))
@@ -197,8 +203,9 @@ func (e *Engine) Stats() map[string]any {
 		"open_sessions": openSessions, "session_pools": poolCount,
 		"notifiers":           notifiers,
 		"buffered_body_bytes": buffered, "goroutines": runtime.NumGoroutine(),
-		"buffered_upload_bytes": uploads,
-		"heap_alloc_bytes":      mem.HeapAlloc, "heap_inuse_bytes": mem.HeapInuse}
+		"buffered_upload_bytes":   uploads,
+		"buffered_ws_write_bytes": wsWrites,
+		"heap_alloc_bytes":        mem.HeapAlloc, "heap_inuse_bytes": mem.HeapInuse}
 }
 
 func (e *Engine) Start(raw []byte) (uint64, error) {
@@ -473,7 +480,11 @@ func (e *Engine) Info(id uint64) (Info, error) {
 	if r.info.State != "eof" && r.info.State != "error" && r.ctx.Err() != nil {
 		r.setErrorLocked(r.ctx.Err())
 	}
-	return r.info, nil
+	info := r.info
+	if r.ws != nil {
+		info.WebSocket = r.ws.snapshot()
+	}
+	return info, nil
 }
 
 // Read never waits on network I/O and copies into caller-owned storage.
@@ -483,6 +494,9 @@ func (e *Engine) Read(id uint64, dst []byte) (int, int) {
 	}
 	r, err := e.get(id)
 	if err != nil {
+		return 0, Invalid
+	}
+	if r.ws != nil {
 		return 0, Invalid
 	}
 	r.readMu.Lock()

@@ -39,6 +39,9 @@ func (r *request) ready(mask uint32) bool {
 	if state == "error" || (mask&WaitHeaders != 0 && state != "pending") {
 		return true
 	}
+	if r.ws != nil {
+		return r.ws.ready(mask, state, r.buffered.Load())
+	}
 	if mask&WaitRead != 0 {
 		r.readMu.Lock()
 		ready := len(r.rest) > 0 || r.terminal != 0 || len(r.chunks) > 0 || state == "eof"

@@ -48,6 +48,7 @@ def preflight(env):
         "fhttp/http2/receive_window_test.go": ("func TestReceiveWindowMatchesWire", "func TestReceiveWindowClosedStreamDataRefund", "func TestReceiveWindowClosedStreamDataOverrun"),
         "fastls/session.go": ("func NewSession", "Duplex"),
         "fastls/proxy_transport.go": ("func ValidateProxy", "type tunnelProxyDialer"),
+        "fastls/websocket_context.go": ("func DialWebSocketContext", "wsHandshakeConn"),
         "fastls/duplex_test.go": ("func TestDuplexEarlyHeadersUploadLifetime",),
         "fastls/cookie_store.go": ("func NewCookieStore",),
         "fastls/timeouts.go": ("type Timeouts struct",),
@@ -126,6 +127,7 @@ def run():
         execute("notifications-source", [sys.executable, "tests/test_notifications.py"])
         execute("proxy-source", [sys.executable, "tests/test_proxy.py"])
         execute("request-options-source", [sys.executable, "tests/test_request_options.py"])
+        execute("websocket-source", [sys.executable, "tests/test_websocket.py"])
         execute("cookiejar", ["go", "test", "./cookiejar"], ROOT.parent / "fhttp")
         for name, relative, pattern in (("profile", "fastls/profile", "./..."), ("generator", "imitate", "./...")):
             execute(name, ["go", "test", pattern], ROOT.parent / relative)
@@ -148,6 +150,7 @@ def run():
         execute("notifications-wheel", [sys.executable, "scripts/test_wheel.py", "--notifications"])
         execute("proxy-wheel", [sys.executable, "scripts/test_wheel.py", "--proxy"])
         execute("request-options-wheel", [sys.executable, "scripts/test_wheel.py", "--request-options"])
+        execute("websocket-wheel", [sys.executable, "scripts/test_wheel.py", "--websocket"])
         dist = ROOT / "dist"
         library = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
         executable = dist / ("c-profiles.exe" if os.name == "nt" else "c-profiles")
@@ -162,6 +165,9 @@ def run():
         waiter = dist / ("c-wait.exe" if os.name == "nt" else "c-wait")
         execute("c-wait-build", compiler + ["examples/c/wait.c", "-I", str(dist), str(dist / library), "-o", str(waiter)])
         execute("c-wait-execute", [sys.executable, "tests/test_c_wait.py"], command_env=runtime_env)
+        ws_consumer = dist / ("c-websocket.exe" if os.name == "nt" else "c-websocket")
+        execute("c-websocket-build", compiler + ["examples/c/websocket.c", "-I", str(dist), str(dist / library), "-o", str(ws_consumer)])
+        execute("c-websocket-execute", [sys.executable, "tests/test_c_websocket.py"], command_env=runtime_env)
         if env.get("FASTLS_CI_RACE", "").lower() == "true":
             soak_env = dict(env, FASTLS_STABILITY_SECONDS="300", FASTLS_TEST_LABEL="extended")
             execute("extended-soak", [sys.executable, "tests/test_stability.py", "Stability.test_soak_and_resource_recovery"], command_env=soak_env)

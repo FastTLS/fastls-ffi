@@ -21,7 +21,7 @@ var engine = bridge.New()
 //export fastls_features
 func fastls_features() *C.char {
 	return result(func() (any, error) {
-		return []string{"https_proxy_tls", "proxy_tunnels", "session_notifications", "duplex_h2", "stream_upload", "write_timeout", "stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers"}, nil
+		return []string{"websocket_v1", "https_proxy_tls", "proxy_tunnels", "session_notifications", "duplex_h2", "stream_upload", "write_timeout", "stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers"}, nil
 	})
 }
 
@@ -121,6 +121,53 @@ func fastls_start(data *C.char, length C.size_t) *C.char {
 		}
 		return engine.Start(C.GoBytes(unsafe.Pointer(data), C.int(length)))
 	})
+}
+
+//export fastls_ws_start
+func fastls_ws_start(data *C.char, length C.size_t) *C.char {
+	return result(func() (any, error) {
+		if data == nil || length < 1 || length > bridge.MaxInput {
+			return nil, fmt.Errorf("invalid WebSocket input buffer")
+		}
+		return engine.StartWebSocket(C.GoBytes(unsafe.Pointer(data), C.int(length)))
+	})
+}
+
+//export fastls_ws_send
+func fastls_ws_send(handle C.uint64_t, opcode C.int, data unsafe.Pointer, length C.size_t) (status C.int) {
+	status = bridge.Failed
+	defer func() {
+		if recover() != nil {
+			status = bridge.Failed
+		}
+	}()
+	if length > bridge.MaxWSMessage || (length > 0 && data == nil) {
+		return bridge.Invalid
+	}
+	return C.int(engine.WebSocketSend(uint64(handle), int(opcode), unsafe.Slice((*byte)(data), int(length))))
+}
+
+//export fastls_ws_read
+func fastls_ws_read(handle C.uint64_t, buffer unsafe.Pointer, capacity C.size_t, length *C.size_t, opcode *C.int, end *C.int) (status C.int) {
+	status = bridge.Failed
+	defer func() {
+		if recover() != nil {
+			status = bridge.Failed
+		}
+	}()
+	if length == nil || opcode == nil || end == nil {
+		return bridge.Invalid
+	}
+	*length, *opcode, *end = 0, 0, 0
+	if buffer == nil || capacity < 1 || capacity > bridge.ChunkSize {
+		return bridge.Invalid
+	}
+	n, kind, done, code := engine.WebSocketRead(uint64(handle), unsafe.Slice((*byte)(buffer), int(capacity)))
+	*length, *opcode = C.size_t(n), C.int(kind)
+	if done {
+		*end = 1
+	}
+	return C.int(code)
 }
 
 //export fastls_info
