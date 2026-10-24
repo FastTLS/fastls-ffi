@@ -1,6 +1,14 @@
 export class FastlsError extends Error {
   override name = "FastlsError";
 }
+export class FastlsHTTPError extends FastlsError {
+  override name = "FastlsHTTPError";
+  readonly status: number;
+  constructor(readonly response: import("./response.js").Response | import("./response.js").StreamResponse) {
+    super(`HTTP ${response.status}`);
+    this.status = response.status;
+  }
+}
 
 export type TimeoutPhase = "connect" | "write" | "headers" | "read" | "total";
 export class FastlsTimeoutError extends FastlsError {

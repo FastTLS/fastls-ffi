@@ -9,6 +9,7 @@ import { DuplexExchange } from "./duplex.js";
 import type { UploadLifecycle } from "./response.js";
 import { SSEStream, validateSSEOptions, type SSEOptions } from "./sse.js";
 import { Notifier } from "./notifications.js";
+import { prepare, type QueryParams, type JSONValue, type FormFields, type MultipartFiles } from "./request-options.js";
 
 export interface RequestOptions {
   /** Undefined inherits the session proxy; null or an empty string connects directly. */
@@ -21,6 +22,10 @@ export interface RequestOptions {
   timeoutMs?: Timeout;
   allowRedirects?: boolean;
   body?: UploadBody;
+  params?: QueryParams;
+  json?: JSONValue;
+  form?: FormFields;
+  files?: MultipartFiles;
   decodeContent?: boolean;
   maxDecodedBytes?: number;
   signal?: AbortSignal;
@@ -28,7 +33,7 @@ export interface RequestOptions {
   duplex?: boolean;
 }
 
-export type DuplexOptions = Omit<RequestOptions, "body" | "duplex">;
+export type DuplexOptions = Omit<RequestOptions, "body" | "duplex" | "json" | "form" | "files">;
 
 export interface SessionOptions {
   /** HTTP/HTTPS CONNECT, socks5 (local DNS), or socks5h (proxy DNS) URL. */
@@ -207,7 +212,9 @@ export class Session {
     if (duplex && !this.native.call<string[]>("features").includes("duplex_h2")) {
       throw new FastlsError("HTTP/2 duplex requires a newer Fastls native library");
     }
-    const body = options.body === undefined && duplex && !manual ? Buffer.alloc(0) : options.body;
+    const prepared = prepare(url, options, headers);
+    url = prepared.url;
+    const body = prepared.body === undefined && duplex && !manual ? Buffer.alloc(0) : prepared.body;
     const streaming = isStreamingBody(body) || duplex;
     const bodyBytes = streaming || body === undefined ? undefined : Buffer.from(body as string | Uint8Array);
     const timeouts = options.timeoutMs === undefined ? this.timeouts : timeoutFields(options.timeoutMs);
@@ -278,7 +285,7 @@ export class Session {
 
   /** Open a manual exchange; send() and response reads can run concurrently. */
   duplex(method: string, url: string, options: DuplexOptions = {}): DuplexExchange {
-    if ("body" in options || "duplex" in options) throw new TypeError("manual duplex uses send() and finishUpload(), not body or duplex options");
+    if (["body", "duplex", "json", "form", "files"].some(key => key in options)) throw new TypeError("manual duplex uses send() and finishUpload(), not body, json, form, files or duplex options");
     this.ensureOpen();
     const cancellation = new AbortController();
     const signal = options.signal === undefined ? cancellation.signal : AbortSignal.any([options.signal, cancellation.signal]);

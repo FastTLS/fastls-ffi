@@ -53,6 +53,11 @@ try {
 - `timeoutMs` 为毫秒整数或 `{ total, connect?, write?, headers?, read? }`，每项范围1..86400000；默认总时限30000。请求级数字覆盖会清除会话分层限制，结构化覆盖替换整份策略。
 - 会话默认头和请求头按大小写不敏感方式合并，请求值优先，包括空字符串。
 - `Response` 提供 `status`、`ok`、`headers`、`wireHeaders`、`decoded`、`match`、`content: Buffer`，以及同步 `text()` / `json()`。
+
+0.8 中 `ok` 改为状态小于400，与Python一致，因此302/304也为true。
+`raiseForStatus()` 只对400–599抛出 `FastlsHTTPError`，异常包含原响应 `response` 和 `status`，消息仅含状态码；流式响应可在读取正文前检查，随后仍需关闭。
+`encoding` 从Content-Type的charset初始化，缺省utf-8，可修改；`text()`替换坏字节，未知编码报错。Latin-1保留完整字节映射，其它字符集使用Node内置TextDecoder的WHATWG编码表，不自动猜测。
+`json()`直接读取原始字节，支持UTF-8/16/32及BOM，独立于encoding；JSON数字仍受JavaScript数字精度限制。
 - 4xx/5xx 仍返回 Response；参数、网络、TLS 和原生错误抛出异常。
 - `Headers.get(name)` 返回第一个值或 undefined；`getAll(name)` 保留所有重复值，不按逗号拆分。
   `entries()` / 默认迭代返回每个字段的首值，`multiItems()` 返回全部字段值。
@@ -237,7 +242,7 @@ npm run test:package
 测试使用真实动态库和本地靶场，覆盖 H1/H2、证书、连接池、Cookie、多值头、二进制、取消、超时、
 异常正文、64 MiB 下载、32 MiB 缓存限制和 128 路并发。安装包测试在临时项目安装 npm tarball，
 重新执行全部测试并检查包名导入和 TypeScript 声明。证据写入仓库 build/node-*.json。
-十一组Python套件的150个场景已有对应项，包含13项双工、23项SSE、21项通知和14项代理验收，连同原有16项，共166项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
+十二组Python套件的166个场景已有对应项，包含13项双工、23项SSE、21项通知和14项代理验收，连同原有16项，共182项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
 持续测试默认30秒，检查RSS、操作系统句柄/描述符、Go堆和goroutine回收。Linux当前Go/Node组合另跑300秒；设置 `FASTLS_NODE_SOAK_SECONDS=300` 后执行 `npm run test:soak` 可复现。
 
 ## 与Python的语言差异
@@ -254,7 +259,7 @@ CI 运行时还记录提交 SHA。测试前后会核对动态库未被替换。�
 构建本平台Go动态库后，运行 `npm run pack:native`，产物位于上级 `dist/`。
 例如Windows x64：`fasttls-fastls-0.6.0-dev.0-win32-x64.tgz`；Linux包名另带`-glibc`。
 在目标项目执行 `npm install <候选包绝对路径> --ignore-scripts`，随后即可 `new Session()`，无需Go、Python、编译器或FASTLS_LIBRARY。
-安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整166项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
+安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整182项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
 
 当前候选覆盖Windows x64、Linux glibc x64/arm64、macOS x64/arm64，Node22+。每个tarball只含一个系统/架构，不能将同名版本的这些变体当成可直接发布到npm的通用包。npm的os/cpu/libc字段限制安装目标；首次使用还检查平台、ABI声明、库SHA256及Linux的glibc版本。Linux最低glibc从ELF符号版本提取，macOS最低版本从Mach-O提取，具体要求及系统动态依赖见包内`native/manifest.json`，不将CI宿主机上的通过扩大为所有旧系统均已测试。musl不在当前范围。
 
@@ -282,12 +287,50 @@ Session和请求的`proxy`接受URL字符串或null。请求省略或undefined�
 
 `proxyCaFile`只控制HTTPS代理信任，`caFile`只控制目标信任，两者互不代替。未设置代理CA使用系统根；提供文件则替换系统根。构造Session时读取默认代理CA一次，请求指定路径时重新读取；请求undefined继承默认，null恢复系统根。直连、HTTP和SOCKS忽略代理CA默认值及请求覆盖。代理地址及凭据、profile、代理CA和目标CA共同隔离连接池。目标证书仍需验证；目标请求禁止设置Proxy-Authorization和Proxy-Connection。认证只用于代理握手，错误消息不回显凭据或代理任意响应短语。握手计入connect和total预算，AbortSignal取消会关闭未建立的隧道；取消单条H2流继续复用健康的共享隧道。代理拒绝后不降级或自动重试。
 
-代理测试使用Node测试进程中的独立、仅访问loopback的CONNECT/RFC1928/RFC1929靶场；SDK本身不依赖Python或代理辅助进程。十一组Python行为映射、源码及内置库安装包统一验收；语言适配见PARITY.md。
+代理测试使用Node测试进程中的独立、仅访问loopback的CONNECT/RFC1928/RFC1929靶场；SDK本身不依赖Python或代理辅助进程。十二组Python行为映射、源码及内置库安装包统一验收；语言适配见PARITY.md。
 
-`npm run test:proxy:soak`默认以32路并发运行60秒，轮换正常请求、共享H2流取消、错误认证和停滞握手取消；四种scheme分别使用真实loopback代理。FASTLS_NODE_PROXY_SOAK_SECONDS可设为1..300。Linux当前Go/Node组合执行该独立测试，沿用现有RSS、Go堆、goroutine及句柄阈值，逐批记录写入build/node-proxy-recovery-*.json，不计入166项主套件。
+`npm run test:proxy:soak`默认以32路并发运行60秒，轮换正常请求、共享H2流取消、错误认证和停滞握手取消；四种scheme分别使用真实loopback代理。FASTLS_NODE_PROXY_SOAK_SECONDS可设为1..300。Linux当前Go/Node组合执行该独立测试，沿用现有RSS、Go堆、goroutine及句柄阈值，逐批记录写入build/node-proxy-recovery-*.json，不计入182项主套件。
 
 代理独立长测与SSE长测一样，显式使用`--max-semi-space-size=16`固定测试进程的V8半空间上限。本机Windows Node24默认策略在持续分配时将new_space保留空间从4MiB扩大至128MiB，而Go堆、原生请求和隧道已回收。该参数仅作用于独立测试进程，不修改SDK用户进程的运行配置，也不放宽RSS或句柄阈值。证据保存运行参数、V8空间快照，以及阈值判定之后的完整GC诊断；判定使用GC前的最终采样。
 
 私有HTTPS代理示例：`new Session({ proxy: 'https://proxy.example:443', proxyCaFile: '/path/to/proxy-ca.pem', caFile: '/path/to/target-ca.pem' })`。两类CA分别验证代理与目标；请求可用`{ proxyCaFile: null }`恢复代理系统信任，或指定其它代理CA文件，均不会复用不相符的已有隧道。
 
 代理长测按靶场握手阶段同步取消，避免固定毫秒计时在慢runner上提前中止TLS而未触达待测CONNECT阶段。HTTPS靶场延迟50毫秒处理CONNECT，确保该时序在本地也能覆盖。H2可合并同一代理的在途建连；每批每种scheme至少触发一次真实握手取消，并逐批核对启动/回收计数，不依赖请求数等于物理建连数。资源阈值保持不变。
+
+## 请求参数（0.8）
+
+```ts
+const response = await session.get('https://example.com/search?old=a%20b#fragment', {
+  params: [['q', '中文'], ['tag', ['a', 'b']], ['empty', '']],
+});
+response.raiseForStatus();
+await session.post('https://example.com/api', { json: null });
+await session.post('https://example.com/form', { form: { tag: ['a', 'b'], enabled: true } });
+
+// FileHandle归调用方拥有；适配read签名，从当前位置读取，始终由调用方关闭。
+const file = await open('/path/to/archive.bin', 'r'); // import { open } from 'node:fs/promises'
+try {
+  await session.post('https://example.com/upload', {
+    form: { description: '附件' },
+    files: { file: ['archive.bin', {
+      async read(maxBytes, signal) {
+        signal.throwIfAborted();
+        const buffer = Buffer.allocUnsafe(maxBytes);
+        const { bytesRead } = await file.read(buffer, 0, maxBytes, null);
+        return buffer.subarray(0, bytesRead);
+      },
+    }, 'application/octet-stream'] },
+  });
+} finally { await file.close(); }
+```
+
+- `params`/`form`接受普通对象、Map或键值对数组。列表值展开成重复键；null/undefined值省略，空字符串保留；布尔值与Python一致为True/False，Unicode用UTF-8，空格为+。键可用字符串/Uint8Array，值可用字符串/Uint8Array、有限数或布尔值。与Python不同，查询及表单拒绝非有限数。
+- `params`另接受不含#的已编码ASCII字符串，原查询编码和fragment保留。fragment不发送到服务器。
+- `json`只接受严格JSON值、普通对象及数组，拒绝NaN/Infinity、undefined、bigint、稀疏数组、循环和toJSON。显式null发送null；省略json无正文。`json`与body/form/files冲突；`body`与form/files冲突。不要把Python的data映射直接传给body；Node用form显式编码，现有字节块数组仍是原始body。
+- JSON/表单在内存中编码；超过512KiB自动转为流式上传，不是大型数据增量编码器。默认Content-Type仅在没有会话/请求自定义头时设置；编码正文拒绝Content-Length/Transfer-Encoding。原始body沿用原有规则。
+- `files`接受对象、Map或重复字段对数组。每个文件是Uint8Array、`MultipartReader`，或`[filename, body, contentType?]`；filename为null省略filename参数。默认从读取器name/字段名取文件名；内置固定MIME推断只覆盖txt/json/html/csv/png/jpg/jpeg/pdf，其它类型请显式指定，缺省application/octet-stream。不支持自定义分部头。
+- multipart可配合form字段，每次read最多64KiB，空Uint8Array表示EOF；支持同步/Promise读取器。无需seek/长度/临时文件，不全量缓存文件；调用方负责close和重新定位，成功、失败、取消均保留读取器所有权。提供给read的AbortSignal可中断自定义等待；不可取消的Promise会延后closeAsync清理。Node Readable及FileHandle不能直接作为此读取器，应适配其读取接口；现有原始body的Readable销毁规则不变。
+- multipart管理随机boundary及Content-Type，拒绝会话或请求中显式Content-Type；元数据拒绝控制字符。正文仅使用一次，307/308不自动重放，301/302/303沿用核心GET转换规则。
+- request/get/post/stream/sse与自动duplex共享参数处理；multipart不支持duplex。手动duplex只接受params，正文继续send()/finishUpload()。自动双工支持JSON/表单且关闭重定向。
+
+本阶段新增16项请求参数行为验收；WebSocket尚未接入Node，现有Python WebSocket测试不在本阶段166项映射范围内。仍为内部候选，未发布npm。

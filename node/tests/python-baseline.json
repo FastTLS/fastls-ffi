@@ -1,5 +1,5 @@
 {
-  "revision": "1990a6bdb59fce5cc3084297777651592b12c76b",
+  "revision": "7bea602e3326ba478cae70cd512c59fe1041be84",
   "files": {
     "test_python.py": "5874e289a751cf28da52683e0657806bfd9d41278b52f74bf1af15b018d21f41",
     "test_stability.py": "0ad5d3277b48eed4edfe5e9b99e333ce9d70b12e1242f18ad1db0b40ee79a13d",
@@ -11,6 +11,7 @@
     "test_duplex.py": "570df447c0b73acc62875263b9538430e28d2fec91d0e3555ffec2f84ccf6e8d",
     "test_sse.py": "d50638d18da1c22ae9795595c94e0081fbe996849d51f8fc1e8e99d9e21ae09b",
     "test_notifications.py": "1b35c407a5037bacf00391f0ee94b8d6da4daae8cd29f090535d0e3fed184a4e",
-    "test_proxy.py": "4278318c2c360edf38a6c80995cd1286a99f627b130fdb97a8e7c3f2a4917212"
+    "test_proxy.py": "4278318c2c360edf38a6c80995cd1286a99f627b130fdb97a8e7c3f2a4917212",
+    "test_request_options.py": "99223609deb9ff8156b055978e3029c46754bd54f66e122cc4b13804c269d47b"
   }
 }

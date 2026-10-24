@@ -1,4 +1,5 @@
-import { AbortError, FastlsError, FastlsTimeoutError, responseError } from "./errors.js";
+import { AbortError, FastlsError, FastlsTimeoutError, FastlsHTTPError, responseError } from "./errors.js";
+import { responseEncoding, decodeText, decodeJSON } from "./text.js";
 import { Headers } from "./headers.js";
 import { Native, type NativeInfo } from "./native.js";
 import { scheduler } from "./scheduler.js";
@@ -107,15 +108,18 @@ export class Transfer {
 }
 
 export class Response {
+  encoding: string;
   constructor(readonly status: number, readonly headers: Headers,
     readonly match: Readonly<Record<string, unknown>>, readonly content: Buffer,
-    readonly wireHeaders: Headers = headers, readonly decoded = false) {}
-  get ok(): boolean { return this.status >= 200 && this.status < 300; }
-  text(): string { return this.content.toString("utf8"); }
-  json<T = unknown>(): T { return JSON.parse(this.text()) as T; }
+    readonly wireHeaders: Headers = headers, readonly decoded = false) { this.encoding = responseEncoding(headers.get("content-type")); }
+  get ok(): boolean { return this.status < 400; }
+  raiseForStatus(): void { if (this.status >= 400 && this.status <= 599) throw new FastlsHTTPError(this); }
+  text(): string { return decodeText(this.content,this.encoding); }
+  json<T = unknown>(): T { return JSON.parse(decodeJSON(this.content)) as T; }
 }
 
 export class StreamResponse {
+  encoding: string;
   readonly status: number;
   readonly headers: Headers;
   readonly match: Readonly<Record<string, unknown>>;
@@ -127,13 +131,15 @@ export class StreamResponse {
   constructor(private readonly transfer: Transfer, info: NativeInfo, private readonly upload?: UploadLifecycle) {
     this.status = info.status!;
     this.headers = new Headers(info.header_values, info.headers);
+    this.encoding = responseEncoding(this.headers.get("content-type"));
     this.wireHeaders = info.wire_header_values ? new Headers(info.wire_header_values) : this.headers;
     this.decoded = info.decoded ?? false;
     this.match = Object.freeze({ ...info.match });
     this.body = { [Symbol.asyncIterator]: () => this.iterate() };
   }
 
-  get ok(): boolean { return this.status >= 200 && this.status < 300; }
+  get ok(): boolean { return this.status < 400; }
+  raiseForStatus(): void { if (this.status >= 400 && this.status <= 599) throw new FastlsHTTPError(this); }
 
   /** @internal Check cancellation even when a parser still holds buffered data. */
   ensureOpen(): void { this.transfer.ensureOpen(); }
@@ -166,8 +172,8 @@ export class StreamResponse {
     }
     return length === content.length ? content : Buffer.from(content.subarray(0, length));
   }
-  async text(): Promise<string> { return (await this.read()).toString("utf8"); }
-  async json<T = unknown>(): Promise<T> { return JSON.parse(await this.text()) as T; }
+  async text(): Promise<string> { return decodeText(await this.read(),this.encoding); }
+  async json<T = unknown>(): Promise<T> { return JSON.parse(decodeJSON(await this.read())) as T; }
   /** Consume the response concurrently: waiting alone can block on HTTP/2 flow control. */
   async waitUpload(): Promise<void> {
     if (!this.upload) return;

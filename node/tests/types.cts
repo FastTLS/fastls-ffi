@@ -6,6 +6,13 @@ function consume(session: fastls.Session): Promise<fastls.Response> {
 }
 void options;
 void consume;
+async function encoded(session: fastls.Session) {
+  const files: fastls.MultipartFiles = [['file', ['a.bin', Buffer.from('content')]]];
+  const response = await session.post('https://example.com', { params: new Map([['tag', ['a', 'b']]]), form: { value: '中文' }, files });
+  response.raiseForStatus();
+  try { response.raiseForStatus(); } catch (error) { if (error instanceof fastls.FastlsHTTPError) { const status: number = error.status; const owner: fastls.Response | fastls.StreamResponse = error.response; void status; void owner; } }
+}
+void encoded;
 function manual(session: fastls.Session): fastls.DuplexExchange {
   return session.duplex('POST', 'https://example.com', { timeoutMs: { total: 1000, write: 200 } });
 }

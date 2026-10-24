@@ -24,6 +24,16 @@ async function consume(session: Session): Promise<void> {
   new Session({ notifications: true });
   const options: RequestOptions = { body: Buffer.from([0, 255]), signal: AbortSignal.timeout(1000) };
   const response: Response = await session.post('https://example.com', options);
+  await session.post('https://example.com', { params: [['tag', ['中文', 'a b']]], json: null });
+  await session.post('https://example.com', { form: { tag: ['a', 'b'], empty: '' } });
+  await session.post('https://example.com', { files: { file: ['a.bin', { read: async (maximum: number) => Buffer.alloc(maximum) }, 'application/octet-stream'] } });
+  response.encoding = 'iso-8859-1';
+  response.raiseForStatus();
+  session.duplex('POST', 'https://example.com', { params: { q: '中文' } });
+  // @ts-expect-error Manual duplex only accepts send() for its body.
+  session.duplex('POST', 'https://example.com', { json: null });
+  // @ts-expect-error JSON excludes undefined members.
+  session.post('https://example.com', { json: { invalid: undefined } });
   const value: string = response.json<{ value: string }>().value;
   const stream: StreamResponse = await session.stream('GET', 'https://example.com');
   for await (const chunk of stream.body) { const bytes: Buffer = chunk; void bytes; }

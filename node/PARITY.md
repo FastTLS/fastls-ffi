@@ -1,8 +1,8 @@
 # Python / Node 验收对应关系
 
-范围：十一个 Python SDK 行为套件的 150 个用例，基线为 1990a6b，保留原始文件名和用例名作为 Node 测试 ID。
+范围：十二个 Python SDK 行为套件的 166 个用例，基线为 a118129，保留原始文件名和用例名作为 Node 测试 ID。
 对应关系由 `scripts/check-parity.mjs` 检查；Python 用例新增、删除或改名时，映射未更新会失败。
-`tests/python-baseline.json` 同时固定十一个 Python 源文件的哈希；即使用例名称不变，断言改变也必须复核 Node 对应测试后更新基线。
+`tests/python-baseline.json` 同时固定十二个 Python 源文件的哈希；即使用例名称不变，断言改变也必须复核 Node 对应测试后更新基线。
 每项在真实动态库和独立本地靶场上执行，结果写入 `build/node-parity-source-*.json` / `node-parity-package-*.json`。
 清单对应关系本身不表示用例通过，应检查同一提交的测试退出状态和逐项结果。
 
@@ -20,13 +20,17 @@
 
 - test_proxy.py：14项，HTTP/HTTPS CONNECT、独立代理CA与主机名验证、SOCKS5本地/代理DNS、认证与目标头隔离、连接/凭据池隔离、显式直连、旧库门禁、目标CA、环境代理忽略、超时取消、64MiB同步/异步上传下载、慢消费者、SSE与双工。
 
-加上原有 2 项原生绑定测试和 14 项 Node 基础测试，完整 Node 套件为 166 项。
+- test_request_options.py：16项，查询、JSON、表单、multipart、64MiB同步/异步读源、慢消费者、取消、失败、重定向、结束分隔符竞态、编码与状态检查。
+
+WebSocket 的 Python 测试已存在，本阶段尚未映射，不能将以上166项理解为全部Python能力；WebSocket另行接入与验收。
+
+加上原有 2 项原生绑定测试和 14 项 Node 基础测试，完整 Node 套件为 182 项。
 TypeScript 的 ESM/CommonJS 类型检查及安装包内容/哈希检查独立于上述用例数。
 共享的Go测试、race检查和Python依赖门禁仍由原CI执行，不用Node重写。
 
 ## 语言适配范围
 
-以下23个场景在逐项记录的 `adaptation` 字段中说明差异：
+以下32个场景在逐项记录的 `adaptation` 字段中说明差异：
 
 - test_python.py::test_sync_stream_first_chunk_before_completion：使用Promise和异步迭代，验证相同的首块时序。
 - test_stability.py::test_multithreaded_sync_session：以96路Promise并发验证请求共享；不提供共享同步Session或worker_threads线程安全承诺。
@@ -59,8 +63,8 @@ TypeScript 的 ESM/CommonJS 类型检查及安装包内容/哈希检查独立于
 ## 持续运行与证据
 
 源码和安装包分别默认运行30秒、32路并发的资源回收测试。Linux当前Go组合额外运行300秒。
-同一Linux组合另跑60秒、32路并发的双工混合长测，轮换自动上传、取消、手动交换与提前拒绝；支持设置FASTLS_NODE_DUPLEX_SOAK_SECONDS=300延长。该独立检查不计入166项主套件。
-该组合另跑60秒、32路并发的SSE混合长测，轮换正常/压缩事件流、提前break、非法响应头、解析上限及解码错误；设置FASTLS_NODE_SSE_SOAK_SECONDS=300可延长。同样不计入166项主套件，证据为build/node-sse-recovery-source-*.json。
+同一Linux组合另跑60秒、32路并发的双工混合长测，轮换自动上传、取消、手动交换与提前拒绝；支持设置FASTLS_NODE_DUPLEX_SOAK_SECONDS=300延长。该独立检查不计入182项主套件。
+该组合另跑60秒、32路并发的SSE混合长测，轮换正常/压缩事件流、提前break、非法响应头、解析上限及解码错误；设置FASTLS_NODE_SSE_SOAK_SECONDS=300可延长。同样不计入182项主套件，证据为build/node-sse-recovery-source-*.json。
 独立SSE长测显式设置V8的`--max-semi-space-size=16`，以统一不同主机的年轻代容量。Windows Node24默认策略在高分配速率下可将年轻代保留空间扩至128MiB，即使完整GC后存活对象恢复仍保留该空间，影响从冷进程预热基线计算的RSS增量。该参数只约束测试进程的年轻代，不限制老年代、不改变SDK运行配置；RSS、Go堆、goroutine与句柄阈值均保持不变，证据另存运行参数和V8堆空间快照。
 预热后检查goroutine增量不超过16、Go heap_inuse峰值增量不超过96MiB、RSS峰值增量不超过128MiB、最终RSS增量不超过96MiB、句柄/描述符增量不超过64，与Python阈值一致。
 记录请求数、完整时间序列和基线；阈值是回归保护，不是无内存泄漏的证明。
@@ -75,8 +79,12 @@ npm run test:duplex:soak
 npm run test:sse:soak
 ```
 
-代理扩展另提供60秒、32路并发的混合回收检查，覆盖四种代理的正常H2、单流取消、认证拒绝和握手取消；Linux当前组合纳入CI，支持FASTLS_NODE_PROXY_SOAK_SECONDS=300。独立证据为build/node-proxy-recovery-source-*.json，沿用上述回收阈值，不计入166项主套件。
+代理扩展另提供60秒、32路并发的混合回收检查，覆盖四种代理的正常H2、单流取消、认证拒绝和握手取消；Linux当前组合纳入CI，支持FASTLS_NODE_PROXY_SOAK_SECONDS=300。独立证据为build/node-proxy-recovery-source-*.json，沿用上述回收阈值，不计入182项主套件。
 
 代理独立长测与SSE长测一样，显式使用`--max-semi-space-size=16`固定测试进程的V8半空间上限。本机Windows Node24默认策略在持续分配时将new_space保留空间从4MiB扩大至128MiB，而Go堆、原生请求和隧道已回收。该参数仅作用于独立测试进程，不修改SDK用户进程的运行配置，也不放宽RSS或句柄阈值。证据保存运行参数、V8空间快照，以及阈值判定之后的完整GC诊断；判定使用GC前的最终采样。
 
 代理长测按靶场握手阶段同步取消，避免固定毫秒计时在慢runner上提前中止TLS而未触达待测CONNECT阶段。HTTPS靶场延迟50毫秒处理CONNECT，确保该时序在本地也能覆盖。H2可合并同一代理的在途建连；每批每种scheme至少触发一次真实握手取消，并逐批核对启动/回收计数，不依赖请求数等于物理建连数。资源阈值保持不变。
+
+## 0.8 请求参数适配
+
+新增9个场景的adaptation字段明确说明：Node保留body，以form显式编码表单；multipart接受调用方拥有的read(maxBytes, signal)读取器，读取可同步或返回Promise，不自动close。Python同步与异步入口在Node统一为Promise。其余7项沿用相同行为断言。166项行为映射分为12个套件，完整测试182项；WebSocket暂不计入。
