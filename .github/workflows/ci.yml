@@ -8,16 +8,12 @@ on:
       fastls_ref:
         description: Reviewed FastTLS/fastls commit SHA (optional override)
         type: string
-      fhttp_ref:
-        description: Reviewed FastTLS/fhttp commit SHA (optional override)
+      ftransport_ref:
+        description: Reviewed FastTLS/ftransport commit SHA (optional override)
         type: string
       imitate_ref:
         description: Reviewed FastTLS/imitate commit SHA (optional override)
         type: string
-      full_fhttp_tests:
-        description: Also run the full upstream HTTP2 suite (known legacy failures)
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -32,8 +28,9 @@ jobs:
     timeout-minutes: 5
     outputs:
       fastls_ref: ${{ steps.refs.outputs.fastls_ref }}
-      fhttp_ref: ${{ steps.refs.outputs.fhttp_ref }}
+      ftransport_ref: ${{ steps.refs.outputs.ftransport_ref }}
       imitate_ref: ${{ steps.refs.outputs.imitate_ref }}
+      matrix: ${{ steps.refs.outputs.matrix }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -45,54 +42,22 @@ jobs:
         id: refs
         env:
           FASTLS_REF: ${{ inputs.fastls_ref || vars.FASTLS_REF }}
-          FHTTP_REF: ${{ inputs.fhttp_ref || vars.FHTTP_REF }}
+          FTRANSPORT_REF: ${{ inputs.ftransport_ref || vars.FTRANSPORT_REF }}
           IMITATE_REF: ${{ inputs.imitate_ref || vars.IMITATE_REF }}
         run: python scripts/ci.py resolve
 
   native:
     needs: dependencies
-    name: ${{ matrix.target }} / Go ${{ matrix.go }} / Python ${{ matrix.python }}
+    name: Build / ${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: windows-2022
-            target: windows-amd64
-            go: '1.26.10'
-            python: '3.11'
-            race: false
-          - runner: ubuntu-24.04
-            target: linux-amd64
-            go: '1.26.10'
-            python: '3.11'
-            race: true
-          - runner: ubuntu-24.04-arm
-            target: linux-arm64
-            go: '1.26.10'
-            python: '3.11'
-            race: false
-          - runner: macos-15-intel
-            target: darwin-amd64
-            go: '1.26.10'
-            python: '3.11'
-            race: false
-          - runner: macos-15
-            target: darwin-arm64
-            go: '1.26.10'
-            python: '3.11'
-            race: false
-          - runner: ubuntu-24.04
-            target: linux-amd64
-            go: '1.24.11'
-            python: '3.10'
-            race: false
-    runs-on: ${{ matrix.runner }}
+        config: ${{ fromJSON(needs.dependencies.outputs.matrix) }}
+    runs-on: ${{ matrix.config.runner }}
     timeout-minutes: 30
     env:
       CGO_ENABLED: '1'
-      FASTLS_CI_RACE: ${{ matrix.race }}
-      FASTLS_CI_TARGET: ${{ matrix.target }}
-      FASTLS_FULL_FHTTP_TESTS: ${{ inputs.full_fhttp_tests || false }}
+      FASTLS_CI_TARGET: ${{ matrix.config.target }}
       FASTLS_STABILITY_SECONDS: '30'
     defaults:
       run:
@@ -110,9 +75,9 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          repository: FastTLS/fhttp
-          ref: ${{ needs.dependencies.outputs.fhttp_ref }}
-          path: workspace/fhttp
+          repository: FastTLS/ftransport
+          ref: ${{ needs.dependencies.outputs.ftransport_ref }}
+          path: workspace/ftransport
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -122,35 +87,191 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: ${{ matrix.go }}
-          cache: false
+          go-version: ${{ matrix.config.go }}
+          cache: true
+          cache-dependency-path: |
+            workspace/fastls-ffi/go.sum
+            workspace/fastls-ffi/ci/dependencies.json
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: ${{ matrix.python }}
-      - name: Build and execute native, source SDK, wheel and C tests
-        run: python scripts/ci.py run
-      - name: Save binaries and evidence
+          python-version: ${{ matrix.config.python }}
+      - name: Build native library, fixture and bundled wheel
+        run: python scripts/ci.py run --stage build
+      - name: Share immutable platform inputs
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: inputs-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+          path: |
+            workspace/fastls-ffi/dist/
+            workspace/fastls-ffi/build/ffi-fixture*
+            workspace/fastls-ffi/go.work
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain build evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: fastls-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}
+          name: build-evidence-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+          path: workspace/fastls-ffi/build/ci-*/
+          retention-days: 14
+
+  tests:
+    needs: [dependencies, native]
+    name: ${{ matrix.stage }} / ${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJSON(needs.dependencies.outputs.matrix) }}
+        stage: [contracts, source, wheel, release]
+    runs-on: ${{ matrix.config.runner }}
+    timeout-minutes: 30
+    env:
+      CGO_ENABLED: '1'
+      FASTLS_CI_TARGET: ${{ matrix.config.target }}
+      FASTLS_STABILITY_SECONDS: '30'
+    defaults:
+      run:
+        working-directory: workspace/fastls-ffi
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: workspace/fastls-ffi
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FastTLS/fastls
+          ref: ${{ needs.dependencies.outputs.fastls_ref }}
+          path: workspace/fastls
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FastTLS/ftransport
+          ref: ${{ needs.dependencies.outputs.ftransport_ref }}
+          path: workspace/ftransport
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FastTLS/imitate
+          ref: ${{ needs.dependencies.outputs.imitate_ref }}
+          path: workspace/imitate
+          persist-credentials: false
+      - if: matrix.stage == 'contracts' || matrix.stage == 'release' || matrix.stage == 'race'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ matrix.config.go }}
+          cache: true
+          cache-dependency-path: |
+            workspace/fastls-ffi/go.sum
+            workspace/fastls-ffi/ci/dependencies.json
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.config.python }}
+      - name: Download this platform's immutable inputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: inputs-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+          path: workspace/fastls-ffi
+      - name: Verify inputs and execute selected stage
+        run: python scripts/ci.py run --stage ${{ matrix.stage }}
+      - name: Retain incremental evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: evidence-${{ matrix.stage }}-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
           path: |
-            workspace/fastls-ffi/dist/
-            workspace/fastls-ffi/build/
-          if-no-files-found: warn
+            workspace/fastls-ffi/build/ci-*/
+            workspace/fastls-ffi/build/stability-*.json
+            workspace/fastls-ffi/build/checks-*/
+          retention-days: 14
+
+  extended:
+    needs: [dependencies, native]
+    name: ${{ matrix.stage }} / linux-amd64
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - runner: ubuntu-24.04
+            target: linux-amd64
+            go: '1.26.10'
+            python: '3.11'
+        stage: [race, soak]
+    runs-on: ${{ matrix.config.runner }}
+    timeout-minutes: 30
+    env:
+      CGO_ENABLED: '1'
+      FASTLS_CI_TARGET: ${{ matrix.config.target }}
+      FASTLS_STABILITY_SECONDS: '30'
+    defaults:
+      run:
+        working-directory: workspace/fastls-ffi
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: workspace/fastls-ffi
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FastTLS/fastls
+          ref: ${{ needs.dependencies.outputs.fastls_ref }}
+          path: workspace/fastls
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FastTLS/ftransport
+          ref: ${{ needs.dependencies.outputs.ftransport_ref }}
+          path: workspace/ftransport
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: FastTLS/imitate
+          ref: ${{ needs.dependencies.outputs.imitate_ref }}
+          path: workspace/imitate
+          persist-credentials: false
+      - if: matrix.stage == 'contracts' || matrix.stage == 'race'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ matrix.config.go }}
+          cache: true
+          cache-dependency-path: |
+            workspace/fastls-ffi/go.sum
+            workspace/fastls-ffi/ci/dependencies.json
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.config.python }}
+      - name: Download this platform's immutable inputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: inputs-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+          path: workspace/fastls-ffi
+      - name: Verify inputs and execute selected stage
+        run: python scripts/ci.py run --stage ${{ matrix.stage }}
+      - name: Retain incremental evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: evidence-${{ matrix.stage }}-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+          path: |
+            workspace/fastls-ffi/build/ci-*/
+            workspace/fastls-ffi/build/stability-*.json
+            workspace/fastls-ffi/build/checks-*/
           retention-days: 14
 
   required:
     name: All native tests
     if: always()
-    needs: [dependencies, native]
+    needs: [dependencies, native, tests, extended]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - name: Reject failed, cancelled or skipped matrix jobs
+      - name: Reject failed, cancelled or skipped stages
         env:
           DEPENDENCIES_RESULT: ${{ needs.dependencies.result }}
           NATIVE_RESULT: ${{ needs.native.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+          EXTENDED_RESULT: ${{ needs.extended.result }}
         run: |
           test "$DEPENDENCIES_RESULT" = success
           test "$NATIVE_RESULT" = success
+          test "$TESTS_RESULT" = success
+          test "$EXTENDED_RESULT" = success

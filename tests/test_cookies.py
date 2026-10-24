@@ -37,7 +37,7 @@ class CookieAcceptance(FixtureCase):
                 with self.assertRaises(TypeError):
                     response.headers["X-List"] = "changed"
 
-    def test_automatic_path_secure_host_scope_and_foreign_domain_rejection(self):
+    def test_automatic_path_secure_loopback_host_scope_and_foreign_domain_rejection(self):
         for name in ("https1", "https2"):
             with self.subTest(protocol=name), self.session() as session:
                 base = self.fixture[name]
@@ -47,12 +47,14 @@ class CookieAcceptance(FixtureCase):
                 self.assertEqual(session.cookies.get("private", url=base + "/private/item"), "three")
                 self.assertIsNone(session.cookies.get("private", url=base + "/private-other"))
                 insecure = session.cookies.get_dict(self.fixture["http"])
-                self.assertNotIn("secure", insecure)
+                # Go 1.26 follows browser secure-origin behavior for loopback hosts:
+                # Secure cookies may be sent to http://127.0.0.1 and localhost.
+                self.assertEqual(insecure.get("secure"), "four")
                 self.assertNotIn("foreign", insecure)
                 localhost = base.replace("127.0.0.1", "localhost")
                 self.assertEqual(session.cookies.get_dict(localhost), {})
                 self.assertIn("secure=four", self.echoed(session, base))
-                self.assertNotIn("secure=", self.echoed(session, self.fixture["http"]))
+                self.assertIn("secure=four", self.echoed(session, self.fixture["http"]))
 
     def test_manual_domain_default_path_duplicate_names_and_exact_delete(self):
         with self.session() as session:

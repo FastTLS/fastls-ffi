@@ -160,7 +160,7 @@ def main():
                 machine=platform.machine(),cpu=platform.processor(),logical_cpus=psutil.cpu_count(),memory_bytes=psutil.virtual_memory().total,python_ssl=ssl.OPENSSL_VERSION,
                 packages=deps,library_sha256=hashlib.sha256(library.read_bytes()).hexdigest(),
                 build_info=json.loads((ROOT/"dist/build-info.json").read_text()),
-                sources={name:revision(path) for name,path in (("fastls-ffi",ROOT),("fastls",ROOT.parent/"fastls"),("fhttp",ROOT.parent/"fhttp"),("imitate",ROOT.parent/"imitate"))},
+                sources={name:revision(path) for name,path in (("fastls-ffi",ROOT),("fastls",ROOT.parent/"fastls"),("ftransport",ROOT.parent/"ftransport"),("imitate",ROOT.parent/"imitate"))},
                 benchmark_sources={path.name:hashlib.sha256(path.read_bytes()).hexdigest() for path in (ROOT/"benchmarks").glob("*.py")},
                 not_applicable=[dict(client="requests",protocol="h2",reason="standard Requests has no H2 client"),dict(clients=["requests","curl"],workload="parsed",reason="native Fastls SSE parser is an independent measurement")],runs=[])
     config={"smoke":(.15,.03,150,1048576),"quick":(1,.2,1000,16*1048576),"full":(30,10,5000,16*1048576)}[args.profile]

@@ -99,6 +99,77 @@ func TestWebSocketEngineInvalidContracts(t *testing.T) {
 	}
 }
 
+func TestWebSocketSessionCookieExchange(t *testing.T) {
+	for _, name := range []string{"inherited", "explicit", "disabled", "rejected"} {
+		t.Run(name, func(t *testing.T) {
+			seen := make(chan string, 1)
+			upgrader := websocket.Upgrader{}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				seen <- r.Header.Get("Cookie")
+				header := http.Header{"Set-Cookie": {"reply=one; Path=/", "second=two; Path=/"}}
+				if name == "rejected" {
+					w.Header()["Set-Cookie"] = header["Set-Cookie"]
+					http.Error(w, "denied", 401)
+					return
+				}
+				c, err := upgrader.Upgrade(w, r, header)
+				if err == nil {
+					defer c.Close()
+					c.ReadMessage() // Wait for the client to close.
+				}
+			}))
+			defer server.Close()
+			e := New()
+			session, _ := e.CreateSession()
+			defer e.CloseSession(session)
+			command, _ := json.Marshal(map[string]any{"action": "set", "url": server.URL, "cookie": map[string]string{"name": "login", "value": "yes", "path": "/"}})
+			if _, err := e.SessionCookies(session, command); err != nil {
+				t.Fatal(err)
+			}
+			input := WebSocketInput{URL: strings.Replace(server.URL, "http", "ws", 1), Session: session}
+			want := "login=yes"
+			if name == "explicit" {
+				input.Headers = map[string]string{"cOoKiE": "manual=only"}
+				want = "manual=only"
+			}
+			if name == "disabled" {
+				if _, err := e.SessionCookies(session, []byte(`{"action":"configure","enabled":false}`)); err != nil {
+					t.Fatal(err)
+				}
+				want = ""
+			}
+			raw, _ := json.Marshal(input)
+			id, err := e.StartWebSocket(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer e.Close(id)
+			e.Wait(id, WaitHeaders, 3*time.Second)
+			select {
+			case got := <-seen:
+				if got != want {
+					t.Fatalf("Cookie = %q, want %q", got, want)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("no handshake")
+			}
+			get, _ := json.Marshal(map[string]string{"action": "get", "url": server.URL})
+			stored, err := e.SessionCookies(session, get)
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, _ := json.Marshal(stored)
+			if name == "disabled" {
+				if string(encoded) != "[]" {
+					t.Fatal(string(encoded))
+				}
+			} else if !strings.Contains(string(encoded), `"name":"reply"`) || !strings.Contains(string(encoded), `"name":"second"`) {
+				t.Fatal("handshake cookies were not stored:", string(encoded))
+			}
+		})
+	}
+}
+
 func TestWebSocketCancelRejectsQueuedMessages(t *testing.T) {
 	u := websocket.Upgrader{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	http "github.com/FastTLS/fhttp"
+	"net/http"
 )
 
 const MaxCookieInput = 16384

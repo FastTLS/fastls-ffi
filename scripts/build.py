@@ -45,16 +45,25 @@ def main():
     if args.cc:
         env["CC"] = args.cc
     if args.local:
-        modules = [ROOT, ROOT.parent / "fastls", ROOT.parent / "fastls/profile", ROOT.parent / "fhttp", ROOT.parent / "imitate"]
+        fastls = Path(os.environ.get("FASTLS_LOCAL_FASTLS", ROOT.parent / "fastls")).resolve()
+        ftransport = Path(os.environ.get("FASTLS_LOCAL_FTRANSPORT", ROOT.parent / "ftransport")).resolve()
+        imitate = Path(os.environ.get("FASTLS_LOCAL_IMITATE", ROOT.parent / "imitate")).resolve()
+        modules = [ROOT, fastls, fastls / "profile", ftransport, imitate]
         for path in modules:
             if not (path / "go.mod").is_file():
                 raise SystemExit(f"missing local module: {path}")
         work = ROOT / "go.work"
-        contents = "go 1.24\n\nuse (\n" + "".join("  " + json.dumps(Path(os.path.relpath(p, ROOT)).as_posix()) + "\n" for p in modules) + ")\n"
+        contents = "go 1.26.0\n\nuse (\n" + "".join("  " + json.dumps(Path(os.path.relpath(p, ROOT)).as_posix()) + "\n" for p in modules) + ")\n"
         # Bind unpublished versions even when graph loading needs their go.mod.
+        versions = {
+            "github.com/FastTLS/fastls": "v0.1.0-dev.20261023.8",
+            "github.com/FastTLS/fastls/profile": "v0.1.0-dev.20261023.8",
+            "github.com/FastTLS/ftransport": "v0.0.0-20261024124928-a1916e4d2523",
+            "github.com/FastTLS/imitate": "v0.1.0-dev.20261023.8",
+        }
         for path in modules[1:]:
             module = (path / "go.mod").read_text(encoding="utf-8").splitlines()[0].split()[1]
-            contents += f"replace {module} v0.1.0-dev.20261023.8 => " + json.dumps(Path(os.path.relpath(path, ROOT)).as_posix()) + "\n"
+            contents += f"replace {module} {versions[module]} => " + json.dumps(Path(os.path.relpath(path, ROOT)).as_posix()) + "\n"
         work.write_text(contents, encoding="utf-8")
         env["GOWORK"] = str(work)
     else:
@@ -77,6 +86,9 @@ def main():
         "go": subprocess.check_output(["go", "version"], text=True).strip(),
         "cc": env.get("CC", "gcc"), "abi": 1,
         "workspace_source": before,
+        "sources": {name: subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=path, text=True).strip()
+                    for name, path in (("fastls-ffi", ROOT), ("fastls", fastls),
+                                       ("ftransport", ftransport), ("imitate", imitate))} if args.local else {},
         "library_sha256": hashlib.sha256((out / name).read_bytes()).hexdigest(),
         "note": "Unpublished development build. A local workspace build does not validate remote dependency availability.",
     }, indent=2) + "\n", encoding="utf-8")
