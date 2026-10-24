@@ -135,6 +135,9 @@ func (f *fixture) websocketRoute(w http.ResponseWriter, r *http.Request) bool {
 	if mode == "compression" {
 		fmt.Fprint(rw, "Sec-WebSocket-Extensions: permessage-deflate\r\n")
 	}
+	if mode == "hidden-compression" {
+		fmt.Fprint(rw, "Sec-WebSocket-Extensions: \r\nSec-WebSocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover\r\n")
+	}
 	fmt.Fprint(rw, "\r\n")
 	rw.Flush()
 	switch mode {

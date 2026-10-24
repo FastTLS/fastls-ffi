@@ -104,7 +104,7 @@ class WebSockets(FixtureCase):
 
     def test_handshake_reject_redirect_bad_accept_and_unoffered_compression(self):
         with self.session() as s:
-            for mode in ("reject", "redirect", "bad-accept", "compression", "bad-subprotocol", "huge-headers"):
+            for mode in ("reject", "redirect", "bad-accept", "compression", "hidden-compression", "bad-subprotocol", "huge-headers"):
                 with self.subTest(mode=mode), self.assertRaises(FastlsError):
                     s.ws_connect(self.url(mode=mode))
                 self.assertEqual(s.stats()["open_requests"], 0)
