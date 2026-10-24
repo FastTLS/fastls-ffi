@@ -18,7 +18,8 @@ npm run build
 ```
 
 源码默认查找仓库 `dist/`。安装到其它项目后，设置 `FASTLS_LIBRARY` 为动态库绝对路径，
-或向 Session 传 `library`。当前 npm 包不内置 Go 动态库，不会自动下载或编译 Go 库。
+或向 Session 传 `library`。普通 `npm pack` 仍生成需外部动态库的轻量包。
+0.6新增内置本机动态库的候选包，见下节；两类包均不会自动下载或编译Go库。
 Koffi 自身需要对应平台的原生组件，其依赖不等同于 Fastls 动态库。
 
 可运行 `npm pack` 生成本地安装包，再在目标项目中执行 `npm install <安装包绝对路径>`。
@@ -236,14 +237,27 @@ npm run test:package
 测试使用真实动态库和本地靶场，覆盖 H1/H2、证书、连接池、Cookie、多值头、二进制、取消、超时、
 异常正文、64 MiB 下载、32 MiB 缓存限制和 128 路并发。安装包测试在临时项目安装 npm tarball，
 重新执行全部测试并检查包名导入和 TypeScript 声明。证据写入仓库 build/node-*.json。
-十组Python套件的135个场景已有对应项，包含13项双工、23项SSE和20项通知验收，连同原有16项，共151项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
+十组Python套件的136个场景已有对应项，包含13项双工、23项SSE和21项通知验收，连同原有16项，共152项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
 持续测试默认30秒，检查RSS、操作系统句柄/描述符、Go堆和goroutine回收。Linux当前Go/Node组合另跑300秒；设置 `FASTLS_NODE_SOAK_SECONDS=300` 后执行 `npm run test:soak` 可复现。
 
 ## 与Python的语言差异
 
 Node统一使用Promise API，不提供Python同步Session或共享同步会话多线程调用；对应场景采用同步迭代器输入和96路Promise请求验证，不宣称线程安全。Node Readable按自身流的生命周期管理文件句柄，区别于Python保留调用方文件对象。
 JavaScript无法强行中断任意Promise：取消会立即释放原生请求，并请求迭代器return/destroy；生产者正在等待的自定义I/O必须支持取消，才能保证其finally及时执行。推荐使用接收AbortSignal的上传工厂。Python的协程强制取消场景对应为工厂信号取消，报告中明确标记适配。
-安装包验证检查必需入口、类型声明及文件白名单，防止把开发文件或本机二进制混入通用 npm 包。
+安装包验证检查必需入口、类型声明、平台元数据和文件白名单；只允许本平台动态库、清单和依赖声明进入候选包。
 通过后，实际测试过的 tarball、对应 `.sha256` 和 `node-package-info.json` 保存到仓库 `dist/`，
 并随平台 CI artifact 一起保留。清单记录 Node 版本、系统/架构、npm 包及所用动态库的 SHA256；
 CI 运行时还记录提交 SHA。测试前后会核对动态库未被替换。清单用于匹配测试产物，不代表数字签名或公开发布。
+
+## 内置动态库的候选安装包（0.6）
+
+构建本平台Go动态库后，运行 `npm run pack:native`，产物位于上级 `dist/`。
+例如Windows x64：`fasttls-fastls-0.6.0-dev.0-win32-x64.tgz`；Linux包名另带`-glibc`。
+在目标项目执行 `npm install <候选包绝对路径> --ignore-scripts`，随后即可 `new Session()`，无需Go、Python、编译器或FASTLS_LIBRARY。
+安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整152项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
+
+当前候选覆盖Windows x64、Linux glibc x64/arm64、macOS x64/arm64，Node22+。每个tarball只含一个系统/架构，不能将同名版本的这些变体当成可直接发布到npm的通用包。npm的os/cpu/libc字段限制安装目标；首次使用还检查平台、ABI声明、库SHA256及Linux的glibc版本。Linux最低glibc从ELF符号版本提取，macOS最低版本从Mach-O提取，具体要求及系统动态依赖见包内`native/manifest.json`，不将CI宿主机上的通过扩大为所有旧系统均已测试。musl不在当前范围。
+
+加载优先级：Session的`library` → FASTLS_LIBRARY → 包内动态库；源码工作区最后才回退到仓库dist目录。显式覆盖仍检查ABI和能力。包内文件损坏、缺失或平台不符会报错，不静默寻找其它库。SHA256用于完整性核对，不能替代签名或信任来源。
+
+清单还保存Go构建来源摘要、模块版本/校验和、FastTLS仓库提交和收集到的许可证文本。`native/THIRD_PARTY_NOTICES.txt`仅是可用材料清单。当前FastTLS各仓库缺少根LICENSE/COPYING，已明确记为公开发布前的待处理项，不能据此推定已有再分发授权。候选包标记private且没有安装/构建脚本；本阶段仅生成CI验收产物，不发布npm或Release。

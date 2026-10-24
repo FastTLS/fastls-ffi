@@ -142,7 +142,7 @@ jobs:
         run: npm ci --prefix node
       - name: Build and test Node.js SDK
         run: npm test --prefix node
-      - name: Install and test npm package in an isolated project
+      - name: Install and test bundled native npm candidate without build tools
         run: npm run test:package --prefix node
       - name: Extended Node.js resource recovery soak
         if: matrix.race

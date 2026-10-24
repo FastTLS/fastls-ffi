@@ -10,6 +10,6 @@
     "test_upload.py": "bf3b188e04d2c8a3bbd11c3c0a85a313e43256fd9edb10f73cf98bb13826b729",
     "test_duplex.py": "570df447c0b73acc62875263b9538430e28d2fec91d0e3555ffec2f84ccf6e8d",
     "test_sse.py": "d50638d18da1c22ae9795595c94e0081fbe996849d51f8fc1e8e99d9e21ae09b",
-    "test_notifications.py": "ad689b3259d64269e7d2324a6bd0291294fa2f626075808d249bfe5685a6ab2d"
+    "test_notifications.py": "1b35c407a5037bacf00391f0ee94b8d6da4daae8cd29f090535d0e3fed184a4e"
   }
 }
