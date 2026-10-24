@@ -100,3 +100,7 @@ SSE另增加源码/wheel各23项验收，覆盖逐字节与所有分割位置、
 原始失败日志保留于build/ci-20261023T061821035135Z/fhttp-h2.log。
 默认必需检查采用现有Fastls验收入口相同的可移植HTTP2契约范围，不宣称fhttp完整测试已通过。
 需要诊断完整上游测试时，可在workflow_dispatch勾选full_fhttp_tests；它会在各组完成封装测试后附加完整HTTP2测试，任何失败都会使该次运行失败。也可本地设置FASTLS_FULL_FHTTP_TESTS=true运行。
+
+## Python基础靶场并发队列
+
+Python 3.10/3.11基础测试的ThreadingHTTPServer默认backlog为5，而事件循环验收同时建立8路HTTP/1连接。macOS Intel出现该项2秒总超时失败后，靶场改用显式32连接等待队列，保持原有8路请求、2秒预算、正文和取消断言。Node对应项同时验证8路HTTP/1、每路512KiB正文及原有32路H2检查；未通过放宽SDK超时消除失败。
