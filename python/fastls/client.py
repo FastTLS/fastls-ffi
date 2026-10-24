@@ -12,6 +12,14 @@ from ._native import Native, FastlsError, raise_response_error
 from .headers import Headers
 from .cookies import Cookies
 from .timeout import Timeout
+from .request_options import prepare, response_encoding
+
+
+class FastlsHTTPError(FastlsError):
+    def __init__(self, response):
+        self.response = response
+        self.status_code = response.status_code
+        super().__init__(f"HTTP status {self.status_code}")
 
 # Windows asyncio can dispatch timers up to one monotonic-clock tick early.
 # A delay shorter than that tick can repeatedly complete without yielding time.
@@ -46,6 +54,7 @@ class Response:
         self.decoded = info.get("decoded", False)
         self.match = info["match"]
         self._content = None
+        self.encoding = response_encoding(self.headers.get("Content-Type"))
 
     def _read(self, buffer):
         if self._handle is None:
@@ -76,7 +85,15 @@ class Response:
 
     @property
     def text(self):
-        return self.content.decode("utf-8", errors="replace")
+        return self.content.decode(self.encoding or "utf-8", errors="replace")
+
+    @property
+    def ok(self):
+        return self.status_code < 400
+
+    def raise_for_status(self):
+        if 400 <= self.status_code < 600:
+            raise FastlsHTTPError(self)
 
     def json(self):
         return json.loads(self.content)
@@ -257,6 +274,7 @@ class Session:
     def _open(self, method, url, **kwargs):
         if kwargs.get("duplex"):
             raise TypeError("use Session.duplex() for synchronous manual send/receive")
+        url, kwargs = prepare(url, kwargs, self.headers)
         data = kwargs.get("data")
         if hasattr(data, "__aiter__"):
             raise TypeError("async upload iterators require AsyncSession")
@@ -297,9 +315,10 @@ class Session:
     @contextmanager
     def duplex(self, method, url, **kwargs):
         """Manual synchronous H2 exchange; the caller controls send/receive order."""
-        if "data" in kwargs or "duplex" in kwargs:
+        if any(key in kwargs for key in ("data", "json", "files", "duplex")):
             raise TypeError("Session.duplex uses send() and finish_upload(), not data")
         from .duplex import DuplexExchange
+        url, kwargs = prepare(url, kwargs, self.headers)
         handle = self._begin(method, url, duplex=True, **kwargs)
         exchange = DuplexExchange(self, handle)
         try:
@@ -504,6 +523,7 @@ class AsyncSession(Session):
             await source.aclose()
 
     async def _aopen(self, method, url, **kwargs):
+        url, kwargs = prepare(url, kwargs, self.headers)
         await self._ensure_notifications()
         duplex = kwargs.get("duplex", False)
         handle = self._begin(method, url, **kwargs)
