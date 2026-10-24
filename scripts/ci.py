@@ -40,7 +40,7 @@ def resolve():
 
 def preflight(env):
     capabilities = {
-        "fastls/index.go": ("DoContext(", "VerifyTLS", "TLSRootCAs", "RequestHasBody"),
+        "fastls/index.go": ("DoContext(", "VerifyTLS", "TLSRootCAs", "ProxyTLSRootCAs", "RequestHasBody"),
         "fastls/profile/go.mod": ("github.com/FastTLS/fastls/profile",),
         "imitate/go.mod": ("github.com/FastTLS/imitate",),
         "fhttp/go.mod": ("github.com/FastTLS/fhttp",),

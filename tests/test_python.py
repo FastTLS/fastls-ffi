@@ -79,16 +79,16 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
 
-class FixtureServer(ThreadingHTTPServer):
-    # The async case starts eight connections at once. Python 3.10/3.11's
-    # default backlog of five can drop a SYN on macOS and consume its 2s budget.
+class IntegrationServer(ThreadingHTTPServer):
+    # Eight simultaneous new connections must fit without SYN retransmission.
+    # The platform default backlog (5) can exceed this test's two-second budget.
     request_queue_size = 32
 
 
 class Integration(unittest.TestCase):
     def setUp(self):
         # Give each case independent events and sockets, including daemon handlers.
-        self.server = FixtureServer(("127.0.0.1", 0), Handler)
+        self.server = IntegrationServer(("127.0.0.1", 0), Handler)
         self.server.daemon_threads = True
         self.server.release = threading.Event()
         self.server.entered = threading.Event()
