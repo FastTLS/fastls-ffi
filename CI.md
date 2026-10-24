@@ -29,8 +29,8 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 
 F3 本地集成分支已生成不可变提交，`ci/dependencies.json` 固定以下候选；执行远端矩阵前须先推送这些提交，当前文档不把本地提交声称为已发布：
 
-- fastls：f1fe3f174cd77e9d2056efff548cfa9639433533。
-- ftransport：46a3d86770551169642e4422bdcfa2eb9076167b。
+- fastls：12840f5a3fa068589d6c2aa8b9a2e3442ead2a65。
+- ftransport：72f0fe69e21f5437e4c4d8c78156a780218c6370。
 - imitate：28b32d452256e3acbdb2e904869e5c4331bf0177。
 
 Fastls依赖包含连接生命周期、隔离的私有CA根配置、可复用Session、多值头/CookieStore及流式解码/分层预算；Brotli固定v1.2.0以拒绝截断流。ftransport负责标准库请求/响应、HTTP/1.1头顺序、HTTP/2帧与流控、可取消的共用建连及独立空闲超时。动态库须重新构建；核心包测试执行顺序请求、重定向、关闭后重连、活动响应体及并发回归，封装侧重新执行全部同步/异步与流式测试。
