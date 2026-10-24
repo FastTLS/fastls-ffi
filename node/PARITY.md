@@ -1,6 +1,6 @@
 # Python / Node 验收对应关系
 
-范围：十个 Python SDK 行为套件的 135 个用例，基线为 4d4a9d7，保留原始文件名和用例名作为 Node 测试 ID。
+范围：十个 Python SDK 行为套件的 136 个用例，基线为 316342f，保留原始文件名和用例名作为 Node 测试 ID。
 对应关系由 `scripts/check-parity.mjs` 检查；Python 用例新增、删除或改名时，映射未更新会失败。
 `tests/python-baseline.json` 同时固定十个 Python 源文件的哈希；即使用例名称不变，断言改变也必须复核 Node 对应测试后更新基线。
 每项在真实动态库和独立本地靶场上执行，结果写入 `build/node-parity-source-*.json` / `node-parity-package-*.json`。
@@ -16,9 +16,9 @@
 - test_duplex.py：13项，HTTP/2同时收发、手动send/半关闭、64MiB双向哈希、双向背压、响应头后异常及超时、取消和清理。
 - test_sse.py：23项，逐字节及所有分割位置、UTF-8/BOM/行尾、id/retry、大小边界、H1/H2、gzip校验、状态及头、恢复、取消、心跳超时、40MiB背压和双工上传组合。
 
-- test_notifications.py：20项，空闲时无轮询、代次竞态、共享等待取消、128路混合请求、会话隔离、握手认证/取消、断线、旧库门禁、显式poll及资源回收。
+- test_notifications.py：21项，空闲时无轮询、代次竞态、共享等待取消、128路混合请求、会话隔离、握手认证/取消、断线、旧库门禁、显式poll及资源回收、32×32独立会话创建关闭。
 
-加上原有 2 项原生绑定测试和 14 项 Node 基础测试，完整 Node 套件为 151 项。
+加上原有 2 项原生绑定测试和 14 项 Node 基础测试，完整 Node 套件为 152 项。
 TypeScript 的 ESM/CommonJS 类型检查及安装包内容/哈希检查独立于上述用例数。
 共享的Go测试、race检查和Python依赖门禁仍由原CI执行，不用Node重写。
 
@@ -55,8 +55,8 @@ TypeScript 的 ESM/CommonJS 类型检查及安装包内容/哈希检查独立于
 ## 持续运行与证据
 
 源码和安装包分别默认运行30秒、32路并发的资源回收测试。Linux当前Go组合额外运行300秒。
-同一Linux组合另跑60秒、32路并发的双工混合长测，轮换自动上传、取消、手动交换与提前拒绝；支持设置FASTLS_NODE_DUPLEX_SOAK_SECONDS=300延长。该独立检查不计入151项主套件。
-该组合另跑60秒、32路并发的SSE混合长测，轮换正常/压缩事件流、提前break、非法响应头、解析上限及解码错误；设置FASTLS_NODE_SSE_SOAK_SECONDS=300可延长。同样不计入151项主套件，证据为build/node-sse-recovery-source-*.json。
+同一Linux组合另跑60秒、32路并发的双工混合长测，轮换自动上传、取消、手动交换与提前拒绝；支持设置FASTLS_NODE_DUPLEX_SOAK_SECONDS=300延长。该独立检查不计入152项主套件。
+该组合另跑60秒、32路并发的SSE混合长测，轮换正常/压缩事件流、提前break、非法响应头、解析上限及解码错误；设置FASTLS_NODE_SSE_SOAK_SECONDS=300可延长。同样不计入152项主套件，证据为build/node-sse-recovery-source-*.json。
 独立SSE长测显式设置V8的`--max-semi-space-size=16`，以统一不同主机的年轻代容量。Windows Node24默认策略在高分配速率下可将年轻代保留空间扩至128MiB，即使完整GC后存活对象恢复仍保留该空间，影响从冷进程预热基线计算的RSS增量。该参数只约束测试进程的年轻代，不限制老年代、不改变SDK运行配置；RSS、Go堆、goroutine与句柄阈值均保持不变，证据另存运行参数和V8堆空间快照。
 预热后检查goroutine增量不超过16、Go heap_inuse峰值增量不超过96MiB、RSS峰值增量不超过128MiB、最终RSS增量不超过96MiB、句柄/描述符增量不超过64，与Python阈值一致。
 记录请求数、完整时间序列和基线；阈值是回归保护，不是无内存泄漏的证明。

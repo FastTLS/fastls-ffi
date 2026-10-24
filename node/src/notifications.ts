@@ -30,7 +30,12 @@ export class Notifier {
 
   constructor(private readonly native: Native, private readonly session: bigint) { void this.ready.catch(() => {}); }
   start(): Promise<void> {
-    const timeout = setTimeout(() => this.fail(new FastlsError("could not start native notifications within 3 seconds")), 3000);
+    const timeout = setTimeout(() => {
+      try {
+        if (this.registered) this.native.call("session_events", this.session);
+        this.fail(new FastlsError("could not start native notifications within 3 seconds"));
+      } catch (cause) { this.fail(new FastlsError("could not start native notifications", { cause })); }
+    }, 3000);
     void this.ready.then(() => clearTimeout(timeout), () => clearTimeout(timeout));
     try {
       const server = this.server = createServer(socket => this.accept(socket));

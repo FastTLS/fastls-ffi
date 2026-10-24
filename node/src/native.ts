@@ -1,7 +1,6 @@
 import koffi, { type LibraryHandle } from "koffi";
 import { parse, stringify } from "lossless-json";
-import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { libraryPath } from "./library-path.js";
 import { isMainThread } from "node:worker_threads";
 import { FastlsError, responseError } from "./errors.js";
 
@@ -75,14 +74,7 @@ export class Native {
 
   static load(library?: string): Native {
     if (!isMainThread) throw new FastlsError("Fastls must be loaded on the main thread; worker_threads are not supported yet");
-    const name = process.platform === "win32" ? "fastls.dll"
-      : process.platform === "darwin" ? "libfastls.dylib" : "libfastls.so";
-    let path: string;
-    try {
-      path = realpathSync(resolve(library ?? process.env.FASTLS_LIBRARY ?? resolve(__dirname, "../../dist", name)));
-    } catch (cause) {
-      throw new FastlsError("Cannot find Fastls library; set FASTLS_LIBRARY or pass { library: absolutePath }", { cause });
-    }
+    const path = libraryPath(library);
     let native = bindings.get(path);
     if (!native) {
       native = new Native(path);

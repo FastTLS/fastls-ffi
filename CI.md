@@ -17,7 +17,7 @@ runner标签采用GitHub官方支持的标准runner。具体可用额度由仓�
 ## 每组实际执行
 
 Node.js SDK 新增同一原生矩阵的检查：前五组使用 Node 24，最低版本组使用 Node 22。
-Node 0.5 将十组Python SDK的135个场景映射为对应Node用例，包含13项双工、23项SSE及20项通知验收，连同原有16项共151项；源码与隔离安装包均执行。
+Node 0.6 将十组Python SDK的136个场景映射为对应Node用例，包含13项双工、23项SSE及21项通知验收，连同原有16项共152项；源码与隔离安装包均执行。
 每组各运行30秒Node资源回收测试；Linux当前Go组合另跑300秒，检查RSS、句柄/描述符、Go堆及goroutine。
 该Linux组合还分别运行60秒双工与SSE混合资源回收检查；SSE轮换成功、取消、非法头、解析超限和解码失败，保存逐批资源快照。
 Linux当前Go组合另跑60秒双工混合长测，覆盖同连接连续收发、取消、手动交换和提前拒绝，防止取消后流控记账漂移。
@@ -26,7 +26,7 @@ Linux当前Go组合另跑60秒双工混合长测，覆盖同连接连续收发�
 `npm run test:package --prefix node`。安装包检查在临时项目安装 tarball，重复真实动态库测试并验证 ESM/CJS 包名入口。
 Node 证据保存在 `build/node-*.json`，编译后的 SDK 同原生证据一起上传；失败会使现有汇总检查失败。
 隔离安装检查还会保留实际测试过的 npm tarball、SHA256 文件和 `dist/node-package-info.json`，
-清单记录 npm 包与配套动态库校验值、平台、Node版本和运行提交；Go 动态库仍作为独立产物提供。
+清单记录 npm 包与配套动态库校验值、平台、Node版本和运行提交；候选npm包内置本平台Go动态库，独立动态库也继续提供。安装阶段禁用生命周期脚本、清除FASTLS_LIBRARY并使用空工具搜索路径；检查错误架构、库摘要、缺失文件和显式外部覆盖。包内native/manifest.json记录实际原生依赖及最低glibc/macOS要求；许可证缺失作为发布前待处理项记录。
 各平台结果以同一提交的Actions退出状态和artifact中的逐项记录为准，映射清单及配置加入不代表已通过。
 
 构建c-shared动态库及头文件；运行依赖版本门禁测试、核心与桥接Go测试、Python源码SDK集成测试、profile和生成器测试，以及fhttp HTTP2的显式空/零设置与连接设置契约测试、vet检查。
@@ -96,6 +96,6 @@ SSE另增加源码/wheel各23项验收，覆盖逐字节与所有分割位置、
 ## 上游完整测试的范围
 
 本地试跑完整fhttp/http2测试已记录失败，包括依赖用户目录charles_cert.pem的用例、原版Accept-Encoding假设、TLS1.0/1.1默认版本变化及PushPromise的Host断言。
-原始失败日志保留于build/ci-20261023T061821035135Z/fhttp-h2.log。
+原始失败日志保留于build/ci-20261023T061821035136Z/fhttp-h2.log。
 默认必需检查采用现有Fastls验收入口相同的可移植HTTP2契约范围，不宣称fhttp完整测试已通过。
 需要诊断完整上游测试时，可在workflow_dispatch勾选full_fhttp_tests；它会在各组完成封装测试后附加完整HTTP2测试，任何失败都会使该次运行失败。也可本地设置FASTLS_FULL_FHTTP_TESTS=true运行。

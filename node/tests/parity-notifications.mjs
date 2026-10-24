@@ -1,4 +1,4 @@
-import { parity, session, fixture, assert, delay, sdk, sdkEntry, Native, Notifier, eventually, control, randomUUID, evidence, resources } from './harness.mjs';
+import { parity, session, fixture, assert, delay, sdk, sdkEntry, Native, Notifier, eventually, control, randomUUID, evidence, resources, monitor } from './harness.mjs';
 import { createRequire } from 'node:module';
 const require=createRequire(import.meta.url),crypto=require('node:crypto');
 const p=(name,fn,adaptation)=>parity('test_notifications.py',name,fn,adaptation);
@@ -6,6 +6,13 @@ async function held(t,s=session(t,{notifications:'required'})) {const response=a
 async function idleBody(t){const {s,response,reader}=await held(t);let reads=0;const native=s.native,original=native.read;native.read=function(...args){reads++;return original.apply(this,args);};try{const pending=assert.rejects(reader.next(),sdk.AbortError);await delay(50);const before=reads;await delay(250);assert.ok(reads-before<=1);response.cancel();await pending;return {seconds:0.25,read_calls:reads-before,mode:s.notificationMode};}finally{native.read=original;await s.closeAsync();}}
 async function brokenSetup(t,action){const original=crypto.timingSafeEqual;crypto.timingSafeEqual=()=>false;try{return await action();}finally{crypto.timingSafeEqual=original;}}
 
+p('test_concurrent_independent_session_churn',async t=>{
+ await Promise.all(Array.from({length:32},async()=>{for(let i=0;i<32;i++){
+  const s=session(t,{notifications:'required'});try{assert.equal((await s.get(fixture.https1+'/bytes?n=4')).status,200);}finally{await s.closeAsync();}
+ }}));
+ await eventually(()=>monitor.stats().notifiers===0&&monitor.stats().open_requests===0);
+ evidence.measurements.notification_session_churn={concurrency:32,iterations:32,sessions:1024};
+});
 p('test_sync_wait_releases_gil_and_does_not_poll_body',async t=>{evidence.measurements.notification_idle_adapted=await idleBody(t);},'Node has one nonblocking Promise API; idle-read counts and timer progress replace Python GIL and blocking-wait checks.');
 p('test_async_idle_body_has_no_timer_polling_or_python_threads',async t=>{evidence.measurements.notification_idle=await idleBody(t);assert.equal(evidence.measurements.notification_idle.mode,'async-events');},'Node attaches its main-thread event loop to the wakeup socket; no JavaScript worker is created. Native Go and Node runtime threads are not Python thread counts.');
 p('test_async_idle_headers_do_not_poll_info',async t=>{
@@ -60,7 +67,13 @@ p('test_overflow_hint_rescans_all_owned_handles',async t=>{
  const s=session(t,{notifications:'required'}),ids=[randomUUID(),randomUUID()],responses=await Promise.all(ids.map(id=>s.stream('GET',fixture.https2+'/sse-hold?id='+id))),readers=responses.map(r=>r.body[Symbol.asyncIterator]());await Promise.all(readers.map(r=>r.next()));const original=s.native.call;
  s.native.call=function(name,...args){const result=original.call(this,name,...args);return name==='session_events'?{handles:[],overflow:true}:result;};try{const pending=Promise.all(readers.map(r=>r.next()));await delay(30);await Promise.all(ids.map(id=>control('/release',id)));const values=await pending;assert.ok(values.every(r=>r.value.includes('last')));}finally{s.native.call=original;for(const r of responses)r.close();}
 });
-p('test_wrong_handshake_fails_cleanly_then_retries',async t=>{const s=session(t,{notifications:'required'});await brokenSetup(t,()=>assert.rejects(s.get(fixture.https2),/notification/));assert.equal(s.stats().notifiers,0);assert.equal(s.stats().open_requests,0);assert.equal((await s.get(fixture.https2)).status,200);});
+p('test_wrong_handshake_fails_cleanly_then_retries',async t=>{
+ const s=session(t,{notifications:'required'});await brokenSetup(t,()=>assert.rejects(s.get(fixture.https2),/notification/));assert.equal(s.stats().notifiers,0);assert.equal(s.stats().open_requests,0);
+ const native=s.native,original=native.call,diagnostic=Error('native notification transport: simulated startup failure');
+ native.call=function(name,...args){if(name==='session_events')throw diagnostic;return original.call(this,name,...args);};
+ try{await brokenSetup(t,()=>assert.rejects(s.get(fixture.https2),error=>error.cause===diagnostic));}finally{native.call=original;}
+ assert.equal(s.stats().notifiers,0);assert.equal((await s.get(fixture.https2)).status,200);
+});
 p('test_context_initializes_before_body_and_cleans_failed_entry',async t=>{
  const s=await sdk.Session.open({caFile:fixture.ca_file,notifications:'required'});try{assert.ok(s.notifier.isReady);assert.equal(s.stats().notifiers,1);assert.equal(s.stats().open_requests,0);}finally{await s.closeAsync();}
  await brokenSetup(t,()=>assert.rejects(sdk.Session.open({caFile:fixture.ca_file,notifications:'required'}),/notification/));await eventually(()=>Native.load().call('stats').notifiers===0);assert.equal(Native.load().call('stats').open_sessions,1);

@@ -1,6 +1,6 @@
 {
   "name": "@fasttls/fastls",
-  "version": "0.5.0-dev.0",
+  "version": "0.6.0-dev.0",
   "description": "Node.js bindings for the Fastls C ABI",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -27,7 +27,8 @@
     "test:sse:soak": "node --expose-gc --max-semi-space-size=16 --test tests/sse-recovery.mjs",
     "test:types": "tsc --ignoreConfig --noEmit --strict --module NodeNext --target ES2022 --types node tests/types.mts tests/types.cts",
     "test:package": "node scripts/test-package.mjs",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "pack:native": "node scripts/pack-native.mjs"
   },
   "dependencies": {
     "koffi": "3.3.3",
