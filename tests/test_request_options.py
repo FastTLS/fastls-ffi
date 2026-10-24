@@ -4,7 +4,9 @@ import base64
 import hashlib
 import io
 import math
+import time
 import unittest
+from unittest.mock import patch
 
 from test_stability import FixtureCase, EvidenceResult, SLAB, resources
 from fastls import FastlsHTTPError
@@ -117,6 +119,32 @@ class RequestOptions(FixtureCase):
                 self.assertFalse(owned.closed)
                 owned.close()
                 self.assertEqual(s.post(self.fixture[key] + "/multipart", files={}).json()["parts"], [])
+
+    def test_multipart_immediate_response_after_terminal_boundary(self):
+        # Force headers to arrive before the producer gets another Python turn.
+        # A separate EOF write incorrectly rejects this valid server response.
+        def delayed(native):
+            original = native.write
+            def write(handle, data, end=False):
+                code = original(handle, data, end=end)
+                if code == 0 and data.startswith(b"--fastls-") and data.endswith(b"--\r\n"):
+                    deadline = time.monotonic() + 5
+                    while native.call("fastls_info", handle)["state"] == "pending":
+                        if time.monotonic() > deadline:
+                            raise AssertionError("server did not respond after terminal boundary")
+                        time.sleep(.001)
+                return code
+            return write
+        with self.session() as s, patch.object(s._native, "write", delayed(s._native)):
+            for _ in range(10):
+                self.assertEqual(s.post(self.fixture["https2"] + "/multipart", files={"file": ("a.bin", b"content")}).json()["parts"][0]["bytes"], 7)
+        async def run():
+            async with self.session(async_=True) as s:
+                with patch.object(s._native, "write", delayed(s._native)):
+                    for _ in range(10):
+                        r = await s.post(self.fixture["https2"] + "/multipart", files={"file": ("a.bin", b"content")})
+                        self.assertEqual(r.json()["parts"][0]["bytes"], 7)
+        asyncio.run(run())
 
     def test_multipart_64mib_slow_consumer_bounded_reads_and_memory(self):
         before = resources()["rss_bytes"]

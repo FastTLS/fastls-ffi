@@ -49,6 +49,7 @@ class Multipart:
         self.boundary = "fastls-" + secrets.token_hex(24)
         self.parts = []
         self.used = False
+        self.final_chunk = False
         for name, value in _values(data, "data") if data is not None else ():
             name = name.decode("utf-8") if isinstance(name, bytes) else name
             self.parts.append((f'Content-Disposition: form-data; name="{_quoted(name)}"\r\n',
@@ -84,6 +85,9 @@ class Multipart:
             finally:
                 source.close()
             yield b"\r\n"
+        # Publish EOF with this known terminal block. A multipart parser may
+        # respond as soon as it sees the boundary, before a separate EOF write.
+        self.final_chunk = True
         yield ("--" + self.boundary + "--\r\n").encode("ascii")
 
 
