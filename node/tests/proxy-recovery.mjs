@@ -3,6 +3,8 @@ import { writeFileSync } from 'node:fs';
 import { session, fixture, sdk, assert, delay, eventually, resources, root, randomUUID } from './harness.mjs';
 import { ProxyLab } from './proxy-lab.mjs';
 import { getHeapSpaceStatistics } from 'node:v8';
+import { createConnection } from 'node:net';
+import { once } from 'node:events';
 
 const seconds = Number(process.env.FASTLS_NODE_PROXY_SOAK_SECONDS ?? 60);
 assert.ok(Number.isInteger(seconds) && seconds >= 1 && seconds <= 300);
@@ -39,6 +41,13 @@ test('proxy tunnels recover after shared H2 cancellation, failed auth and cancel
     assert.equal(s.stats().open_requests,0);proof.requests+=32;
   };
   try {
+    // A raw FIN before ClientHello must not leave the TLS acceptance fixture
+    // waiting for a handshake timeout. This makes the cancellation race fixed.
+    const https=normal.find(p=>p.scheme==='https');
+    const probe=createConnection({host:'127.0.0.1',port:Number(new URL(https.url).port)});
+    t.after(()=>probe.destroy());await once(probe,'connect');probe.end();
+    await eventually(()=>probe.destroyed&&https.sockets.size===0);
+    proof.fixture_eof_probe=true;
     // Seed each H2 connection before concurrent traffic; racing the initial
     // connection dial may legitimately create multiple idle pooled tunnels.
     for(const proxy of normal)await s.get(fixture.https2+'/bytes?n=4',{proxy:proxy.url});
@@ -56,7 +65,11 @@ test('proxy tunnels recover after shared H2 cancellation, failed auth and cancel
     assert.ok(Math.max(...proof.samples.map(s=>s.rss_bytes))<=proof.baseline.rss_bytes+128*1024**2);
     assert.ok(Math.max(...proof.samples.map(s=>s.heap_inuse_bytes))<=proof.baseline.heap_inuse_bytes+96*1024**2);
     proof.passed=true;
-  }catch(error){proof.error=String(error);proof.final=resources();proof.final_v8=getHeapSpaceStatistics();throw error;}
+  }catch(error){
+    proof.error=String(error);proof.final=resources();proof.final_v8=getHeapSpaceStatistics();
+    proof.proxy_state=[...normal,...stalled].map(p=>({scheme:p.scheme,mode:p.mode,accepted:p.accepted,sockets:[...p.sockets].map(s=>({type:s.constructor.name,destroyed:s.destroyed,readableEnded:s.readableEnded,writableEnded:s.writableEnded,remotePort:s.remotePort}))}));
+    throw error;
+  }
   finally{
     proof.seconds=started===undefined?0:(performance.now()-started)/1000;
     // Diagnostic only: thresholds above use the pre-GC final sample.
