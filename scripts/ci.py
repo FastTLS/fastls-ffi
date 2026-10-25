@@ -264,7 +264,7 @@ def run(stage="all"):
     finally:
         runner.results["success"] = success
         runner.checkpoint()
-    summary(f"Native checks passed on {target}; evidence: {evidence.name}. This run does not publish a release.")
+    summary(f"Native checks passed on {target}; evidence: {evidence.name}. The aggregate workflow decides whether the certified candidate is retained or published on GitHub.")
     return 0
 
 

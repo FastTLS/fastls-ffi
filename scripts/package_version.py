@@ -15,6 +15,8 @@ VERSION_PATTERN = re.compile(
 def package_version(environ=None):
     environ = os.environ if environ is None else environ
     value = environ.get("FASTLS_PACKAGE_VERSION") or VERSION_FILE.read_text(encoding="utf-8").strip()
+    if environ.get("FASTLS_RELEASE_MODE", "").lower() == "true" and value.startswith("v"):
+        value = value[1:]
     if not VERSION_PATTERN.fullmatch(value):
         raise RuntimeError(f"invalid FASTLS package version: {value!r}")
     return value

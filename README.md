@@ -1,11 +1,11 @@
 # fastls-ffi
 
-Fastls 的 C ABI 动态库和 Python SDK。当前是未发布的开发版本。
+Fastls 的 C ABI 动态库和 Python SDK。正式 wheel、SDK-only sdist 和签发材料仅通过 GitHub Releases 发布，不上传 PyPI。
 指纹生成复用独立 `FastTLS/imitate`，请求侧复用 `FastTLS/fastls`；Python 无需手动接入 Provider。
 
 ## 本地构建
 
-需要 Go 1.26+ 与目标平台的 cgo C 编译器。当前上游依赖是未发布候选，需要本地兄弟仓库：
+从源码开发需要 Go 1.26+ 与目标平台的 cgo C 编译器。修改多个上游仓库时可使用本地兄弟仓库：
 
 ```text
 workspace/
@@ -24,7 +24,7 @@ python scripts/build.py --local
 编译器可通过 `CC` 或 `--cc` 指定。Windows 需兼容 Go cgo 的编译器，例如 MinGW-w64；已有 Zig 也可以使用 `--cc "<zig路径> cc -target x86_64-windows.win10-gnu"`。
 产物位于 `dist/`，包含动态库、生成的 C 头文件及构建说明。各系统和架构需分别构建并运行验证。
 `--local` 只写本仓库被忽略的 go.work，不修改全局 Go 配置或上游 go.mod。
-不带 `--local` 的构建要求依赖候选已能从模块源获取；目前不承诺可用。
+不带 `--local` 的构建使用 `go.mod` 中的正式模块版本。
 
 Python 3.10+，无第三方Python运行依赖。安装本地 SDK：
 
@@ -32,7 +32,7 @@ Python 3.10+，无第三方Python运行依赖。安装本地 SDK：
 python -m pip install -e ./python
 ```
 
-本地源码和SDK-only sdist不编译或下载原生库，默认可查找本仓库 `dist/`；独立安装后需设置 `FASTLS_LIBRARY` 为动态库绝对路径，或向 Session 传 `library=...`。候选平台wheel已内置对应动态库，但尚未发布PyPI；平台与系统边界见[PACKAGING.md](PACKAGING.md)。
+本地源码和SDK-only sdist不编译或下载原生库，默认可查找本仓库 `dist/`；独立安装后需设置 `FASTLS_LIBRARY` 为动态库绝对路径，或向 Session 传 `library=...`。GitHub Release 中的平台 wheel 已内置对应动态库；平台与系统边界见[PACKAGING.md](PACKAGING.md)。
 
 ## 同步调用
 
