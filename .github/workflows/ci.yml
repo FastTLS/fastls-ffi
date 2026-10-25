@@ -42,6 +42,22 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.11'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.10'
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Verify standalone remote module graph
+        env:
+          GOWORK: 'off'
+        run: |
+          go mod download
+          go mod verify
+          go list -m all
+          if go mod graph | grep -F 'github.com/FastTLS/fhttp'; then
+            echo 'legacy fhttp dependency remains in the module graph' >&2
+            exit 1
+          fi
       - name: Require reviewed dependency commits
         id: refs
         env:
