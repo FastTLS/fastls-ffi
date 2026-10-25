@@ -355,6 +355,20 @@ class WebSockets(FixtureCase):
             await asyncio.gather(*(exchange(str(i)) for i in range(8)))
         asyncio.run(run())
 
+    def test_manual_cookie_mode_disables_both_directions(self):
+        with self.session() as s:
+            base=self.fixture['https1']
+            s.cookies.set('seed','private',url=base,path='/')
+            self.assertEqual(self.inspect_cookies(s,cookie_mode='manual',params={'set_cookie':'ignored=no; Path=/'}),'')
+            self.assertEqual(s.cookies.get_dict(base),{'seed':'private'})
+            self.assertEqual(self.inspect_cookies(s,cookie_mode='manual',headers={'Cookie':'explicit=yes'}),'explicit=yes')
+
+    def test_invalid_upgrade_does_not_poison_cookie_store(self):
+        with self.session() as s:
+            with self.assertRaises(FastlsError):
+                s.ws_connect(self.url(mode='bad-accept'),params={'set_cookie':'poison=no; Path=/'})
+            self.assertEqual(s.cookies.get_list(self.fixture['https1']),[])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2, testRunner=unittest.TextTestRunner(verbosity=2, resultclass=EvidenceResult))

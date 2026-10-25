@@ -75,3 +75,7 @@ int fastls_ws_read(uint64_t handle, void *buffer, size_t capacity,
 继续复用 `fastls_info/wait/cancel/close`、会话通知及会话关闭。HTTP 的 `fastls_read/write` 不可用于 WS 句柄。C 调用方必须保证单读者和单写入序列，并在释放句柄前协调并发调用。独立 C 示例见 `examples/c/websocket.c`。
 
 协议依据：[RFC6455](https://www.rfc-editor.org/rfc/rfc6455.html)。消息实现基于仓库已固定的 [Gorilla WebSocket v1.5.3](https://pkg.go.dev/github.com/gorilla/websocket@v1.5.3)，额外实施 UTF-8、协商、长度和生命周期检查。测试靶场独立手写帧，不复用客户端的 WebSocket 库。
+
+## Cookie控制能力统一
+
+与Node候选分支共同提供websocket_cookie_control_v1，并保留websocket_cookies与websocket_cookies_v1标记。Python cookie_mode="manual"通过disable_cookies禁用本次握手的自动收发；显式Cookie仍可发送。无效101握手不写回Cookie。仅有历史websocket_cookies_v1能力的原生库无法保证manual，新SDK会在启动握手前拒绝；需升级原生库。

@@ -37,7 +37,9 @@ def source_digest(env):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--local", action="store_true", help="use unpublished sibling modules through an ignored go.work")
+    workspace = parser.add_mutually_exclusive_group()
+    workspace.add_argument("--local", action="store_true", help="use unpublished sibling modules through an ignored go.work")
+    workspace.add_argument("--workspace", type=Path, help="use an existing go.work without rewriting module paths")
     parser.add_argument("--cc", help="C compiler command; otherwise use CC or gcc")
     args = parser.parse_args()
     env = os.environ.copy()
@@ -66,6 +68,11 @@ def main():
             contents += f"replace {module} {versions[module]} => " + json.dumps(Path(os.path.relpath(path, ROOT)).as_posix()) + "\n"
         work.write_text(contents, encoding="utf-8")
         env["GOWORK"] = str(work)
+    elif args.workspace:
+        work = args.workspace.resolve(strict=True)
+        if not work.is_file():
+            parser.error("--workspace must name a go.work file")
+        env["GOWORK"] = str(work)
     else:
         env["GOWORK"] = "off"
     name = "fastls.dll" if sys.platform == "win32" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
@@ -82,7 +89,7 @@ def main():
     if generated_header != header:
         shutil.copyfile(generated_header, header)
     (out / "build-info.json").write_text(json.dumps({
-        "platform": platform.platform(), "machine": platform.machine(), "local_dependencies": args.local,
+        "platform": platform.platform(), "machine": platform.machine(), "local_dependencies": args.local or bool(args.workspace),
         "go": subprocess.check_output(["go", "version"], text=True).strip(),
         "cc": env.get("CC", "gcc"), "abi": 1,
         "workspace_source": before,

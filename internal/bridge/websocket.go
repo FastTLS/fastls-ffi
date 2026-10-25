@@ -26,6 +26,7 @@ import (
 const MaxWSMessage = 16 * 1024 * 1024
 
 type WebSocketInput struct {
+	DisableCookies bool              `json:"disable_cookies"`
 	URL            string            `json:"url"`
 	Profile        string            `json:"profile"`
 	Session        uint64            `json:"session"`
@@ -178,7 +179,6 @@ func (e *Engine) StartWebSocket(raw []byte) (uint64, error) {
 		cancel()
 		return 0, errors.New("too many open requests")
 	}
-	var cookies *fastls.CookieStore
 	if in.Session != 0 {
 		s := e.sessions[in.Session]
 		if s == nil {
@@ -187,7 +187,9 @@ func (e *Engine) StartWebSocket(raw []byte) (uint64, error) {
 			return 0, errors.New("invalid or closed session handle")
 		}
 		r.owner, r.watch = in.Session, s.watch
-		cookies = s.cookies
+		if !in.DisableCookies {
+			opts.CookieJar = s.cookies
+		}
 	}
 	r.id = e.next.Add(1)
 	e.requests[r.id] = r
@@ -202,8 +204,29 @@ func (e *Engine) StartWebSocket(raw []byte) (uint64, error) {
 		}
 		r.signal()
 	})
-	go func() { defer e.workers.Add(-1); defer cancel(); r.runWebSocket(e, in, opts, cookies) }()
+	go func() { defer e.workers.Add(-1); defer cancel(); r.runWebSocket(e, in, opts) }()
 	return r.id, nil
+}
+
+func addWebSocketCookies(opts *fastls.Options, u *url.URL) {
+	if opts.CookieJar == nil {
+		return
+	}
+	for name := range opts.Headers {
+		if strings.EqualFold(name, "Cookie") {
+			return // An explicit empty header also suppresses automatic cookies.
+		}
+	}
+	request := &http.Request{Header: make(http.Header)}
+	for _, c := range opts.CookieJar.Cookies(u) {
+		request.AddCookie(&http.Cookie{Name: c.Name, Value: c.Value})
+	}
+	if value := request.Header.Get("Cookie"); value != "" {
+		if opts.Headers == nil {
+			opts.Headers = make(map[string]string)
+		}
+		opts.Headers["Cookie"] = value
+	}
 }
 
 func (r *request) wsError(err error, phase string) {
@@ -218,46 +241,27 @@ func (r *request) wsError(err error, phase string) {
 	r.setError(err)
 }
 
-func (r *request) runWebSocket(e *Engine, in WebSocketInput, opts fastls.Options, cookies *fastls.CookieStore) {
+func (r *request) runWebSocket(e *Engine, in WebSocketInput, opts fastls.Options) {
 	defer func() {
 		if recover() != nil {
 			r.setError(errors.New("internal WebSocket failure"))
 		}
 	}()
-	// Reuse the HTTP jar, including its locking, public suffix and Secure rules.
-	u, _ := url.Parse(in.URL)
-	if u.Scheme == "wss" {
-		u.Scheme = "https"
+	cookieURL, _ := url.Parse(in.URL) // StartWebSocket already validated this URL.
+	if cookieURL.Scheme == "wss" {
+		cookieURL.Scheme = "https"
 	} else {
-		u.Scheme = "http"
+		cookieURL.Scheme = "http"
 	}
-	if cookies != nil {
-		explicit := false
-		for name := range opts.Headers {
-			explicit = explicit || strings.EqualFold(name, "Cookie")
-		}
-		if !explicit {
-			header := &http.Request{Header: make(http.Header)}
-			for _, cookie := range cookies.Cookies(u) {
-				header.AddCookie(cookie)
-			}
-			if value := header.Header.Get("Cookie"); value != "" {
-				if opts.Headers == nil {
-					opts.Headers = make(map[string]string)
-				}
-				opts.Headers["Cookie"] = value
-			}
-		}
-	}
+	addWebSocketCookies(&opts, cookieURL)
 	ctx, cancel := context.WithTimeout(r.ctx, time.Duration(in.TimeoutMS)*time.Millisecond)
 	c, resp, err := fastls.DialWebSocketContext(ctx, in.URL, opts, in.Protocols)
 	cancel()
 	if resp != nil {
-		// HTTP also accepts cookies from non-success responses. No redirect is
-		// followed: these cookies belong only to the original handshake URL.
-		if cookies != nil {
-			response := &http.Response{Header: http.Header(resp.Header)}
-			cookies.SetCookies(u, response.Cookies())
+		// Non-101 HTTP responses update the jar just like HTTP error/redirect
+		// responses. Reject cookies from an invalid 101 protocol negotiation.
+		if opts.CookieJar != nil && (err == nil || resp.StatusCode != 101) {
+			opts.CookieJar.SetCookies(cookieURL, (&http.Response{Header: http.Header(resp.Header)}).Cookies())
 		}
 		r.mu.Lock()
 		r.info.Status = resp.StatusCode
