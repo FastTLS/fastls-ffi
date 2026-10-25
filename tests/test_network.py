@@ -158,6 +158,19 @@ class NetworkFaults(FixtureCase):
             response = session.get("http://" + peer.address, timeout=5)
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.content, b"\x00\x01\x80\xffend")
+            self.assertEqual(response.http_version, "HTTP/1.1")
+            self.assertEqual(response.url, "http://" + peer.address)
+            self.assertEqual(response.trailers["X-Checksum"], "fixture")
+
+    def test_request_and_response_trailers_and_metadata(self):
+        for name, protocol in (("https1", "HTTP/1.1"), ("https2", "HTTP/2.0")):
+            with self.subTest(protocol=name), self.session() as session:
+                url = self.fixture[name] + "/trailers"
+                response = session.post(url, data=b"payload", trailers={"X-Request-Trailer": ["request-value"]})
+                self.assertEqual(response.text, "request-value")
+                self.assertEqual(response.http_version, protocol)
+                self.assertEqual(response.url, url)
+                self.assertEqual(response.trailers["X-Response-Trailer"], "response-value")
 
     def test_aborted_h1_connection_and_h2_stream_recover(self):
         for name in ("https1", "https2"):

@@ -450,6 +450,11 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"protocol": r.Proto, "headers": r.Header})
 	case "/echo":
 		io.Copy(w, r.Body)
+	case "/trailers":
+		_, _ = io.ReadAll(r.Body)
+		w.Header().Set("Trailer", "X-Response-Trailer")
+		_, _ = io.WriteString(w, r.Trailer.Get("X-Request-Trailer"))
+		w.Header().Set("X-Response-Trailer", "response-value")
 	case "/sse":
 		w.Header().Set("Content-Type", "text/event-stream")
 		data := []byte("data: 第一条\n\ndata: second\n\n")

@@ -49,8 +49,11 @@ class Response:
     def __init__(self, owner, handle, info):
         self._owner, self._handle = owner, handle
         self.status_code = info["status"]
+        self.http_version = info.get("protocol", "")
+        self.url = info.get("final_url", "")
         self.headers = Headers(info.get("header_values"), fallback=info.get("headers", {}))
         self.wire_headers = Headers(info.get("wire_header_values"), fallback=dict(self.headers)) if info.get("wire_header_values") else self.headers
+        self.trailers = Headers(info.get("trailer_values"))
         self.decoded = info.get("decoded", False)
         self.match = info["match"]
         self._content = None
@@ -59,7 +62,13 @@ class Response:
     def _read(self, buffer):
         if self._handle is None:
             raise FastlsError("response is closed")
-        return self._owner._native.read(self._handle, buffer)
+        result = self._owner._native.read(self._handle, buffer)
+        if result[0] == 2:
+            info = self._owner._info(self._handle)
+            self.trailers = Headers(info.get("trailer_values"))
+            self.http_version = info.get("protocol", self.http_version)
+            self.url = info.get("final_url", self.url)
+        return result
 
     def iter_bytes(self, chunk_size=65536):
         if not 1 <= chunk_size <= 1024 * 1024:
@@ -190,7 +199,7 @@ class Session:
         else:
             time.sleep(POLL_INTERVAL)
 
-    def _begin(self, method, url, *, profile=None, headers=None, data=None, timeout=None, allow_redirects=True,
+    def _begin(self, method, url, *, profile=None, headers=None, trailers=None, data=None, timeout=None, allow_redirects=True,
                decode_content=None, max_decoded_bytes=None, duplex=False, proxy=_INHERIT_PROXY, proxy_ca_file=_INHERIT_PROXY):
         selected_proxy = self.proxy if proxy is _INHERIT_PROXY else proxy
         if selected_proxy is not None and not isinstance(selected_proxy, str):
@@ -214,6 +223,17 @@ class Session:
         merged.update({k.lower(): v for k, v in (headers or {}).items()})
         if any(not isinstance(v, str) for v in merged.values()):
             raise TypeError("header values must be strings")
+        normalized_trailers = {}
+        if trailers is not None:
+            if "request_trailers" not in self._native.call("fastls_features"):
+                raise FastlsError("request trailers require a newer Fastls native library")
+            if not isinstance(trailers, dict):
+                raise TypeError("trailers must be a mapping")
+            for name, value in trailers.items():
+                values = [value] if isinstance(value, str) else value
+                if not isinstance(name, str) or not isinstance(values, (list, tuple)) or any(not isinstance(item, str) for item in values):
+                    raise TypeError("trailer names and values must be strings")
+                normalized_trailers[name] = list(values)
         limit = self.timeout if timeout is None else timeout
         limit = limit if isinstance(limit, Timeout) else Timeout(total=limit)
         if limit.write is not None and "write_timeout" not in self._native.call("fastls_features"):
@@ -227,6 +247,8 @@ class Session:
         request = dict(url=url, method=method, profile=self.profile if profile is None else profile,
                        session=self._session, headers=merged, disable_redirect=duplex or not allow_redirects,
                        decode_content=decode, max_decoded_bytes=maximum, **limit.native_fields())
+        if normalized_trailers:
+            request["trailers"] = normalized_trailers
         if self._ca_pem is not None:
             request["ca_pem"] = self._ca_pem
         if selected_proxy:

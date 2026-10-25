@@ -19,7 +19,7 @@ with Session(profile="chrome/156/windows") as session:
 
 response.headers是大小写不敏感的只读Mapping。headers[name]和headers.get(name)返回该字段的第一个值；get_list(name)返回所有值的独立列表，multi_items()返回包含重复字段的(name,value)列表。不存在的字段使用get_list会返回空列表。
 
-Set-Cookie、Link等字段不会按逗号或旧的/,/分隔符拆分；每个解析后的字段值分别保留。映射不承诺原始字段名大小写、跨字段的线上顺序或原始报文字节；trailer与重定向历史不在此接口中。这里只展示最终响应头，重定向中间响应的Cookie仍会进入存储。
+Set-Cookie、Link等字段不会按逗号或旧的/,/分隔符拆分；每个解析后的字段值分别保留。映射不承诺原始字段名大小写、跨字段的线上顺序或原始报文字节。`response.trailers` 在正文成功读到 EOF 后提供相同的多值只读映射；这里只展示最终响应头和 Trailer，重定向中间响应的 Cookie 仍会进入存储。
 
 与此前开发版本的dict相比，Python的头访问现在大小写不敏感且只读；Set-Cookie单值访问返回第一项，获取全部Cookie应使用get_list。
 
@@ -37,7 +37,7 @@ Set-Cookie、Link等字段不会按逗号或旧的/,/分隔符拆分；每个解
 
 ## 原生边界
 
-核心Response新增HeaderValues；旧Headers单值映射继续保留，包括历史Set-Cookie拼接形式。C ABI仍为版本1，fastls_info新增header_values字段（字段名到字符串数组），不改变原有headers字段。
+核心 Response 提供 HeaderValues、Trailer、Protocol 与 FinalURL；旧 Headers 单值映射继续保留，包括历史 Set-Cookie 拼接形式。C ABI 仍为版本 1，`fastls_info` 增加 `header_values`、`trailer_values`、`protocol` 与 `final_url`，不改变原有 headers 字段。
 
 新增fastls_session_cookies(handle,data,length)，输入是最多16384字节的UTF-8 JSON命令，返回仍为JSON信封并由fastls_free释放。支持action=get/set/clear/configure；get/set要求HTTP(S)绝对URL且不含凭据，set使用cookie对象，configure要求enabled布尔值。旧C客户端可继续使用原接口；新版Python包需同时更新动态库。
 
