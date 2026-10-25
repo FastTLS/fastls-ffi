@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"runtime"
 	"strings"
@@ -51,6 +52,7 @@ type Input struct {
 	Method           string            `json:"method"`
 	Profile          string            `json:"profile"`
 	Headers          map[string]string `json:"headers"`
+	Trailers         http.Header       `json:"trailers,omitempty"`
 	Body             string            `json:"body"`
 	BodyBase64       *string           `json:"body_base64"`
 	TimeoutMS        int64             `json:"timeout_ms"`
@@ -67,8 +69,11 @@ type Info struct {
 	TimeoutPhase     string              `json:"timeout_phase,omitempty"`
 	State            string              `json:"state"`
 	Status           int                 `json:"status,omitempty"`
+	Protocol         string              `json:"protocol,omitempty"`
+	FinalURL         string              `json:"final_url,omitempty"`
 	Headers          map[string]string   `json:"headers,omitempty"`
 	HeaderValues     map[string][]string `json:"header_values,omitempty"`
+	TrailerValues    map[string][]string `json:"trailer_values,omitempty"`
 	Match            profile.Match       `json:"match"`
 	Error            string              `json:"error,omitempty"`
 }
@@ -282,7 +287,7 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 			return 0, errors.New("proxy headers must not be sent as target headers; configure proxy URL credentials")
 		}
 	}
-	opts := fastls.Options{Proxy: in.Proxy, Headers: in.Headers, Body: in.Body, VerifyTLS: true,
+	opts := fastls.Options{Proxy: in.Proxy, Headers: in.Headers, Body: in.Body, Trailers: in.Trailers, VerifyTLS: true,
 		Timeout: int((in.TimeoutMS + 999) / 1000), DisableRedirect: in.DisableRedirect}
 	if in.ProxyCAPEM != "" {
 		proxyURL, _ := url.Parse(in.Proxy)
@@ -335,7 +340,7 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 			}
 			// The first request must not become the pool's default headers or UA.
 			poolOpts := opts
-			poolOpts.Headers, poolOpts.HeaderValues, poolOpts.Body = nil, nil, ""
+			poolOpts.Headers, poolOpts.HeaderValues, poolOpts.Body, poolOpts.Trailers = nil, nil, "", nil
 			poolOpts.UserAgent = poolOpts.FingerprintUserAgent
 			poolOpts.DisableRedirect = false
 			poolOpts.CookieJar = s.cookies
@@ -388,7 +393,7 @@ func (r *request) run(in Input, opts fastls.Options) {
 		if r.upload != nil {
 			body = r.upload
 		}
-		resp, err = pool.DoContext(r.ctx, in.URL, fastls.RequestOptions{Duplex: in.Duplex, Headers: in.Headers, Body: in.Body, BodyReader: body, DisableRedirect: in.DisableRedirect,
+		resp, err = pool.DoContext(r.ctx, in.URL, fastls.RequestOptions{Duplex: in.Duplex, Headers: in.Headers, Body: in.Body, BodyReader: body, Trailers: in.Trailers, DisableRedirect: in.DisableRedirect,
 			DecodeContent: in.DecodeContent, MaxDecodedBytes: in.MaxDecodedBytes,
 			Timeouts: fastls.Timeouts{Write: time.Duration(in.WriteTimeoutMS) * time.Millisecond, Connect: time.Duration(in.ConnectTimeoutMS) * time.Millisecond, Headers: time.Duration(in.HeadersTimeoutMS) * time.Millisecond, Read: time.Duration(in.ReadTimeoutMS) * time.Millisecond}}, strings.ToUpper(in.Method))
 	} else {
@@ -406,7 +411,7 @@ func (r *request) run(in Input, opts fastls.Options) {
 		return
 	}
 	r.mu.Lock()
-	r.info.State, r.info.Status, r.info.Headers = "headers", resp.Status, resp.Headers
+	r.info.State, r.info.Status, r.info.Protocol, r.info.FinalURL, r.info.Headers = "headers", resp.Status, resp.Protocol, resp.FinalURL, resp.Headers
 	r.info.HeaderValues = resp.HeaderValues
 	r.info.WireHeaderValues, r.info.Decoded = resp.WireHeaderValues, resp.Decoded
 	r.info.UploadDiscarded = in.StreamBody && !resp.RequestHasBody
@@ -418,6 +423,11 @@ func (r *request) run(in Input, opts fastls.Options) {
 		r.buffered.Add(int64(n))
 		if n == 0 && err == nil {
 			continue
+		}
+		if errors.Is(err, io.EOF) {
+			r.mu.Lock()
+			r.info.TrailerValues = resp.Trailer.Clone()
+			r.mu.Unlock()
 		}
 		select {
 		case r.chunks <- chunk{data: b[:n], err: err}:

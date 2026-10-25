@@ -91,6 +91,44 @@ func TestBinaryAndStableEOF(t *testing.T) {
 	}
 }
 
+func TestRequestResponseTrailersAndMetadata(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.ReadAll(r.Body)
+		w.Header().Set("Trailer", "X-Response-Trailer")
+		_, _ = io.WriteString(w, r.Trailer.Get("X-Request-Trailer"))
+		w.Header().Set("X-Response-Trailer", "response-value")
+	}))
+	defer s.Close()
+	e := New()
+	id := start(t, e, Input{URL: s.URL, Method: http.MethodPost, Body: "payload", Trailers: http.Header{"X-Request-Trailer": {"request-value"}}})
+	info := waitInfo(t, e, id)
+	if info.Protocol != "HTTP/1.1" || info.FinalURL != s.URL {
+		t.Fatalf("metadata = %+v", info)
+	}
+	var body []byte
+	for {
+		buffer := make([]byte, 32)
+		n, status := e.Read(id, buffer)
+		body = append(body, buffer[:n]...)
+		if status == EOF {
+			break
+		}
+		if status == Failed || status == Invalid {
+			t.Fatalf("read status = %d", status)
+		}
+		if status == Pending {
+			time.Sleep(time.Millisecond)
+		}
+	}
+	info, err := e.Info(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "request-value" || info.TrailerValues["X-Response-Trailer"][0] != "response-value" {
+		t.Fatalf("body/info = %q/%+v", body, info)
+	}
+}
+
 func TestBoundedStreamAndCancel(t *testing.T) {
 	finished := make(chan struct{})
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

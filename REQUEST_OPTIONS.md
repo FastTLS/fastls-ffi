@@ -9,6 +9,8 @@ with Session(profile="chrome/156/windows") as session:
     response = session.get("https://example.com/search", params={"q": "中文", "tag": ["a", "b"]})
     response.raise_for_status()
     response = session.post("https://example.com/api", json={"enabled": True})
+    response = session.post("https://example.com/upload", data=b"payload",
+                            trailers={"X-Checksum": ["verified"]})
     response = session.post("https://example.com/form", data=[("tag", "a"), ("tag", "b")])
     with open("archive.bin", "rb") as upload:
         response = session.post("https://example.com/upload", data={"description": "附件"},
@@ -33,6 +35,8 @@ with Session(profile="chrome/156/windows") as session:
 - 同步手动 `duplex()` 只新增 `params`；正文继续使用 `send()`。异步 duplex 允许已有 `data`，也可用 JSON/表单，但禁用自动重定向；不支持 multipart。
 
 ## 响应
+
+`response.http_version` 是最终协议（例如 `HTTP/1.1` 或 `HTTP/2.0`），`response.url` 是重定向后的最终 URL。`response.trailers` 与 headers 一样支持大小写不敏感访问和 `get_list()`，在正文成功读取到 EOF 后完整可用。
 
 `response.encoding` 初值来自 `Content-Type` 的 charset，缺省 UTF-8，可在读取 `.text` 前修改。文本解码替换坏字节；未知编码名抛出 `LookupError`，不自动猜测编码。`.json()` 仍直接解析原始字节，独立于 `.encoding`，保留 JSON 的 UTF/BOM 识别。
 

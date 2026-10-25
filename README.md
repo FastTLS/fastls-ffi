@@ -48,7 +48,7 @@ with Session(profile="chrome/156/windows") as session:
     print(response.match)
 ```
 
-单次调用可以覆盖 `profile`、`headers`、`timeout`、`allow_redirects`。
+单次调用可以覆盖 `profile`、`headers`、`trailers`、`timeout`、`allow_redirects`。响应通过 `http_version`、`url` 和 `trailers` 暴露最终协议、重定向后 URL 与正文结束后的 Trailer。
 `data` 接受 str 或 bytes。timeout 单位秒，覆盖从发起到流结束的整个请求，默认30秒。
 用户头值优先，包含空值；未知规范 ID 报错。目录可通过 `session.list_profiles()` 获取。
 `chrome/156/windows` 的生成身份和协议基线不是同一概念，以 Match 与上游证据为准。
@@ -95,7 +95,7 @@ async def download(url):
 - `fastls_stats()`：返回只读诊断JSON结果，新增符号，不改变已有函数的ABI。
 - `fastls_wait()`与`fastls_session_watch/events/unwatch()`：原生就绪等待及会话通知，见[NOTIFICATIONS.md](NOTIFICATIONS.md)。
 - `fastls_start(data, length)`：输入UTF-8 JSON，立即返回请求句柄的JSON结果。
-- `fastls_info(handle)`：返回状态pending/headers/eof/error、状态码、头、Match或错误。
+- `fastls_info(handle)`：返回状态 pending/headers/eof/error、状态码、最终协议/URL、头、正文结束后的 Trailer、Match 或错误。
 - `fastls_read(handle, buffer, capacity, &length)`：非阻塞二进制读取。0=数据、1=等待、2=EOF、-1=请求失败、-2=非法参数或句柄。
 - `fastls_cancel(handle)`：取消并保留句柄以便查询。
 - `fastls_close(handle)`：移除句柄并取消，多次调用无害。
@@ -103,7 +103,7 @@ async def download(url):
 
 JSON结果为 `{"ok":true,"result":...}` 或 `{"ok":false,"error":"..."}`。
 每次获取的JSON指针都必须释放。输入和读取缓冲仅在调用期间使用；不返回Go指针。
-start输入字段：url、method、profile、headers、body或body_base64、timeout_ms、disable_redirect、可选ca_pem及session。未知字段拒绝。
+start 输入字段：url、method、profile、headers、可选 trailers、body 或 body_base64、timeout_ms、disable_redirect、可选 ca_pem 及 session。未知字段拒绝。
 输入上限1MiB，解码上传上限512KiB，未关闭请求上限256；单次读取1..1MiB。
 同一响应只支持单个读取者，控制接口可并发调用；完成后仍须close。库应随进程长期加载。
 
