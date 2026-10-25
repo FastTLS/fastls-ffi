@@ -165,7 +165,9 @@ class Integration(unittest.TestCase):
 
     def test_async_requests_keep_loop_responsive_and_cancel(self):
         async def scenario():
-            async with AsyncSession(timeout=2) as s:
+            # The timeout is not the subject of this concurrency/cancellation
+            # test. Leave enough headroom for slower macOS x64 CI runners.
+            async with AsyncSession(timeout=5) as s:
                 count = 0
                 stop = False
 
