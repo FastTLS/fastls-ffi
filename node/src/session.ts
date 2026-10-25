@@ -307,7 +307,9 @@ export class Session {
     if(!this.native.websocketAvailable)throw new FastlsError("WebSocket requires a newer Fastls native library");
     const cookieMode=options.cookieMode===undefined?"session":options.cookieMode;
     if(cookieMode!=="session" && cookieMode!=="manual")throw new TypeError("cookieMode must be session or manual");
-    const sessionCookies=this.native.call<string[]>("features").includes("websocket_cookies");
+    const features=this.native.call<string[]>("features");
+    const sessionCookies=features.includes("websocket_cookie_control_v1")||features.includes("websocket_cookies");
+    if(cookieMode==="manual" && !sessionCookies && features.includes("websocket_cookies_v1"))throw new FastlsError("This native library cannot disable automatic WebSocket cookies; a newer library with websocket_cookie_control_v1 is required");
     if(cookieMode==="session" && !sessionCookies)throw new FastlsError("WebSocket session cookies require a newer Fastls native library; use cookieMode manual for legacy behavior");
     const maximum=(options.maxMessageBytes===undefined?1048576:options.maxMessageBytes);
     if(!Number.isSafeInteger(maximum)||maximum<1||maximum>16777216)throw new RangeError("maxMessageBytes must be 1..16777216");

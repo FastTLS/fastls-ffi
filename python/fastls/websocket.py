@@ -32,7 +32,10 @@ def _start(owner, url, *, params=None, headers=None, profile=None, subprotocols=
     features = owner._native.call("fastls_features")
     if cookie_mode not in ("session", "manual"):
         raise ValueError("cookie_mode must be session or manual")
-    if cookie_mode == "session" and "websocket_cookies" not in features:
+    session_cookies = "websocket_cookie_control_v1" in features or "websocket_cookies" in features
+    if cookie_mode == "manual" and not session_cookies and "websocket_cookies_v1" in features:
+        raise FastlsError("This native library cannot disable automatic WebSocket cookies; a newer library with websocket_cookie_control_v1 is required")
+    if cookie_mode == "session" and not session_cookies:
         raise FastlsError("WebSocket session cookies require a newer Fastls native library; use cookie_mode=manual for legacy behavior")
     if "websocket_v1" not in features:
         raise FastlsError("WebSocket requires a newer Fastls native library")
@@ -51,7 +54,7 @@ def _start(owner, url, *, params=None, headers=None, profile=None, subprotocols=
                    timeout_ms=_milliseconds(handshake_timeout, "handshake_timeout"),
                    read_timeout_ms=0 if read_timeout is None else _milliseconds(read_timeout, "read_timeout"),
                    write_timeout_ms=_milliseconds(write_timeout, "write_timeout"))
-    if cookie_mode == "manual" and "websocket_cookies" in features:
+    if cookie_mode == "manual" and session_cookies:
         request["disable_cookies"] = True
     selected = owner.proxy if proxy is _INHERIT_PROXY else proxy
     if selected is not None and not isinstance(selected, str):

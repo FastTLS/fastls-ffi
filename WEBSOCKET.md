@@ -80,3 +80,7 @@ int fastls_ws_read(uint64_t handle, void *buffer, size_t capacity,
 ## Node.js
 
 Node 0.9通过Session.websocket接入同一ABI，0.10加入共享Cookie。使用Promise消息接口、AbortSignal、每会话就绪通知及受限poll回退。时间参数以Ms命名，关闭使用await closeAsync或立即abort；详见[node/README.md](node/README.md)。21项WS与14项共享Cookie行为映射见[node/PARITY.md](node/PARITY.md)。跨平台验收以Actions和候选证据为准。
+
+## Cookie控制能力兼容
+
+两条候选分支统一提供websocket_cookie_control_v1：支持disable_cookies及无效101不写回。保留websocket_cookies与websocket_cookies_v1作为历史标记；仅有websocket_cookies_v1的旧分发库不能保证禁用自动Cookie，新SDK拒绝manual调用，必须升级原生库。无自动Cookie的旧WS库仍可使用manual；0.10原生库的websocket_cookies完整契约保持兼容。

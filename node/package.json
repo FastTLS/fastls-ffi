@@ -1,6 +1,6 @@
 {
   "name": "@fasttls/fastls",
-  "version": "0.10.0-dev.0",
+  "version": "0.10.1-dev.0",
   "description": "Node.js bindings for the Fastls C ABI",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -31,8 +31,9 @@
     "prepack": "npm run build",
     "pack:native": "node scripts/pack-native.mjs",
     "test:ws": "npm run build && node --expose-gc --test tests/parity-websocket.mjs tests/parity-websocket-cookies.mjs",
-    "test:quick": "npm run build && npm run test:types && npm run test:parity && node --expose-gc --test --test-concurrency=1 tests/native.test.mjs tests/parity-websocket.mjs tests/parity-websocket-cookies.mjs",
-    "test:ws:soak": "node --expose-gc --max-semi-space-size=16 --test tests/ws-recovery.mjs"
+    "test:quick": "npm run build && npm run test:types && npm run test:parity && node --expose-gc --test --test-concurrency=1 tests/native.test.mjs tests/parity-websocket.mjs tests/parity-websocket-cookies.mjs && node scripts/test-cookie-compat.mjs",
+    "test:ws:soak": "node --expose-gc --max-semi-space-size=16 --test tests/ws-recovery.mjs",
+    "test:compat": "npm run build && node scripts/test-cookie-compat.mjs"
   },
   "dependencies": {
     "koffi": "3.3.3",

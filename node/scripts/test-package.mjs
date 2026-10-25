@@ -41,6 +41,7 @@ try {
   }
   writeFileSync(resolve(temporary, 'package.json'), JSON.stringify({ name: 'fastls-install-test', private: true }));
   const env = { ...process.env, FASTLS_NODE_PACKAGE: temporary };
+  delete env.FASTLS_COOKIE_COMPAT_LIBRARIES;
   delete env.FASTLS_LIBRARY;
   // The installed suite starts only an already-built local fixture by absolute
   // path. An empty search path makes accidental compiler/source fallback fail.
@@ -68,12 +69,16 @@ try {
   const installed = resolve(temporary, 'node_modules/@fasttls/fastls');
   const nativePath = resolve(installed, 'native', packed.native.file);
   const nativeHash = sha256(nativePath);
+  // Resolve from the consumer; resolving inside this package uses self-reference
+  // even when require.resolve receives a different paths array.
+  run(['-e', `const assert=require('node:assert/strict');const {createRequire}=require('node:module');const path=require('node:path');const req=createRequire(path.join(process.cwd(),'package.json'));const entry=req.resolve('@fasttls/fastls');assert.equal(entry,require('node:fs').realpathSync(process.argv[1]));const {Native}=req(path.join(path.dirname(entry),'native.js'));assert.equal(Native.load().path,require('node:fs').realpathSync(process.argv[2]));`, resolve(installed,'dist/index.js'), nativePath], temporary, env);
   if (nativeHash !== packed.native.sha256) throw Error('Bundled native library differs from manifest');
   for (const file of ['types.mts', 'types.cts']) copyFileSync(resolve(root, 'tests', file), resolve(temporary, file));
   run([resolve(root, 'node_modules/typescript/bin/tsc'), '--ignoreConfig', '--noEmit', '--strict',
     '--module', 'NodeNext', '--target', 'ES2022', '--types', 'node',
     '--typeRoots', resolve(root, 'node_modules/@types'), 'types.mts', 'types.cts'], temporary, env);
   const evidenceDirectory = resolve(root, '../build');
+  process.stdout.write(run([resolve(root, 'scripts/test-cookie-compat.mjs')], temporary, env));
   const previous = new Set(readdirSync(evidenceDirectory));
   process.stdout.write(run(['--expose-gc', '--test', '--test-concurrency=1', ...[
     'native.test.mjs', 'sdk.test.mjs', 'parity.test.mjs',
@@ -120,7 +125,8 @@ try {
     native: { file: packed.native.file, sha256: nativeHash, abi: 1, embedded: true, manifest: packed.native },
     checks: { installedSuite: true, types: true, esm: true, commonjs: true,
       noLibraryEnvironment: true, noCompilerPath: true, installScriptsDisabled: true,
-      platformGate: true, npmPlatformGate: true, integrityGate: true, externalOverrides: true, missingNativeGate: true },
+      platformGate: true, npmPlatformGate: true, integrityGate: true, externalOverrides: true, missingNativeGate: true,
+      installedEntryAndNativePath: true },
     parity: { scenarios: scenarioCount, adaptations: parity.cases.filter(test => test.adaptation).length, evidence: records[0] },
   };
   copyFileSync(resolve(temporary, filename), resolve(destination, filename));

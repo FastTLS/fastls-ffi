@@ -14,7 +14,7 @@
     "test_proxy.py": "4278318c2c360edf38a6c80995cd1286a99f627b130fdb97a8e7c3f2a4917212",
     "test_request_options.py": "99223609deb9ff8156b055978e3029c46754bd54f66e122cc4b13804c269d47b",
     "test_websocket.py": "e5833abffb1ea466dfb1bad3f55c9aabeab6541e491b0564984c053a657f8a27",
-    "test_websocket_cookies.py": "d6eeffda0291f8984ea43acfb459c89c115faeaa88289c3dcab15b835e242e69"
+    "test_websocket_cookies.py": "3f778c9075e0e142296df561cbe3fce3814fa902add2e0ed0bcb1f3f67e41a7b"
   },
   "additionalSuites": {
     "test_websocket_cookies.py": "Node 0.10 shared bridge contract; reviewed alongside its Node counterpart"
