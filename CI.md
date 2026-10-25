@@ -2,6 +2,7 @@
 
 `.github/workflows/ci.yml` 在每次push、PR更新以及手动workflow_dispatch时执行。只读仓库权限，不发布模块或Release。
 使用各系统原生runner构建并运行，而不是把交叉编译成功当成运行测试成功。
+依赖入口先在关闭 `go.work` 的环境下载并校验 `go.sum`，列出远端模块图并拒绝遗留 `fhttp`；随后才检出固定提交执行本地源码矩阵。
 
 ## 测试矩阵
 
@@ -29,9 +30,9 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 
 F3 本地集成分支已生成不可变提交，`ci/dependencies.json` 固定以下候选；执行远端矩阵前须先推送这些提交，当前文档不把本地提交声称为已发布：
 
-- fastls：f2b213de88e47c8c0911197a93928daf86827020（已合并）。
+- fastls：7e43e08f06caea50d648e467a3bfb15cf7dda0ed（已合并）。
 - ftransport：89e11191566268687328d9f3fc19ccc23e0a4d58（已合并）。
-- imitate：28b32d452256e3acbdb2e904869e5c4331bf0177。
+- imitate：442a9557c0ef06a5e61b1cb25faacb8b21598dcb（已合并）。
 
 Fastls依赖包含连接生命周期、隔离的私有CA根配置、可复用Session、多值头/CookieStore及流式解码/分层预算；Brotli固定v1.2.0以拒绝截断流。ftransport负责标准库请求/响应、HTTP/1.1头顺序、HTTP/2帧与流控、可取消的共用建连及独立空闲超时。动态库须重新构建；核心包测试执行顺序请求、重定向、关闭后重连、活动响应体及并发回归，封装侧重新执行全部同步/异步与流式测试。
 
@@ -42,7 +43,7 @@ Fastls依赖包含连接生命周期、隔离的私有CA根配置、可复用Ses
 2. 仓库Actions变量FASTLS_REF、FTRANSPORT_REF、IMITATE_REF。
 3. 提交到ci/dependencies.json的fastls_ref、ftransport_ref、imitate_ref。
 
-不接受浮动分支名。上游各自的模块候选版本仍为v0.1.0-dev.20261023.8；本地go.work显式绑定检出的提交，无需先发布Go模块标签。
+不接受浮动分支名。上游依赖使用上述提交对应的 Go pseudo-version，可在关闭 `go.work`、没有 `replace` 的干净模块中解析；本地 `go.work` 仍显式绑定检出的同一批提交。无需先发布 Go 模块标签。
 本仓库push会启动工作流；工作流不是本地文件写好后就已在GitHub执行。
 
 ## 本地复现
