@@ -58,7 +58,7 @@ def main():
         contents = "go 1.26.0\n\nuse (\n" + "".join("  " + json.dumps(Path(os.path.relpath(p, ROOT)).as_posix()) + "\n" for p in modules) + ")\n"
         # Bind unpublished versions even when graph loading needs their go.mod.
         versions = {
-            "github.com/FastTLS/fastls": "v0.1.0",
+            "github.com/FastTLS/fastls": "v0.1.1",
             "github.com/FastTLS/fastls/profile": "v0.1.0",
             "github.com/FastTLS/ftransport": "v0.1.0",
             "github.com/FastTLS/imitate": "v0.1.0",

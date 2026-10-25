@@ -30,7 +30,7 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 
 F3 本地集成分支已生成不可变提交，`ci/dependencies.json` 固定以下候选；执行远端矩阵前须先推送这些提交，当前文档不把本地提交声称为已发布：
 
-- fastls：661930e5f62f6d8abb3235da339467e5f33643da（`v0.1.0`）。
+- fastls：a57a7c51852b80976a07d7ce50ab758c22d44434（`v0.1.1`）。
 - ftransport：2e1d66a7983b4fe730d18c3b8b90831ae6e93db5（`v0.1.0`）。
 - imitate：1ef806aec3fca9607c083e375a72e84ae542d6bd（`v0.1.0`）。
 
