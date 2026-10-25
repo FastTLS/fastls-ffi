@@ -83,13 +83,21 @@ class IntegrationServer(ThreadingHTTPServer):
     # Eight simultaneous new connections must fit without SYN retransmission.
     # The platform default backlog (5) can exceed this test's two-second budget.
     request_queue_size = 32
+    # server_close must join request handlers so a connection-reset traceback
+    # cannot race the Python interpreter's stderr shutdown on Windows.
+    daemon_threads = False
+    block_on_close = True
+
+    def handle_error(self, request, client_address):
+        if isinstance(sys.exc_info()[1], ConnectionResetError):
+            return
+        super().handle_error(request, client_address)
 
 
 class Integration(unittest.TestCase):
     def setUp(self):
-        # Give each case independent events and sockets, including daemon handlers.
+        # Give each case independent events and sockets.
         self.server = IntegrationServer(("127.0.0.1", 0), Handler)
-        self.server.daemon_threads = True
         self.server.release = threading.Event()
         self.server.entered = threading.Event()
         self.server.cancelled = threading.Event()
