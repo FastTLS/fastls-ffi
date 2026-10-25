@@ -1,10 +1,11 @@
-"""Create a non-publishing manifest for a fully checked development snapshot."""
+"""Create a manifest for a fully checked development or GitHub release candidate."""
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 
-from package_version import require_development_version
+from package_version import package_version
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,9 +25,13 @@ def one(directory, pattern, label):
 def create_manifest(root=ROOT, environ=None):
     dist = root / "dist"
     inputs = json.loads((dist / "ci-inputs.json").read_text(encoding="utf-8"))
-    version = require_development_version(environ)
+    environ = os.environ if environ is None else environ
+    version = package_version(environ)
+    formal = environ.get("FASTLS_RELEASE_MODE", "").lower() == "true"
+    if not formal and ".dev" not in version:
+        raise RuntimeError(f"development snapshots require a .devN version, got {version!r}")
     if inputs.get("package_version") != version:
-        raise RuntimeError("development snapshot version differs from the immutable CI inputs")
+        raise RuntimeError("candidate version differs from the immutable CI inputs")
 
     wheel = one(dist, "*.whl", "wheel")
     sdist = one(dist, "*.tar.gz", "sdist")
@@ -39,14 +44,14 @@ def create_manifest(root=ROOT, environ=None):
 
     manifest = {
         "schema": 1,
-        "status": "development-only",
-        "publishable": False,
+        "status": "official" if formal else "development-only",
+        "publishable": formal,
         "package_version": version,
         "target": inputs["target"],
         "sources": inputs["sources"],
         "files": files,
     }
-    destination = dist / "development-snapshot.json"
+    destination = dist / ("release-manifest.json" if formal else "development-snapshot.json")
     destination.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return destination
 
@@ -56,4 +61,4 @@ if __name__ == "__main__":
     parser.add_argument("command", choices=("create",))
     parser.parse_args()
     path = create_manifest()
-    print(f"Development snapshot manifest created: {path}")
+    print(f"Candidate manifest created: {path}")

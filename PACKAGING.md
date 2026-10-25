@@ -1,8 +1,10 @@
-# Python 平台候选包
+# Python 平台包与 GitHub 发布
 
-本阶段生成内置动态库的候选 wheel 与 SDK-only sdist；不发布 PyPI 或 Release。验证结果以对应提交的 Actions 为准。
+正式版本生成内置动态库的 wheel 与 SDK-only sdist，只发布到 GitHub Releases，不上传 PyPI 或其他索引。验证结果以标签对应的 GitHub Actions 为准。
 
-每次 CI 运行使用唯一的 `0.1.0.dev<run-number>` 开发版本。只有通过平台 `release` 验收阶段后，wheel、sdist、原生审计记录和 `development-snapshot.json` 才会作为 `development-snapshot-*` 构建产物保留14天。清单固定版本、目标平台、四仓库提交和文件哈希，并显式标记 `development-only`、`publishable: false`。仓库中的 `python/VERSION` 继续保持 `0.1.0.dev0`，这些产物不会创建标签、GitHub Release 或上传PyPI。
+普通 CI 使用唯一的 `0.1.0.dev<run-number>` 开发版本。只有通过平台 `release` 验收后，wheel、sdist、原生审计记录和 `development-snapshot.json` 才会作为 `development-snapshot-*` 产物保留14天，并标记 `development-only`、`publishable: false`。
+
+推送 `v*` 标签时，版本号由标签确定；同一矩阵生成 `release-manifest.json`，标记 `official`、`publishable: true`。汇总作业只选择 Go 1.26.10 的五个平台认证结果，生成 `SHA256SUMS` 和 Sigstore/GitHub 来源证明，并创建 GitHub Release。前瞻 Go 版本仍参与兼容性门禁，但不重复发布同平台 wheel。仓库中的 `python/VERSION` 保持本地开发默认值；标签构建不会上传 PyPI。
 
 ## 安装与加载
 
@@ -12,10 +14,10 @@
 
 `_lib/build-info.json` 记录原生 ABI、四仓库提交、工具链、源码摘要及库 SHA-256。`_lib/native-audit.json` 记录 ELF/Mach-O/PE 依赖信息。源码摘要目前包含绝对路径，不宣称不同目录或工具链的构建逐字节一致。
 
-## 候选平台范围
+## 正式平台范围
 
 - Windows amd64：`py3-none-win_amd64`，原生 Windows runner 验收。
-- Linux amd64/arm64：原生 Ubuntu 24.04 runner，使用普通 `linux_*` 标签。首个公开候选仅承诺 Ubuntu 24.04兼容系统与glibc 2.39或更新版本；门禁拒绝需要更高GLIBC符号的产物。未认证manylinux或musllinux。
+- Linux amd64/arm64：原生 Ubuntu 24.04 runner，使用普通 `linux_*` 标签。首个正式版仅承诺 Ubuntu 24.04兼容系统与glibc 2.39或更新版本；门禁拒绝需要更高GLIBC符号的产物。未认证manylinux或musllinux。
 - macOS amd64/arm64：保守使用构建及验收主机的系统大版本作为 wheel 最低版本，不沿用可能早于 Go 运行时要求的 Python 最低部署标签。附 `otool` 依赖和加载命令。
 - Python 最低版本仍为 3.10；当前六组矩阵没有穷举其后所有 Python 版本。
 
@@ -31,6 +33,6 @@ wheel 的 `py3-none` 表示通过 ctypes 调用 C ABI，没有 CPython 扩展 AB
 
 `dist/ci-inputs.json` 绑定原生库、fixture、wheel、审计记录、workspace 与 SDK 输入。下游阶段拒绝不同提交、架构或哈希的产物。
 
-## 后续发布门槛
+## 发布门槛
 
-许可证正文与生产依赖的第三方许可证统一进入wheel和sdist；`release`阶段会根据实际Go生产依赖图拒绝过期材料，并验证归档内容、sdist安装、版本升级、卸载和Linux glibc 2.39边界。公开发布仍需由维护者选择最终版本号、签署发布决定并配置目标索引凭据；CI不会自动上传包或创建Release。开发快照即使完成全部认证也不改变这一限制。
+许可证正文与生产依赖的第三方许可证统一进入wheel和sdist；`release`阶段会根据实际Go生产依赖图拒绝过期材料，并验证归档内容、sdist安装、版本升级、卸载和Linux glibc 2.39边界。只有维护者推送正式标签才会创建 GitHub Release；工作流没有 PyPI 或其他索引凭据，开发快照即使完成全部认证也不会成为正式版本。

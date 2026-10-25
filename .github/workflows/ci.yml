@@ -19,8 +19,8 @@ permissions:
   contents: read
 
 env:
-  # Unique installable development versions; this workflow never publishes.
-  FASTLS_PACKAGE_VERSION: 0.1.0.dev${{ github.run_number }}
+  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.1.0.dev{0}', github.run_number) }}
+  FASTLS_RELEASE_MODE: ${{ github.ref_type == 'tag' && 'true' || 'false' }}
 
 concurrency:
   group: ffi-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -193,17 +193,18 @@ jobs:
           path: workspace/fastls-ffi
       - name: Verify inputs and execute selected stage
         run: python scripts/ci.py run --stage ${{ matrix.stage }}
-      - name: Retain certified development snapshot
+      - name: Retain certified candidate
         if: matrix.stage == 'release'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: development-snapshot-${{ github.run_number }}-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+          name: ${{ github.ref_type == 'tag' && 'release-candidate' || format('development-snapshot-{0}', github.run_number) }}-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
           path: |
             workspace/fastls-ffi/dist/*.whl
             workspace/fastls-ffi/dist/*.tar.gz
             workspace/fastls-ffi/dist/build-info.json
             workspace/fastls-ffi/dist/native-audit.json
             workspace/fastls-ffi/dist/development-snapshot.json
+            workspace/fastls-ffi/dist/release-manifest.json
           if-no-files-found: error
           retention-days: 14
       - name: Retain incremental evidence
@@ -308,3 +309,49 @@ jobs:
           test "$NATIVE_RESULT" = success
           test "$TESTS_RESULT" = success
           test "$EXTENDED_RESULT" = success
+
+  publish-github-release:
+    name: Publish GitHub release
+    if: github.ref_type == 'tag'
+    needs: required
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Download certified platform candidates
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-candidate-*
+          path: candidates
+      - name: Assemble canonical GitHub assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir release-assets
+          for directory in candidates/release-candidate-*-go1.26.10-*; do
+            target="$(basename "${directory}" | sed -E 's/^release-candidate-(.*)-go1\.26\.10-py.*/\1/')"
+            cp "${directory}"/*.whl release-assets/
+            cp "${directory}/release-manifest.json" "release-assets/release-manifest-${target}.json"
+            cp "${directory}/build-info.json" "release-assets/build-info-${target}.json"
+            cp "${directory}/native-audit.json" "release-assets/native-audit-${target}.json"
+          done
+          cp "$(find candidates -path '*linux-amd64-go1.26.10-py3.11/*.tar.gz' -print -quit)" release-assets/
+          test "$(find release-assets -name '*.whl' | wc -l)" -eq 5
+          test "$(find release-assets -name '*.tar.gz' | wc -l)" -eq 1
+          (cd release-assets && sha256sum * > SHA256SUMS)
+      - name: Sign release provenance
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: release-assets/SHA256SUMS
+      - name: Publish only to GitHub Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp '${{ steps.attest.outputs.bundle-path }}' release-assets/provenance.sigstore.json
+          gh release create "${GITHUB_REF_NAME}" release-assets/* --verify-tag --generate-notes --title "fastls-ffi ${GITHUB_REF_NAME}"

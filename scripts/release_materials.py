@@ -26,7 +26,7 @@ def json_stream(text):
 
 
 def module_licenses():
-    env = dict(os.environ, CGO_ENABLED="1")
+    env = dict(os.environ, CGO_ENABLED="1", GOWORK="off")
     output = subprocess.check_output(
         ["go", "list", "-deps", "-json", "./cmd/fastls-shared"],
         cwd=ROOT, env=env, text=True, encoding="utf-8",

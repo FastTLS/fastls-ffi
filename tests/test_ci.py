@@ -54,6 +54,7 @@ class DependencyGate(unittest.TestCase):
 class PackageVersion(unittest.TestCase):
     def test_development_override_is_validated(self):
         self.assertEqual(package_version({"FASTLS_PACKAGE_VERSION": "0.1.0.dev123"}), "0.1.0.dev123")
+        self.assertEqual(package_version({"FASTLS_PACKAGE_VERSION": "v0.1.0", "FASTLS_RELEASE_MODE": "true"}), "0.1.0")
         self.assertEqual(require_development_version({"FASTLS_PACKAGE_VERSION": "0.1.0.dev123+gabc"}), "0.1.0.dev123+gabc")
         for value in ("0.1.0", "main", "0.1.0.dev1\nother"):
             with self.assertRaises(RuntimeError):
@@ -83,6 +84,28 @@ class PackageVersion(unittest.TestCase):
                 "fastls_ffi-0.1.0.dev123-py3-none-win_amd64.whl",
                 "fastls_ffi-0.1.0.dev123.tar.gz", "build-info.json", "native-audit.json",
             })
+
+    def test_formal_manifest_is_publishable_only_in_release_mode(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            dist = root / "dist"
+            dist.mkdir()
+            sources = {"fastls-ffi": "a" * 40, "fastls": "b" * 40}
+            (dist / "ci-inputs.json").write_text(json.dumps({
+                "target": "linux-amd64", "sources": sources, "package_version": "0.1.0",
+            }))
+            for name in ("fastls_ffi-0.1.0-py3-none-manylinux_2_39_x86_64.whl",
+                         "fastls_ffi-0.1.0.tar.gz", "native-audit.json"):
+                (dist / name).write_bytes(name.encode())
+            (dist / "build-info.json").write_text(json.dumps({"package_version": "0.1.0"}))
+            destination = development_snapshot.create_manifest(root, {
+                "FASTLS_PACKAGE_VERSION": "v0.1.0", "FASTLS_RELEASE_MODE": "true",
+            })
+            manifest = json.loads(destination.read_text())
+            self.assertEqual(destination.name, "release-manifest.json")
+            self.assertEqual(manifest["status"], "official")
+            self.assertTrue(manifest["publishable"])
+            self.assertEqual(manifest["package_version"], "0.1.0")
 
 
 class ExecutionEvidence(unittest.TestCase):
