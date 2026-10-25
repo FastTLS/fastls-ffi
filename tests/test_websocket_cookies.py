@@ -134,12 +134,38 @@ class WebSocketCookies(FixtureCase):
             original=s._native.call
             def call(name,*args):
                 result=original(name,*args)
-                return [x for x in result if x!='websocket_cookies'] if name=='fastls_features' else result
+                return [x for x in result if x not in ('websocket_cookies','websocket_cookies_v1','websocket_cookie_control_v1')] if name=='fastls_features' else result
             with patch.object(s._native,'call',call):
                 with self.assertRaisesRegex(FastlsError,'newer'):s.ws_connect(self.url())
                 self.assertEqual(s.stats()['open_requests'],0)
                 self.assertEqual(self.inspect(s,cookie_mode='manual',headers={'Cookie':'manual=yes'}),['manual=yes'])
                 self.assertEqual(s.get(self.fixture['https2']+'/status?code=204').status_code,204)
+
+    def test_control_capability_alias_preserves_manual_optout(self):
+        with self.session() as s:
+            original=s._native.call
+            def call(name,*args):
+                result=original(name,*args)
+                return [x for x in result if x not in ('websocket_cookies','websocket_cookies_v1')] if name=='fastls_features' else result
+            with patch.object(s._native,'call',call):
+                s.cookies.set('seed','private',url=self.fixture['https2'],path='/')
+                self.assertEqual(self.inspect(s),['seed=private'])
+                self.assertEqual(self.inspect(s,cookie_mode='manual'),[])
+                with s.websocket(self.url(),cookie_mode='manual',params={'set_cookie':'ignored=no; Path=/'}):pass
+                self.assertEqual(s.cookies.get_dict(self.fixture['https2']),{'seed':'private'})
+
+    def test_automatic_only_library_rejects_manual_before_handle(self):
+        with self.session() as s:
+            original=s._native.call
+            def call(name,*args):
+                result=original(name,*args)
+                return [x for x in result if x not in ('websocket_cookies','websocket_cookie_control_v1')] if name=='fastls_features' else result
+            with patch.object(s._native,'call',call):
+                s.cookies.set('seed','private',url=self.fixture['https2'],path='/')
+                with self.assertRaisesRegex(FastlsError,'cannot disable'):s.ws_connect(self.url(),cookie_mode='manual')
+                with self.assertRaisesRegex(FastlsError,'newer'):s.ws_connect(self.url())
+                self.assertEqual(s.stats()['open_requests'],0)
+                self.assertEqual(s.cookies.get_dict(self.fixture['https2']),{'seed':'private'})
 
     def test_async_login_and_response_cookie_roundtrip(self):
         async def run():

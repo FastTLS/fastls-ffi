@@ -5,7 +5,7 @@ import { resolve, dirname } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const root = process.env.FASTLS_NODE_PACKAGE
-  ? dirname(require.resolve('@fasttls/fastls', { paths: [process.env.FASTLS_NODE_PACKAGE] }))
+  ? dirname(createRequire(resolve(process.env.FASTLS_NODE_PACKAGE, 'package.json')).resolve('@fasttls/fastls'))
   : resolve(import.meta.dirname, '../dist');
 const { parseNativeJSON, encodeNativeJSON, asHandle, Native } = require(resolve(root, 'native.js'));
 
