@@ -819,7 +819,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ==============================================================================
 Module: github.com/klauspost/compress
-Version: v1.18.1
+Version: v1.18.7
 File: LICENSE
 ------------------------------------------------------------------------------
 Copyright (c) 2012 The Go Authors. All rights reserved.
