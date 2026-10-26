@@ -51,6 +51,9 @@ test('fetch cancels unread bodies and rejects unsupported options without leakin
   duringBody.abort();
   await eventually(() => monitor.stats().open_sessions === 1, 'aborted fetch retained its temporary session');
   await assert.rejects(unread.text());
+  const timedOut = await sdk.fetch(fixture.http + '/bytes?n=65536', { timeoutMs: 150 });
+  await eventually(() => monitor.stats().open_sessions === 1, 'timed out fetch retained its temporary session');
+  await assert.rejects(timedOut.text(), /deadline|timeout/i);
   await assert.rejects(sdk.fetch('file:///missing'), /cookie URL|HTTP|http/);
   assert.equal(monitor.stats().open_requests, 0);
 });

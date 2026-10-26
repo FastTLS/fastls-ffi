@@ -154,6 +154,8 @@ export class StreamResponse {
 
   /** @internal Check cancellation even when a parser still holds buffered data. */
   ensureOpen(): void { this.transfer.ensureOpen(); }
+  /** @internal Notification for adapters that own a temporary Session. */
+  get closedSignal(): AbortSignal { return this.transfer.signal; }
 
   private async *iterate(): AsyncGenerator<Buffer> {
     if (this.consumed) throw new FastlsError("response body already has a consumer");

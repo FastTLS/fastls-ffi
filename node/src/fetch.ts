@@ -44,12 +44,12 @@ export async function fetchWithSession(session: Session, input: string | URL | R
     });
     let closing: Promise<void> | undefined;
     const close = (): Promise<void> => closing ??= (async () => {
-      request.signal.removeEventListener("abort", abort);
+      stream.closedSignal.removeEventListener("abort", abort);
       try { await stream.closeAsync(); } finally { if (owned) await session.closeAsync(); }
     })();
     const abort = () => { void close().catch(() => {}); };
-    request.signal.addEventListener("abort", abort, { once: true });
-    if (request.signal.aborted) { await close(); throw request.signal.reason; }
+    stream.closedSignal.addEventListener("abort", abort, { once: true });
+    if (stream.closedSignal.aborted) { await close(); throw stream.closedSignal.reason; }
     try {
       if (request.redirect === "error" && [301,302,303,307,308].includes(stream.status)) throw new TypeError("redirect encountered with redirect: error");
       const responseHeaders = new globalThis.Headers();

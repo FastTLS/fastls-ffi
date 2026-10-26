@@ -505,6 +505,9 @@ jobs:
     - name: Full Node source suite
       if: matrix.mode == 'source'
       run: npm test --prefix node
+    - name: Source cookie compatibility in a fresh process
+      if: matrix.mode == 'source'
+      run: node node/scripts/test-cookie-compat.mjs
     - name: Full installed native package suite
       if: matrix.mode == 'package'
       run: npm run test:package --prefix node
