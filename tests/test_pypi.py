@@ -8,10 +8,12 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from prepare_pypi import PLATFORMS, prepare
+import resume_pypi
 
 
 class Publication(unittest.TestCase):
@@ -100,6 +102,60 @@ class Publication(unittest.TestCase):
         self.complete()
         with self.assertRaisesRegex(RuntimeError, "identity mismatch"):
             prepare(self.candidates, self.output, "0.1.4", True)
+
+
+class UploadRecovery(unittest.TestCase):
+    def setUp(self):
+        self.run = {"repository": {"full_name": resume_pypi.REPOSITORY},
+                    "head_repository": {"full_name": resume_pypi.REPOSITORY},
+                    "path": ".github/workflows/ci.yml", "event": "push",
+                    "head_branch": "v0.1.3", "head_sha": "a" * 40, "status": "completed"}
+        self.jobs = [{"name": name, "status": "completed", "conclusion": "success"}
+                     for name in sorted(resume_pypi.GATES)]
+        self.jobs.append({"name": "Publish fastls to PyPI", "status": "completed", "conclusion": "failure"})
+        self.tag = {"object": {"type": "commit", "sha": "a" * 40}}
+
+    def api(self, path):
+        if path == "actions/runs/123": return self.run
+        if path.startswith("actions/runs/123/jobs?"): return {"jobs": self.jobs, "total_count": len(self.jobs)}
+        if path == "git/ref/tags/v0.1.3": return self.tag
+        if path == "releases/tags/v0.1.3": return {"tag_name": "v0.1.3", "draft": False, "prerelease": False}
+        raise AssertionError(path)
+
+    def test_completed_certified_run_allows_upload_only_recovery(self):
+        with patch.object(resume_pypi, "github_api", side_effect=self.api):
+            run, _ = resume_pypi.validate_run("123", "0.1.3")
+        self.assertEqual(run["head_sha"], "a" * 40)
+
+    def test_foreign_repository_is_rejected(self):
+        self.run["repository"]["full_name"] = "other/repository"
+        with patch.object(resume_pypi, "github_api", side_effect=self.api):
+            with self.assertRaisesRegex(RuntimeError, "repository"):
+                resume_pypi.validate_run("123", "0.1.3")
+
+    def test_moved_tag_is_rejected(self):
+        self.tag["object"]["sha"] = "b" * 40
+        with patch.object(resume_pypi, "github_api", side_effect=self.api):
+            with self.assertRaisesRegex(RuntimeError, "tag no longer matches"):
+                resume_pypi.validate_run("123", "0.1.3")
+
+    def test_failed_native_gate_is_rejected(self):
+        self.jobs[0]["conclusion"] = "failure"
+        with patch.object(resume_pypi, "github_api", side_effect=self.api):
+            with self.assertRaisesRegex(RuntimeError, "gates"):
+                resume_pypi.validate_run("123", "0.1.3")
+
+    def test_unfinished_non_upload_check_is_rejected(self):
+        self.jobs.append({"name": "some platform check", "status": "completed", "conclusion": "skipped"})
+        with patch.object(resume_pypi, "github_api", side_effect=self.api):
+            with self.assertRaisesRegex(RuntimeError, "other than the upload"):
+                resume_pypi.validate_run("123", "0.1.3")
+
+    def test_unsafe_parameters_are_rejected_before_network(self):
+        with patch.object(resume_pypi, "github_api") as api:
+            for run, version in (("../run", "0.1.3"), ("123", "../0.1.3"), ("123", "0.1.3\n")):
+                with self.assertRaises(RuntimeError): resume_pypi.validate_run(run, version)
+            api.assert_not_called()
 
 
 if __name__ == "__main__":
