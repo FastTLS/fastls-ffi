@@ -183,8 +183,15 @@ with Session(profile="chrome/156/windows") as session:
 
 ## 源码开发与许可证
 
-SDK-only sdist 不包含动态库，也不会在安装或导入时下载、编译它。源码开发需先按[构建说明](https://github.com/FastTLS/fastls-ffi#本地构建)生成库，在仓库根目录执行 `python -m pip install -e ./python`。独立源码安装需自行提供匹配 SDK 所需能力的 ABI v1 库；仅 ABI 版本相同不代表所有新增能力可用。
+SDK-only sdist 不包含动态库，也不会在安装或导入时下载、编译它。源码开发需先按[构建说明](https://github.com/FastTLS/fastls-ffi/blob/main/DEVELOPMENT.md)生成库，在仓库根目录执行 `python -m pip install -e ./python`。独立源码安装需自行提供匹配 SDK 所需能力的 ABI v1 库；仅 ABI 版本相同不代表所有新增能力可用。
 
 加载顺序为 `Session(library="绝对路径")` → `FASTLS_LIBRARY` → wheel 内动态库 → 源码开发目录 `dist/`。普通 wheel 用户无需设置库路径；遗留环境变量可能覆盖新安装的库。
 
 项目许可证为 [Apache-2.0](https://github.com/FastTLS/fastls-ffi/blob/main/python/LICENSE)，第三方原生依赖许可证见 [THIRD_PARTY_LICENSES.txt](https://github.com/FastTLS/fastls-ffi/blob/main/python/THIRD_PARTY_LICENSES.txt)。两份文件随发行包提供。正式发布过程见 [PyPI 维护说明](https://github.com/FastTLS/fastls-ffi/blob/main/PYPI.md)。
+
+
+[在线完整文档](https://fasttls.github.io/python/)
+
+## 使用边界与免责声明
+
+仅在拥有权限的系统、数据和网络上使用，并遵守适用法律、服务条款及隐私要求。软件按许可证约定以“现状”提供，不承诺可用性、特定用途适用性、第三方服务放行、匿名性或与真实浏览器完全一致。浏览器名称和版本用于描述配置，不表示获得相应厂商认证或背书。部署方负责访问控制、密钥和个人信息保护、请求限额及数据备份；担保排除与责任限制以随附许可证及适用法律为准。本说明不改变许可证授予的权利或新增许可限制。

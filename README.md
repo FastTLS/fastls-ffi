@@ -1,151 +1,90 @@
-# fastls-ffi
+# Fastls Python / Node.js SDK
 
-Fastls 的 C ABI 动态库和 Python SDK。Python 新发行包名为 `fastls`，代码继续使用 `from fastls import Session`。GitHub v0.1.2 的历史发行名仍为 `fastls-ffi`；[fastls 0.1.3](https://pypi.org/project/fastls/0.1.3/) 已发布到 PyPI。
-指纹生成复用独立 `FastTLS/imitate`，请求侧复用 `FastTLS/fastls`；Python 无需手动接入 Provider。
+[完整文档](https://fasttls.github.io/) · [Python 使用指南](python/README.md) · [Node 使用指南](node/README.md)
 
-## 安装 Python SDK
+在 Python 或 Node.js 进程内使用 Fastls 原生 HTTP 客户端，不需要运行 RPC 服务。平台包内置动态库，普通安装无需 Go 或 C 编译器。
 
-普通用户可从 PyPI 或 GitHub Release 安装内置动态库的平台 wheel，无需 Go 或 C 编译器。
+## Python：安装与使用
 
-```shell
+需要 Python 3.10+；当前稳定版为 `fastls==0.1.3`，发行名和导入名均为 `fastls`。
+
+```sh
 python -m pip install --only-binary=:all: fastls==0.1.3
 ```
-
-从旧 `fastls-ffi` 包迁移时，请先卸载旧包，避免共用导入目录。
-完整命令、五个平台的选择、安装验证、升级卸载及常见问题见 [安装指南](INSTALL.md)。
-维护者的 Trusted Publisher 配置、Linux wheel 验收和正式发布步骤见 [PyPI 发布说明](PYPI.md)。
-
-## 本地构建
-
-从源码开发需要 Go 1.26+ 与目标平台的 cgo C 编译器。修改多个上游仓库时可使用本地兄弟仓库：
-
-```text
-workspace/
-  fastls/          # 含 profile 子模块与本阶段核心改动
-  ftransport/
-  imitate/
-  fastls-ffi/
-```
-
-在本仓库运行：
-
-```shell
-python scripts/build.py --local
-```
-
-编译器可通过 `CC` 或 `--cc` 指定。Windows 需兼容 Go cgo 的编译器，例如 MinGW-w64；已有 Zig 也可以使用 `--cc "<zig路径> cc -target x86_64-windows.win10-gnu"`。
-产物位于 `dist/`，包含动态库、生成的 C 头文件及构建说明。各系统和架构需分别构建并运行验证。
-`--local` 只写本仓库被忽略的 go.work，不修改全局 Go 配置或上游 go.mod。
-不带 `--local` 的构建使用 `go.mod` 中的正式模块版本。
-
-Python 3.10+，无第三方Python运行依赖。安装本地 SDK：
-
-```shell
-python -m pip install -e ./python
-```
-
-本地源码和SDK-only sdist不编译或下载原生库，默认可查找本仓库 `dist/`；独立安装后需设置 `FASTLS_LIBRARY` 为动态库绝对路径，或向 Session 传 `library=...`。GitHub Release 中的平台 wheel 已内置对应动态库；平台与系统边界见[PACKAGING.md](PACKAGING.md)。
-
-## 同步调用
 
 ```python
 from fastls import Session
 
 with Session(profile="chrome/156/windows") as session:
-    response = session.get(
-        "https://tls.peet.ws/api/all",
-        headers={"User-Agent": "my-client/1.0"},
-    )
-    print(response.status_code, response.json())
-    print(response.match)
+    response = session.get("https://example.com/")
+    response.raise_for_status()
+    print(response.status_code, response.text)
 ```
 
-单次调用可以覆盖 `profile`、`headers`、`trailers`、`timeout`、`allow_redirects`。响应通过 `http_version`、`url` 和 `trailers` 暴露最终协议、重定向后 URL 与正文结束后的 Trailer。
-`data` 接受 str 或 bytes。timeout 单位秒，覆盖从发起到流结束的整个请求，默认30秒。
-用户头值优先，包含空值；未知规范 ID 报错。目录可通过 `session.list_profiles()` 获取。
-`chrome/156/windows` 的生成身份和协议基线不是同一概念，以 Match 与上游证据为准。
+支持 Windows x64、Linux glibc 2.39+ x64/ARM64、macOS 15+ Intel/Apple Silicon；不提供 musl/Alpine、Windows ARM64 或其它平台的内置 wheel。从旧 `fastls-ffi` 迁移前先卸载旧包，两者不可共存。安装验证应实际创建 Session，而不只是 import，详见 [安装指南](INSTALL.md)。
 
-私有CA可使用 `Session(ca_file="test-ca.pem")` 或 `AsyncSession(ca_file=...)`。该信任列表只作用于此Session的请求，替代系统根；证书链与主机名校验仍然开启，不修改系统证书。文件在创建Session时读取。
-`session.stats()` 返回当前Go运行时的只读诊断快照：未关闭会话及请求、会话传输配置数、网络worker、桥接缓冲字节、goroutine及Go堆；不是性能指标API，也不会主动触发GC。新版SDK需要同步更新动态库。
+## Node.js：安装与使用
 
-## 流式下载
+需要 Node.js 22+。已发布 `@fastls/fastls@0.10.1-dev.0`，仍为开发版本；即使 registry 的 latest 指向它，也不代表稳定性已升级。
 
-```python
-with Session() as session:
-    with session.stream("GET", "https://example.com/large-file") as response:
-        with open("download.bin", "wb") as output:
-            for chunk in response.iter_bytes():
-                output.write(chunk)
+```sh
+npm install @fastls/fastls@0.10.1-dev.0
 ```
 
-使用上下文管理器确保提前退出也释放资源。块边界不对应行、SSE事件或HTTP帧。
-普通 request/get/post 会缓存响应体，最多32MiB；更大响应使用 stream。
-Go 桥接层每请求最多预读两个64KiB块，加上调用方未消费的至多一个块；不含协议栈与操作系统缓冲。
+```js
+import { Session } from '@fastls/fastls';
+// CommonJS: const { Session } = require('@fastls/fastls');
 
-## asyncio
-
-```python
-from fastls import AsyncSession
-
-async def download(url):
-    async with AsyncSession(profile="chrome/156/windows") as session:
-        async with session.stream("GET", url) as response:
-            async for chunk in response.aiter_bytes():
-                await consume(chunk)
+const session = new Session({ profile: 'chrome/156/windows', timeoutMs: 30_000 });
+try {
+  const response = await session.get('https://example.com/');
+  response.raiseForStatus();
+  console.log(response.status, response.text());
+} finally {
+  await session.closeAsync();
+}
 ```
 
-`await session.get(url)` 返回已缓存的响应；流式响应使用 `await response.aread()`。
-任务取消或上下文退出会关闭请求；`response.cancel()` 也可以直接取消。
-新动态库默认使用状态通知：同步等待原生就绪，asyncio每会话共用本机唤醒通道，不增加Python工作线程或Go→Python回调。可用notifications='required'要求新能力，或notifications='poll'保留轮询；旧库auto模式继续轮询。生命周期和C ABI见[NOTIFICATIONS.md](NOTIFICATIONS.md)。
+支持 ESM、CommonJS、TypeScript，以及 Windows x64、Linux glibc x64/ARM64、macOS x64/ARM64 平台包。保留 npm optional dependencies；系统最低版本以包内 native/manifest.json 为准。只支持 Node 主线程，不支持 worker_threads、Electron、Bun 或浏览器。GitHub 历史 `@fasttls/fastls` 候选不是 npm 的 `@fastls/fastls`。
 
-## C ABI v1
+## 支持什么
 
-以构建生成的 `fastls.h` 为准确声明。接口均为 C 调用约定：
+- HTTP/1.1、HTTP/2、浏览器配置、Cookie、HTTP/HTTPS CONNECT 和 SOCKS5/SOCKS5h 代理。
+- Python 同步/asyncio；Node Promise；请求参数、JSON、表单、文件与流式上传下载。
+- 超时与取消、自动解压、请求/响应 Trailer、SSE、WS/WSS 和 HTTP/2 全双工。
+- 默认校验证书和主机名，可独立设置目标与 HTTPS 代理的 CA。
 
-- `fastls_abi_version()`：当前为1。
-- `fastls_profiles()`：返回规范ID数组的JSON结果。
-- `fastls_stats()`：返回只读诊断JSON结果，新增符号，不改变已有函数的ABI。
-- `fastls_wait()`与`fastls_session_watch/events/unwatch()`：原生就绪等待及会话通知，见[NOTIFICATIONS.md](NOTIFICATIONS.md)。
-- `fastls_start(data, length)`：输入UTF-8 JSON，立即返回请求句柄的JSON结果。
-- `fastls_info(handle)`：返回状态 pending/headers/eof/error、状态码、最终协议/URL、头、正文结束后的 Trailer、Match 或错误。
-- `fastls_read(handle, buffer, capacity, &length)`：非阻塞二进制读取。0=数据、1=等待、2=EOF、-1=请求失败、-2=非法参数或句柄。
-- `fastls_cancel(handle)`：取消并保留句柄以便查询。
-- `fastls_close(handle)`：移除句柄并取消，多次调用无害。
-- `fastls_free(pointer)`：释放上述JSON结果。可传NULL；不得释放别处的内存或重复释放。
+## 限制与资源管理
 
-JSON结果为 `{"ok":true,"result":...}` 或 `{"ok":false,"error":"..."}`。
-每次获取的JSON指针都必须释放。输入和读取缓冲仅在调用期间使用；不返回Go指针。
-start 输入字段：url、method、profile、headers、可选 trailers、body 或 body_base64、timeout_ms、disable_redirect、可选 ca_pem 及 session。未知字段拒绝。
-输入上限1MiB，解码上传上限512KiB，未关闭请求上限256；单次读取1..1MiB。
-同一响应只支持单个读取者，控制接口可并发调用；完成后仍须close。库应随进程长期加载。
+- 不开放完整自定义 TLS Spec，不承诺 requests/httpx/fetch 的完整兼容，也不提供完整浏览器运行时。
+- 普通 HTTP 响应缓存上限 32 MiB，更大正文使用 stream；解压后默认上限 256 MiB，流式读取也受约束。
+- Python 超时单位为秒，Node 为毫秒；HTTP 错误状态通过 raise_for_status()/raiseForStatus() 主动检查。
+- Session、流式响应、SSE、WebSocket 必须关闭；同一响应仅允许一个读取者。
+- WebSocket 不支持压缩、自动重连或 H2/H3 Extended CONNECT；SSE 不自动重连。
+- SDK 文档的正式功能范围为 H1/H2，不因 Go 核心存在 H3 路径就承诺 SDK 提供 H3 指纹能力。
+- ABI 扩展按能力检测；显式加载外部库时须匹配 SDK，不能只检查 ABI 版本号。
 
-## 当前边界与验证
+## 更多用法
 
-Session 管理默认配置、活动请求及独立的连接池，支持HTTP1 keep-alive和HTTP2多路复用。不同Session、profile或CA配置相互隔离；可调用session.close_idle_connections()主动释放空闲连接。使用方法、限制和C ABI扩展见[POOLING.md](POOLING.md)。
-Session默认自动管理Cookie，提供session.cookies查询、设置、删除与清空；可用cookies=False禁用。response.headers支持大小写不敏感访问和get_list获取重复字段，详细规则见[COOKIES_HEADERS.md](COOKIES_HEADERS.md)。
-Python默认流式解码gzip、deflate、br及zstd，可通过decode_content=False取得原始正文。Timeout支持总时限及连接、响应头、正文读取预算；用法、原始头视图与解码上限见[STREAMING_TIMEOUTS.md](STREAMING_TIMEOUTS.md)。
-已支持同步/异步流式上传及write超时，见[STREAMING_UPLOAD.md](STREAMING_UPLOAD.md)。HTTP/2支持显式全双工：异步使用duplex=True，同步使用Session.duplex()手动交互，见[DUPLEX.md](DUPLEX.md)。Python同步与asyncio新增session.sse()按事件消费SSE，支持id/retry、手动恢复及大小限制，见[SSE.md](SSE.md)。代理与WebSocket支持分别见[PROXY.md](PROXY.md)和[WEBSOCKET.md](WEBSOCKET.md)；当前不提供自定义完整Spec，text按UTF-8解码，也不提供完整requests/httpx兼容。
-指纹TCP TLS请求始终启用证书校验；未提供关闭校验选项。
-本仓库尚未公开发布。许可证、sdist、升级/卸载和Linux glibc范围已经纳入release门禁；最终版本号、发布签署及目标索引凭据仍由维护者决定，不能把本地构建或Actions artifact当成已发布版本。
+[Python 完整指南](python/README.md) · [Node 完整指南](node/README.md) · [安装排错](INSTALL.md) · [代理](PROXY.md) · [流式与超时](STREAMING_TIMEOUTS.md) · [上传](STREAMING_UPLOAD.md) · [双工](DUPLEX.md) · [SSE](SSE.md) · [WebSocket](WEBSOCKET.md)
 
-```shell
-go test ./internal/bridge
-python tests/test_python.py
-python scripts/check.py
-```
+维护者入口：[源码开发](DEVELOPMENT.md) · [C ABI](ABI.md) · [CI](CI.md)。
 
-实施规划见 [PLAN.md](PLAN.md)，本地验收记录见 [VALIDATION.md](VALIDATION.md)。
+## 详细文档与问题反馈
 
-## GitHub Actions
+- [使用文档](https://fasttls.github.io/guide/)：安装、功能、参数与排错。
+- [版本与发布说明](https://github.com/FastTLS/fastls-ffi/releases)：正式版本、开发版本和产物边界。
+- [问题反馈](https://github.com/FastTLS/fastls-ffi/issues)：请提供版本、系统架构、脱敏后的最小示例与错误；不要提交凭据、Cookie、私钥或个人数据。
 
-每次push或PR自动运行Windows x64、Linux x64/ARM64及macOS Intel/Apple Silicon的原生构建与测试，另有最低Go/Python版本组合。
-构建产物与日志作为artifact保存；依赖必须绑定已推送的审阅提交，不回退到旧main。
-上游v2开发源码已推送并固定到提交SHA，无需先发布Go模块标签，配置和启用步骤见 [CI.md](CI.md)。
+## 开源协议与第三方声明
 
-稳定性验收增加HTTPS H1/H2、128路混合请求/取消、64MiB流式下载、资源回收及持续运行测试；范围、阈值与时间上限见 [TESTING_STAGE2.md](TESTING_STAGE2.md)。这些检查不表示尚未实现的功能已交付。
+自有代码采用 [Apache-2.0](LICENSE)。Python 分发的第三方声明见 [THIRD_PARTY_LICENSES.txt](python/THIRD_PARTY_LICENSES.txt)，Node 原生依赖声明及摘要随平台包提供。第三方材料保留原授权。
 
-网络异常测试覆盖握手停滞、截断和畸形响应、HTTP2流重置、读取截止时间、重定向与跨主机敏感头处理；源码及wheel均纳入CI，见[TESTING_STAGE3.md](TESTING_STAGE3.md)。
+## 使用边界与免责声明
 
-## Node.js SDK
+仅在拥有权限的系统、数据和网络上使用，并遵守适用法律、服务条款及隐私要求。软件按许可证约定以“现状”提供，不承诺可用性、特定用途适用性、第三方服务放行、匿名性或与真实浏览器完全一致。浏览器名称和版本用于描述配置，不表示获得相应厂商认证或背书。部署方负责访问控制、密钥和个人信息保护、请求限额及数据备份；担保排除与责任限制以随附许可证及适用法律为准。本说明不改变许可证授予的权利或新增许可限制。
 
-Node >=22支持CommonJS/ESM和TypeScript，功能及安装方式见[node/README.md](node/README.md)。主CI复用同一原生构建并验收源码、真实安装包与资源长测。GitHub预发布包由独立node-release流程绑定已通过的main提交签发，包含SHA256与Sigstore来源证明；不自动发布npm。
+
+## 本地构建
+
+源码开发、编译器要求及 ABI 说明已整理到 [DEVELOPMENT.md](DEVELOPMENT.md) 和 [ABI.md](ABI.md)。普通 wheel/npm 用户无需构建。

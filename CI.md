@@ -1,3 +1,5 @@
+> 历史维护/阶段记录：下文按当时阶段保存，不代表当前发布状态。当前安装、能力与限制以 [README](README.md)、[统一文档](https://fasttls.github.io/) 和实际发布标签为准。
+
 # GitHub Actions 持续测试
 
 `.github/workflows/ci.yml` 在每次push、PR更新以及手动workflow_dispatch时执行。普通运行只读且不发布；只有 `v*` 标签在全部必需作业成功后获得 GitHub contents/attestation 权限并创建 GitHub Release，不上传外部软件包索引。

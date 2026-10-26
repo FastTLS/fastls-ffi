@@ -1,3 +1,5 @@
+> 历史维护/阶段记录：下文按当时阶段保存，不代表当前发布状态。当前安装、能力与限制以 [README](README.md)、[统一文档](https://fasttls.github.io/) 和实际发布标签为准。
+
 # Fastls 跨语言封装实施规划
 
 ## Node.js 接入

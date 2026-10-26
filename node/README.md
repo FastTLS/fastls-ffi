@@ -13,10 +13,10 @@ Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明�
 
 ## 安装与快速开始
 
-npm 的 `next` 版本发布后，在消费项目中安装：
+`0.10.1-dev.0` 已发布到 npm，仍是开发版本。建议固定版本安装；`next` 用于后续预发布更新：
 
 ```sh
-npm install @fastls/fastls@next
+npm install @fastls/fastls@0.10.1-dev.0
 ```
 
 主包通过同版本的可选依赖自动安装当前平台的 Fastls 原生库。保留 optional dependencies；支持 Windows x64、Linux glibc x64/arm64、macOS x64/arm64。Linux musl 和其它架构没有内置包。具体系统最低版本见原生包的 `native/manifest.json`。
@@ -42,19 +42,7 @@ try {
 
 后续片段假定 `session` 已创建且未关闭；`consume`、`produceBytes` 等是应用自行实现的业务函数。每次实际使用均应关闭会话和未消费完的响应。
 
-从源码开发时，在仓库根目录构建动态库和测试服务，再安装 Node 开发依赖：
-
-```sh
-python scripts/build.py
-go build -o build/ffi-fixture ./cmd/ffi-fixture
-npm ci --prefix node
-npm run build --prefix node
-```
-
-Windows 测试服务文件名使用 `build/ffi-fixture.exe`，原生构建需要可用的 C 编译器，可通过 `--cc` 指定。`scripts/build.py --local` 会生成忽略跟踪的 `go.work`，使用同级源码仓库；也可用 `FASTLS_LOCAL_FASTLS`、`FASTLS_LOCAL_FTRANSPORT`、`FASTLS_LOCAL_IMITATE` 指向固定副本。当前脚本没有 `--workspace` 参数。正式发布消费同提交 CI 的固定依赖构建，不能用任意本地构建替代。
-
-源码默认加载仓库 `dist/`；普通 `npm pack ./node` 生成需要外部动态库的 thin 包。thin 包可通过 `FASTLS_LIBRARY` 或 `new Session({ library: '/absolute/path/to/library' })` 指定库。GitHub 内置库候选和 npm 拆分包的区别见下文。
-
+源码构建、测试和发包见 [开发指南](DEVELOPMENT.md)。普通 npm 用户不需要这些步骤。
 
 ## 请求和响应
 
@@ -339,48 +327,20 @@ try {
 原生限制仍适用：最多 64 会话、256 未关闭请求，每会话最多 16 种传输配置。
 代理支持HTTP/HTTPS CONNECT、socks5及socks5h，见下节；WebSocket见对应章节。
 
-## 候选包与原生库加载
-
-构建本平台Go动态库后，运行 `npm run pack:native`，产物位于上级 `dist/`。
-例如Windows x64：`fastls-fastls-0.10.1-dev.0-win32-x64.tgz`；Linux包名另带`-glibc`。
-在目标项目执行 `npm install <候选包绝对路径> --ignore-scripts`，随后即可 `new Session()`，无需Go、Python、编译器或FASTLS_LIBRARY。
-安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整225项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
-
-当前候选覆盖Windows x64、Linux glibc x64/arm64、macOS x64/arm64，Node22+。每个tarball只含一个系统/架构，不能将同名版本的这些变体当成可直接发布到npm的通用包。npm的os/cpu/libc字段限制安装目标；首次使用还检查平台、ABI声明、库SHA256及Linux的glibc版本。Linux最低glibc从ELF符号版本提取，macOS最低版本从Mach-O提取，具体要求及系统动态依赖见包内`native/manifest.json`，不将CI宿主机上的通过扩大为所有旧系统均已测试。musl不在当前范围。
-
-加载顺序：显式 `SessionOptions.library` → `FASTLS_LIBRARY` → 包内 `native/manifest.json` 对应的库 → 已安装主包的本平台可选依赖；源码目录没有内置 manifest 时使用仓库 `dist/`。已安装的 thin 包没有仓库回退。可选原生包必须与主包同版本；缺包、错误平台、glibc 不兼容或摘要不一致均报错。显式路径覆盖仍检查 ABI 与必需能力。SHA-256 只验证内容完整性，不能替代来源签名。
-
-清单还保存Go构建来源摘要、模块版本/校验和、FastTLS仓库提交和收集到的许可证文本。`native/THIRD_PARTY_NOTICES.txt`仅是可用材料清单。依赖许可证按实际构建输入收集；imitate已补齐Apache-2.0许可证，npm发布要求所有平台的licenseReviewRequired均为空。GitHub内置库候选保持private且没有安装/构建脚本；npm主包与平台包的发布流程见NPM_RELEASE.md。
-
-npm 拆分包通过 `npm run test:package` 后再执行 `npm run test:npm` 生成，主包与本机原生包位于 `dist/npm/`。五个同名同版本的 GitHub 内置库候选不能作为五个 npm 版本发布。首次 registry 发布必须使用同提交 main CI 汇总得到的六包组，详见 NPM_RELEASE.md。
-
-## 验证
-
-所有命令从仓库根目录执行，先完成动态库和测试服务构建。
-
-```sh
-npm run test:quick --prefix node
-npm test --prefix node
-npm run test:package --prefix node
-npm run test:npm --prefix node
-python node/scripts/test-npm-release.py
-```
-
-`test:quick` 提供类型、映射、原生绑定、WebSocket 和 Cookie 兼容的短反馈。`npm test`、`test:package`、`test:npm` 分别运行源码、内置库候选、npm 拆分包的完整 225 项套件：十五组 Python 的 209 项行为映射，加 2 项绑定和 14 项 Node 专有测试。类型、Cookie 真实库兼容、安装元数据和发布边界检查另计；当前发布边界测试为 9 项。
-
-两类安装测试都在独立消费项目运行，关闭安装脚本、清除外部库环境变量并移除编译工具搜索路径。拆分包测试由临时 registry 提供尚未发布的本项目平台包，npm 自行按平台筛选；其它依赖仍使用正常 registry。
-
-主 CI 覆盖五个平台的 Node 24，以及 Linux x64 的 Node 22 组合，复用固定的原生构建输入。源码证据位于 `build/node-*.json`；内置候选和摘要在 `dist/`；拆分包、`npm-package-info.json` 和独立安装证据在 `dist/npm/`。具体映射、资源阈值及长测命令见 PARITY.md。功能检查和资源长测分开执行，不把清单存在或历史绿色结果当作新提交已通过。
-
 ## 与 Python 的语言差异
 
 Node统一使用Promise API，不提供Python同步Session或共享同步会话多线程调用；对应场景采用同步迭代器输入和96路Promise请求验证，不宣称线程安全。Node Readable按自身流的生命周期管理文件句柄，区别于Python保留调用方文件对象。
 JavaScript无法强行中断任意Promise：取消会立即释放原生请求，并请求迭代器return/destroy；生产者正在等待的自定义I/O必须支持取消，才能保证其finally及时执行。推荐使用接收AbortSignal的上传工厂。Python的协程强制取消场景对应为工厂信号取消，报告中明确标记适配。
 
-## 发布与授权
+## 文档、许可证与使用声明
 
-维护者在 main 的同提交完整 CI 成功后，运行 `npm-publish.yml` 准备或发布 npm 六包组；首次发布、账号权限、2FA、Trusted Publisher 和重试步骤见 NPM_RELEASE.md。
+[完整 Node 文档](https://fasttls.github.io/node/) · [Apache-2.0](LICENSE)。原生第三方声明随平台包提供。
 
-`node-release.yml` 单独签发 GitHub 内置库候选和 thin 包，生成 SHA256SUMS、Sigstore 来源证明及清单，不会发布 npm。既有 `node-v0.10.1-dev.0` GitHub 预发布使用历史包名 `@fasttls/fastls`；本次 npm 包名为 `@fastls/fastls`，两套归档不能互换。后续 GitHub 签发使用新版本号，不能覆盖既有 tag 的来源记录。
+## 使用边界与免责声明
 
-每次构建收集原生依赖许可证，npm 发布要求五个平台的 `licenseReviewRequired` 均为空。`imitate` 已固定到补齐 Apache-2.0 的提交；是否满足要求以本次候选清单为准。发布状态以 npm registry 和已完成的工作流为准。
+仅在拥有权限的系统、数据和网络上使用，并遵守适用法律、服务条款及隐私要求。软件按许可证约定以“现状”提供，不承诺可用性、特定用途适用性、第三方服务放行、匿名性或与真实浏览器完全一致。浏览器名称和版本用于描述配置，不表示获得相应厂商认证或背书。部署方负责访问控制、密钥和个人信息保护、请求限额及数据备份；担保排除与责任限制以随附许可证及适用法律为准。本说明不改变许可证授予的权利或新增许可限制。
+
+
+## 动态库选择与安装排错
+
+加载优先级：显式 SessionOptions.library → FASTLS_LIBRARY → 包内 manifest → 同版本平台可选依赖；源码目录可回退仓库 dist，已安装 thin 包不回退仓库。普通 npm 用户应保留 optionalDependencies，不必设置外部库路径。外部旧库可能覆盖新包，ABI 号相同也不保证扩展能力相同。Linux glibc 与 macOS 最低版本、摘要及动态依赖以 native/manifest.json 为准。更多排错见 [在线帮助](https://fasttls.github.io/help/)。

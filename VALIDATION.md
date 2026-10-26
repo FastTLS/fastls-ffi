@@ -1,3 +1,5 @@
+> 历史维护/阶段记录：下文按当时阶段保存，不代表当前发布状态。当前安装、能力与限制以 [README](README.md)、[统一文档](https://fasttls.github.io/) 和实际发布标签为准。
+
 # 第一阶段本地验收
 
 日期：2026-10-23（Asia/Shanghai）。平台：Windows x64，Go1.26.10、Python3.11、已有Zig0.14.1工具链。
