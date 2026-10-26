@@ -23,7 +23,7 @@ npm run build
 Koffi 自身需要对应平台的原生组件，其依赖不等同于 Fastls 动态库。
 
 可运行 `npm pack` 生成本地安装包，再在目标项目中执行 `npm install <安装包绝对路径>`。
-包名为 `@fastls/fastls`，尚未发布 npm。npm 分发采用主包加五个平台原生库包，自动安装对应平台依赖；发布准备、账号配置与验收步骤见 [NPM_RELEASE.md](NPM_RELEASE.md)。
+包名为 `@fastls/fastls`，尚未发布 npm。npm 分发采用主包加五个平台原生库包，自动安装对应平台依赖；发布准备、账号配置与验收步骤见 [NPM_RELEASE.md](https://github.com/FastTLS/fastls-ffi/blob/main/node/NPM_RELEASE.md)。
 
 ```js
 import { Session } from '@fastls/fastls';
@@ -265,7 +265,7 @@ CI 运行时还记录提交 SHA。测试前后会核对动态库未被替换。�
 
 加载优先级：Session的`library` → FASTLS_LIBRARY → 包内动态库；源码工作区最后才回退到仓库dist目录。显式覆盖仍检查ABI和能力。包内文件损坏、缺失或平台不符会报错，不静默寻找其它库。SHA256用于完整性核对，不能替代签名或信任来源。
 
-清单还保存Go构建来源摘要、模块版本/校验和、FastTLS仓库提交和收集到的许可证文本。`native/THIRD_PARTY_NOTICES.txt`仅是可用材料清单。当前FastTLS各仓库缺少根LICENSE/COPYING，已明确记为公开发布前的待处理项，不能据此推定已有再分发授权。候选包标记private且没有安装/构建脚本；本阶段仅生成CI验收产物，不发布npm或Release。
+清单还保存Go构建来源摘要、模块版本/校验和、FastTLS仓库提交和收集到的许可证文本。`native/THIRD_PARTY_NOTICES.txt`仅是可用材料清单。依赖许可证按实际构建输入收集；imitate已补齐Apache-2.0许可证，npm发布要求所有平台的licenseReviewRequired均为空。GitHub内置库候选保持private且没有安装/构建脚本；npm主包与平台包的发布流程见NPM_RELEASE.md。
 
 ## 代理（0.7）
 
