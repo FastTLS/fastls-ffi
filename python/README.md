@@ -1,13 +1,13 @@
 # fastls Python SDK
 
-通过原生 Fastls 动态库发送带浏览器配置的 HTTP 请求，支持同步、asyncio、流式上传下载、HTTP/2 全双工、SSE 和 WebSocket。Python 发行包名与导入名均为 `fastls`，仓库名为 `fastls-ffi`。当前正式版本为 [0.1.3](https://pypi.org/project/fastls/0.1.3/)。
+通过原生 Fastls 动态库发送带浏览器配置的 HTTP 请求，支持同步、asyncio、流式上传下载、HTTP/2 全双工、SSE 和 WebSocket。Python 发行包名与导入名均为 `fastls`，仓库名为 `fastls-ffi`。当前正式版本为 [0.1.4](https://pypi.org/project/fastls/0.1.4/)。
 
 ## 安装与平台
 
 需要 Python 3.10+。推荐在虚拟环境中安装：
 
 ```shell
-python -m pip install --only-binary=:all: fastls==0.1.3
+python -m pip install --only-binary=:all: fastls==0.1.4
 ```
 
 平台 wheel 已包含动态库，无需 Go、C 编译器或额外下载 DLL。`--only-binary=:all:` 确保没有匹配平台时明确失败，避免误装不含动态库的源码包。
@@ -25,6 +25,30 @@ python -c "from importlib.metadata import version; print(version('fastls'))"
 ```
 
 GitHub 直装、升级卸载及排错见[完整安装指南](https://github.com/FastTLS/fastls-ffi/blob/main/INSTALL.md)。
+
+## 直接发起请求
+
+> 0.1.4 新增模块级便捷方法；使用 0.1.3 或更早版本时，请先升级，或使用下方的 `Session` 示例。
+
+```python
+import fastls
+
+resp = fastls.request("GET", "https://tls.peet.ws/api/all")
+resp.raise_for_status()
+print(resp.json())
+
+# GET 的简写：
+resp = fastls.get("https://tls.peet.ws/api/all", timeout=15)
+print(resp.status_code, resp.text)
+```
+
+提供 `request()`、`get()`、`post()`、`put()`、`patch()`、`delete()`、`head()` 和 `options()`。请求参数沿用 `Session.request()`，例如 `params`、`headers`、`json`、`data`、`files`、`profile`、`proxy` 和 `timeout`。`library`、`ca_file`、`cookies` 与 `notifications` 用于配置本次临时会话，其中 `cookies` 是是否自动管理 Cookie 的布尔开关。
+
+这些入口附带完整关键字参数提示，返回类型为 `Response`；IDE 可识别 `.status_code: int`、`.text: str`、`.content: bytes` 和响应头类型。`.json()` 的结果取决于目标返回的 JSON，保留为 `Any`。类型提示支持 Python 3.10+，无需额外运行时依赖。
+
+每次调用会创建临时会话，完整缓存响应后关闭请求与会话；返回后仍可读取 `.content`、`.text`、`.json()` 和响应头。HTTP 4xx/5xx 默认返回响应，由 `raise_for_status()` 决定是否抛错。`head()` 沿用 Session 的重定向策略，需要禁止跳转时显式设置 `allow_redirects=False`。
+
+各次调用之间不保留 Cookie 或复用连接。连续请求、登录态、流式下载、SSE 或 WebSocket 请使用 `Session`；异步使用 `AsyncSession`。便捷方法同样受普通响应 32 MiB 缓存上限约束，不接受 `stream=True`，流式读取使用 `Session.stream()`。
 
 ## 同步请求
 

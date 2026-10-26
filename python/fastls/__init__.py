@@ -1,5 +1,6 @@
 from ._native import FastlsError, FastlsTimeoutError, FastlsDecodeError
 from .client import Session, AsyncSession, Response, AsyncResponse, FastlsHTTPError
+from .api import request, get, post, put, patch, delete, head, options
 from .headers import Headers
 from .cookies import Cookies
 from .timeout import Timeout
@@ -9,3 +10,4 @@ __all__ = ["Session", "AsyncSession", "Response", "AsyncResponse", "FastlsError"
 __all__.append("FastlsHTTPError")
 from .websocket import WebSocket, AsyncWebSocket, WebSocketClosed
 __all__ += ["WebSocket", "AsyncWebSocket", "WebSocketClosed"]
+__all__ += ["request", "get", "post", "put", "patch", "delete", "head", "options"]

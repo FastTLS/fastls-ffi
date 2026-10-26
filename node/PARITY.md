@@ -2,6 +2,10 @@
 
 当前范围是十五个 Python 行为套件的 209 个场景，加 2 项原生绑定和 14 项 Node 专有检查，共 225 项。源码、GitHub 内置库候选和 npm 拆分包分别运行完整套件。TypeScript、真实库 Cookie 兼容、安装门禁和 9 项发布边界检查另计。
 
+## Python 专有入口
+
+Python 0.1.4 新增模块级 request/get/post 等一次性同步调用，独立的 tests/test_api.py 覆盖临时会话、响应缓存与异常清理。该套件在 Python 源码和 wheel 验收中执行；Node 当前没有对应模块级便捷导出，未计入下方 209 项跨语言场景，不宣称该入口已在 Node 提供。
+
 ## 行为清单与基线
 
 `tests/python-baseline.json` 固定源文件 SHA-256，基础 revision 为 `2325fec`，Cookie 集成来源另记。`scripts/check-parity.mjs` 检查源文件哈希和逐名对应关系；Python 新增、删除、改名或修改断言，都必须先复核 Node 测试再更新基线。清单一致不代表测试通过。

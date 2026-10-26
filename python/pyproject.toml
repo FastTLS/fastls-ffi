@@ -16,3 +16,6 @@ license-files = ["LICENSE", "THIRD_PARTY_LICENSES.txt"]
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["fastls*"]
+
+[tool.setuptools.package-data]
+fastls = ["py.typed", "*.pyi"]

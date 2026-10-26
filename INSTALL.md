@@ -1,11 +1,11 @@
 # Python SDK 安装指南
 
-本指南以 GitHub Release [v0.1.3](https://github.com/FastTLS/fastls-ffi/releases/tag/v0.1.3) 为例。平台 wheel 已包含原生动态库，普通安装不需要 Go、C 编译器、克隆源码或单独下载 DLL/dylib/so 文件。
+本指南以 GitHub Release [v0.1.4](https://github.com/FastTLS/fastls-ffi/releases/tag/v0.1.4) 为例。平台 wheel 已包含原生动态库，普通安装不需要 Go、C 编译器、克隆源码或单独下载 DLL/dylib/so 文件。
 
-发行包名和 Python 导入名都是 `fastls`。推荐从 [PyPI](https://pypi.org/project/fastls/0.1.3/) 安装：
+发行包名和 Python 导入名都是 `fastls`。推荐从 [PyPI](https://pypi.org/project/fastls/0.1.4/) 安装：
 
 ```shell
-python -m pip install --only-binary=:all: fastls==0.1.3
+python -m pip install --only-binary=:all: fastls==0.1.4
 ```
 
 `--only-binary=:all:` 防止没有匹配平台时安装缺少原生库的 SDK-only sdist。
@@ -24,7 +24,7 @@ python -c "import platform, struct, sys; print(sys.version); print(platform.syst
 
 下面命令统一使用 `python`。Linux/macOS 若只有 `python3`，请相应替换；Windows 也可使用已选择正确版本的 `py -3`。
 
-v0.1.3 的平台范围：
+v0.1.4 的平台范围：
 
 - Windows：64 位 x86 Python，使用 `win_amd64`；本版没有 Windows ARM64 原生 wheel。
 - Linux x86_64：使用 `manylinux_2_39_x86_64`；ARM64/aarch64 使用 `manylinux_2_39_aarch64`。
@@ -60,37 +60,37 @@ python -m pip install --upgrade pip
 ### Windows x64
 
 ```shell
-python -m pip install "https://github.com/FastTLS/fastls-ffi/releases/download/v0.1.3/fastls-0.1.3-py3-none-win_amd64.whl"
+python -m pip install "https://github.com/FastTLS/fastls-ffi/releases/download/v0.1.4/fastls-0.1.4-py3-none-win_amd64.whl"
 ```
 
 ### Linux x64
 
 ```shell
-python -m pip install "https://github.com/FastTLS/fastls-ffi/releases/download/v0.1.3/fastls-0.1.3-py3-none-manylinux_2_39_x86_64.whl"
+python -m pip install "https://github.com/FastTLS/fastls-ffi/releases/download/v0.1.4/fastls-0.1.4-py3-none-manylinux_2_39_x86_64.whl"
 ```
 
 ### Linux ARM64
 
 ```shell
-python -m pip install "https://github.com/FastTLS/fastls-ffi/releases/download/v0.1.3/fastls-0.1.3-py3-none-manylinux_2_39_aarch64.whl"
+python -m pip install "https://github.com/FastTLS/fastls-ffi/releases/download/v0.1.4/fastls-0.1.4-py3-none-manylinux_2_39_aarch64.whl"
 ```
 
 ### macOS Intel，macOS 15+
 
 ```shell
-python -m pip install "https://github.com/FastTLS/fastls-ffi/releases/download/v0.1.3/fastls-0.1.3-py3-none-macosx_15_0_x86_64.whl"
+python -m pip install "https://github.com/FastTLS/fastls-ffi/releases/download/v0.1.4/fastls-0.1.4-py3-none-macosx_15_0_x86_64.whl"
 ```
 
 ### macOS Apple Silicon，macOS 15+
 
 ```shell
-python -m pip install "https://github.com/FastTLS/fastls-ffi/releases/download/v0.1.3/fastls-0.1.3-py3-none-macosx_15_0_arm64.whl"
+python -m pip install "https://github.com/FastTLS/fastls-ffi/releases/download/v0.1.4/fastls-0.1.4-py3-none-macosx_15_0_arm64.whl"
 ```
 
 也可从发布页下载 wheel，再安装本地文件。例如 Windows x64：
 
 ```shell
-python -m pip install ./fastls-0.1.3-py3-none-win_amd64.whl
+python -m pip install ./fastls-0.1.4-py3-none-win_amd64.whl
 ```
 
 不要重命名 wheel 来绕过平台检查；改名不会改变动态库的架构或系统依赖。在线安装需要能够访问 GitHub 的发布附件下载服务。
@@ -103,7 +103,7 @@ python -m pip install ./fastls-0.1.3-py3-none-win_amd64.whl
 python -c "from importlib.metadata import version; print(version('fastls'))"
 ```
 
-预期输出 `0.1.3`。然后运行以下 Python 代码，它会实际创建会话、加载原生库并列出配置，不需要访问公网：
+预期输出 `0.1.4`。然后运行以下 Python 代码，它会实际创建会话、加载原生库并列出配置，不需要访问公网：
 
 ```python
 from fastls import Session
@@ -119,7 +119,7 @@ with Session(profile="chrome/156/windows") as session:
 从 PyPI 升级可执行 `python -m pip install --upgrade --only-binary=:all: fastls`。从 GitHub 升级时，从 [Releases](https://github.com/FastTLS/fastls-ffi/releases) 选择目标版本及平台，将对应完整下载地址交给 `python -m pip install --upgrade "下载地址"`；地址中的版本目录与文件名版本必须一致。重新安装本版可使用：
 
 ```shell
-python -m pip install --force-reinstall "https://github.com/FastTLS/fastls-ffi/releases/download/v0.1.3/fastls-0.1.3-py3-none-win_amd64.whl"
+python -m pip install --force-reinstall "https://github.com/FastTLS/fastls-ffi/releases/download/v0.1.4/fastls-0.1.4-py3-none-win_amd64.whl"
 ```
 
 上例适用于 Windows x64；其它平台替换为上面的匹配地址。更新后重启使用该库的 Python 进程或 Notebook 内核，避免继续使用已加载的旧动态库。
@@ -148,6 +148,6 @@ SDK-only `.tar.gz` 不包含原生库，也不会在安装或导入时下载/编
 
 ## 8. PyPI 发布状态
 
-[fastls 0.1.3](https://pypi.org/project/fastls/0.1.3/) 已发布，包含五个平台 wheel 和一个 SDK-only sdist。正式 `v*` 标签通过完整门禁后，由 `ci.yml` 使用 Trusted Publishing 上传；普通分支、PR 和开发快照不上传 PyPI。Linux wheel 的 `manylinux_2_39` 标签要求 glibc 2.39+，不支持 Alpine/musl。维护说明见 [PYPI.md](PYPI.md)。
+[fastls 0.1.4](https://pypi.org/project/fastls/0.1.4/) 已发布，包含五个平台 wheel 和一个 SDK-only sdist。正式 `v*` 标签通过完整门禁后，由 `ci.yml` 使用 Trusted Publishing 上传；普通分支、PR 和开发快照不上传 PyPI。Linux wheel 的 `manylinux_2_39` 标签要求 glibc 2.39+，不支持 Alpine/musl。维护说明见 [PYPI.md](PYPI.md)。
 
 PyPI 官方说明：[通过 Trusted Publisher 创建项目](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)、[GitHub Actions 发布](https://docs.pypi.org/trusted-publishers/using-a-publisher/)。

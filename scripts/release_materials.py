@@ -101,12 +101,15 @@ def artifacts():
     sdist = one("*.tar.gz", "sdist")
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
+        for leaf in ("fastls/api.py", "fastls/api.pyi", "fastls/py.typed"):
+            if leaf not in names:
+                raise RuntimeError(f"wheel is missing {leaf}")
         for leaf in ("LICENSE", "THIRD_PARTY_LICENSES.txt"):
             if not any(".dist-info/licenses/" in name and name.endswith("/" + leaf) for name in names):
                 raise RuntimeError(f"wheel is missing {leaf}")
     with tarfile.open(sdist, "r:gz") as archive:
         names = archive.getnames()
-        for leaf in ("LICENSE", "README.md", "THIRD_PARTY_LICENSES.txt", "VERSION", "fastls/__init__.py"):
+        for leaf in ("LICENSE", "README.md", "THIRD_PARTY_LICENSES.txt", "VERSION", "fastls/__init__.py", "fastls/api.py", "fastls/api.pyi", "fastls/py.typed"):
             if not any(name.endswith("/" + leaf) for name in names):
                 raise RuntimeError(f"sdist is missing {leaf}")
     audit = json.loads((ROOT / "dist" / "native-audit.json").read_text(encoding="utf-8"))

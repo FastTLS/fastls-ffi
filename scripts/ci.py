@@ -233,6 +233,7 @@ def run(stage="all"):
             execute("c-websocket-execute", [sys.executable, "tests/test_c_websocket.py"], command_env=runtime_env)
         if stage in ("all", "source"):
             execute("python-source", [sys.executable, "tests/test_python.py"])
+            execute("api-source", [sys.executable, "tests/test_api.py"])
             execute("stability-source", [sys.executable, "tests/test_stability.py"])
             execute("network-source", [sys.executable, "tests/test_network.py"])
             execute("pooling-source", [sys.executable, "tests/test_pooling.py"])

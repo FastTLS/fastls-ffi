@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import base64
 from contextlib import contextmanager, asynccontextmanager
@@ -6,6 +8,7 @@ import json
 from pathlib import Path
 import threading
 import time
+from typing import Any
 from .upload import is_stream, chunks, async_chunks
 
 from ._native import Native, FastlsError, raise_response_error
@@ -46,6 +49,17 @@ def _cancel_task(task):
 
 
 class Response:
+    status_code: int
+    http_version: str
+    url: str
+    headers: Headers
+    wire_headers: Headers
+    trailers: Headers
+    decoded: bool
+    match: dict[str, Any]
+    encoding: str | None
+    _content: bytes | None
+
     def __init__(self, owner, handle, info):
         self._owner, self._handle = owner, handle
         self.status_code = info["status"]
@@ -83,35 +97,35 @@ class Response:
             else:
                 self._owner._wait(self._handle, 2)
 
-    def read(self):
+    def read(self) -> bytes:
         if self._content is None:
             self._content = _collect(self.iter_bytes())
         return self._content
 
     @property
-    def content(self):
+    def content(self) -> bytes:
         return self.read()
 
     @property
-    def text(self):
+    def text(self) -> str:
         return self.content.decode(self.encoding or "utf-8", errors="replace")
 
     @property
-    def ok(self):
+    def ok(self) -> bool:
         return self.status_code < 400
 
-    def raise_for_status(self):
+    def raise_for_status(self) -> None:
         if 400 <= self.status_code < 600:
             raise FastlsHTTPError(self)
 
-    def json(self):
+    def json(self) -> Any:
         return json.loads(self.content)
 
-    def cancel(self):
+    def cancel(self) -> None:
         if self._handle is not None:
             self._owner._native.call("fastls_cancel", self._handle)
 
-    def close(self):
+    def close(self) -> None:
         if self._handle is not None:
             self._owner._close_handle(self._handle)
             self._handle = None

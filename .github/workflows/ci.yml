@@ -2,7 +2,7 @@ name: Native library and Python SDK
 permissions:
   contents: read
 env:
-  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.1.0.dev{0}', github.run_number)
+  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.1.4.dev{0}', github.run_number)
     }}
   FASTLS_RELEASE_MODE: ${{ github.ref_type == 'tag' && 'true' || 'false' }}
 concurrency:
@@ -44,6 +44,11 @@ jobs:
       run: python scripts/ci.py resolve
     - name: Test package publication boundaries
       run: python tests/test_pypi.py
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      with:
+        node-version: '22'
+    - name: Check Python 3.10 API types
+      run: npm exec --yes --package=pyright@1.1.414 -- pyright --project tests/pyrightconfig.json
     if: github.event_name != 'workflow_dispatch' || inputs.pypi_run_id == ''
   native:
     needs: dependencies

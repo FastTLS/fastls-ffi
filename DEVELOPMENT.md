@@ -29,3 +29,16 @@ npm run test:quick --prefix node
 ```
 
 完整平台矩阵、源码及安装包测试以 CI.md 为准。历史阶段记录 [VALIDATION.md](VALIDATION.md)、[TESTING_STAGE2.md](TESTING_STAGE2.md)、[TESTING_STAGE3.md](TESTING_STAGE3.md)、[PLAN.md](PLAN.md)、[NEXT_PHASE.md](NEXT_PHASE.md) 是维护资料，不是当前发版承诺。
+
+
+## Python 便捷 API 与类型提示
+
+模块级同步入口位于 python/fastls/api.py；api.pyi 提供各 HTTP 方法的完整关键字参数签名，py.typed 使安装包可被类型检查器识别。修改参数时同步实现、提示文件及 python/README.md。返回数据为已缓存 Response，每次便捷调用关闭临时会话。
+
+面向 Python 3.10 的消费代码检查：
+
+```sh
+npm exec --yes --package=pyright@1.1.414 -- pyright --project tests/pyrightconfig.json
+```
+
+这只用于开发验证，不是 Python SDK 的运行依赖。回归测试沿用 `python tests/test_python.py`，需要已构建且匹配的动态库；检查普通 wheel 与 sdist 都包含 api.py、api.pyi 和 py.typed。

@@ -1,0 +1,6 @@
+{
+  "include": ["typing_api.py"],
+  "extraPaths": ["../python"],
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "basic"
+}

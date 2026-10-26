@@ -6,22 +6,23 @@
 
 ## Python：安装与使用
 
-需要 Python 3.10+；当前稳定版为 `fastls==0.1.3`，发行名和导入名均为 `fastls`。
+需要 Python 3.10+；当前稳定版为 `fastls==0.1.4`，发行名和导入名均为 `fastls`。
 
 ```sh
-python -m pip install --only-binary=:all: fastls==0.1.3
+python -m pip install --only-binary=:all: fastls==0.1.4
 ```
 
 ```python
-from fastls import Session
+import fastls
 
-with Session(profile="chrome/156/windows") as session:
-    response = session.get("https://example.com/")
-    response.raise_for_status()
-    print(response.status_code, response.text)
+response = fastls.get("https://example.com/", profile="chrome/156/windows")
+response.raise_for_status()
+print(response.status_code, response.text)
 ```
 
 支持 Windows x64、Linux glibc 2.39+ x64/ARM64、macOS 15+ Intel/Apple Silicon；不提供 musl/Alpine、Windows ARM64 或其它平台的内置 wheel。从旧 `fastls-ffi` 迁移前先卸载旧包，两者不可共存。安装验证应实际创建 Session，而不只是 import，详见 [安装指南](INSTALL.md)。
+
+0.1.4 新增 `fastls.request()` / `fastls.get()` 等一次性请求入口，自动关闭临时会话，并提供 IDE 参数和响应类型提示。连续请求、连接复用或登录态请使用 [Session](python/README.md#同步请求)。
 
 ## Node.js：安装与使用
 

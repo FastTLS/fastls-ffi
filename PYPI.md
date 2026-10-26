@@ -47,3 +47,8 @@ Python 新发行名为 `fastls`，导入名仍为 `fastls`；GitHub 仓库和 C 
 原 CI 的 macOS ARM64 Node 大响应测试曾超时；同源码和同产物完整重跑该任务后，源码与安装包各 225 项通过，未重现超时。该次重跑没有放宽超时、跳过测试或修改运行时代码；原始失败记录保留在正式 CI 中。
 
 发布后在全新 Windows x64 虚拟环境中从官方 PyPI 安装 `fastls==0.1.3`，确认下载来源为 files.pythonhosted.org，包摘要同时匹配 PyPI 与 GitHub，原生库位于虚拟环境且 ABI 为 1。使用 `chrome/156/windows` 通过独立本地 CA 靶场验证 HTTPS HTTP/1.1、HTTP/2、64 MiB 流式下载及正文摘要、WebSocket 回显和 asyncio 请求。该安装复验仅在 Windows 本机运行；其它平台的认证来自原正式 CI。
+
+
+## v0.1.4 发布内容
+
+本次新增模块级一次性请求和 IDE 类型提示，详见 [0.1.4 说明](RELEASE_NOTES_0.1.4.md)。沿用 ci.yml 的完整原生、安装包、跨语言和 PyPI 门禁；先验证 main，再推送新的 v0.1.4 标签，使用同次标签运行认证的五个平台 wheel 和一个 sdist 发布，不移动已有标签或复用旧版本文件。

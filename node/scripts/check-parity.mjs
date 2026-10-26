@@ -4,8 +4,10 @@ import { createHash } from 'node:crypto';
 const root=resolve(import.meta.dirname,'../..');
 const sources=['test_python.py','test_stability.py','test_network.py','test_pooling.py','test_cookies.py','test_decode_timeouts.py','test_upload.py','test_duplex.py','test_sse.py','test_notifications.py','test_proxy.py','test_request_options.py','test_websocket.py','test_websocket_cookies.py','test_response_metadata.py'];
 const deferred=[];
+// Module-level one-shot calls are Python-specific, not Node parity scenarios.
+const pythonSpecific=['test_api.py'];
 const infrastructure=['test_ci.py','test_ci_artifact.py','test_pypi.py','test_benchmarks.py','test_c_wait.py','test_c_websocket.py'];
-const unreviewed=readdirSync(resolve(root,'tests')).filter(file=>/^test_.*\.py$/.test(file)&&![...sources,...deferred,...infrastructure].includes(file));
+const unreviewed=readdirSync(resolve(root,'tests')).filter(file=>/^test_.*\.py$/.test(file)&&![...sources,...deferred,...infrastructure,...pythonSpecific].includes(file));
 if(unreviewed.length)throw Error(`Review new Python suites before claiming parity: ${unreviewed.join(', ')}`);
 const python=new Set();
 const baseline=JSON.parse(readFileSync(resolve(root,'node/tests/python-baseline.json'),'utf8'));
@@ -20,3 +22,5 @@ if(missing.length||obsolete.length)throw Error(JSON.stringify({missing,obsolete}
 console.log(`Python parity inventory: ${python.size} scenarios have explicit Node counterparts (language adaptations documented in test records)`);
 if(deferred.length)console.log(`Deferred SDK suites: ${deferred.join(', ')}; these capabilities are not yet implemented in Node`);
 export const scenarioCount = python.size;
+
+console.log(`Python-specific API suites (no Node convenience export claimed): ${pythonSpecific.join(", ")}`);
