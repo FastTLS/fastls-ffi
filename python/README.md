@@ -4,6 +4,6 @@ The source distribution contains the Python SDK but does not compile or download
 
 Platform wheels contain the matching native library and need no Go or C compiler at installation time. New Linux wheels are audited as manylinux_2_39 and require glibc 2.39 or newer; Alpine/musl is not supported. Legacy v0.1.2 GitHub wheels use linux_* tags.
 
-The distribution name is now `fastls`; imports remain `from fastls import Session`. After the first successful PyPI publication, install a native bundle with `python -m pip install --only-binary=:all: fastls`. When migrating from the legacy `fastls-ffi` distribution, uninstall it first: both distributions provide the same `fastls` import directory and must not coexist. Existing v0.1.2 GitHub assets retain their original names.
+The distribution name is now `fastls`; imports remain `from fastls import Session`. Install the published 0.1.3 native bundle from PyPI with `python -m pip install --only-binary=:all: fastls==0.1.3`. When migrating from the legacy `fastls-ffi` distribution, uninstall it first: both distributions provide the same `fastls` import directory and must not coexist. Existing v0.1.2 GitHub assets retain their original names.
 
 License terms are in `LICENSE`. Native-library third-party license texts are collected in `THIRD_PARTY_LICENSES.txt`.
