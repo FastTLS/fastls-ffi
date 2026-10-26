@@ -89,6 +89,27 @@ class NpmRelease(unittest.TestCase):
     def test_publish_rejects_pending_license(self):
         self.assertIn('license review', self.run_assembly('--publishable').stderr)
 
+    def test_publishable_set_with_complete_licenses(self):
+        for path in self.infos:
+            info = json.loads(path.read_text())
+            info['nativeManifest']['release']['licenseReviewRequired'] = []
+            candidate_path = path.parent.parent/'node-package-info.json'
+            candidate = json.loads(candidate_path.read_text())
+            candidate['native']['manifest'] = info['nativeManifest']; write(candidate_path, candidate)
+            archive_path = path.parent/info['native']['file']
+            with tarfile.open(archive_path) as tar:
+                contents = {member.name: tar.extractfile(member).read() for member in tar.getmembers()}
+            contents['package/native/manifest.json'] = json.dumps(info['nativeManifest']).encode()
+            with tarfile.open(archive_path, 'w:gz') as tar:
+                for filename, data in contents.items():
+                    member = tarfile.TarInfo(filename); member.size = len(data)
+                    tar.addfile(member, io.BytesIO(data))
+            info['native']['sha256'] = hashlib.sha256(archive_path.read_bytes()).hexdigest(); write(path, info)
+        result = self.run_assembly('--publishable')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads((self.root/'output/npm-release-manifest.json').read_text())
+        self.assertEqual(report['license_review_required'], [])
+
     def test_incomplete_platforms_rejected(self):
         self.infos[0].unlink()
         self.assertNotEqual(self.run_assembly().returncode, 0)

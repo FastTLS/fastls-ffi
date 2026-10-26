@@ -29,7 +29,7 @@ npm run test:npm --prefix node
 
 ## 依赖授权
 
-`native/manifest.json` 的 `release.licenseReviewRequired` 保存缺少明确许可证的模块。构建和测试会保留原始材料；正式 npm 发布要求所有候选该列表为空。当前 imitate 的 NOTICE 不构成许可证授予，需要维护者确认授权、在依赖仓库补齐相应材料并重新构建验收。不能通过删字段或手工修改归档解除此项。
+`native/manifest.json` 的 `release.licenseReviewRequired` 保存缺少明确许可证的模块。构建和测试会保留原始材料；正式 npm 发布要求所有候选该列表为空。imitate 已由维护者确认采用 Apache-2.0，源仓库提交 780f88aaef8474f09035855f906ecc90dd0f4102 补齐 LICENSE 并保留来源 NOTICE；ci/dependencies.json 固定到该提交。后续仍以每次构建实际收集到的材料为准，不能通过删字段或手工修改归档解除待审项。
 
 ## 准备发布包组
 
