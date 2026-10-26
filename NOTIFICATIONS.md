@@ -58,7 +58,7 @@ char *fastls_session_unwatch(uint64_t session);
 
 收到唤醒后调用session_events，结果形如`{"ok":true,"result":{"handles":[123,124],"overflow":false}}`。返回集合后清空登记；忽略已经关闭的请求ID。overflow为true时须重查本会话的全部活动请求。网络缓冲可能仍有较早的合并唤醒，允许空集合或虚假唤醒。session_unwatch停止登记且幂等，session_close也自动清理。所有返回JSON仍需fastls_free释放。
 
-跨语言使用者可以选原生阻塞等待，或将控制连接接入自己的事件循环。Node SDK尚未接入这组通知接口。
+跨语言使用者可以选原生阻塞等待，或将控制连接接入自己的事件循环。Node SDK 0.5已接入这组接口：默认auto、显式required/poll，notificationMode返回async-events或poll。同步构造后首次请求自动初始化，或使用await Session.open()/session.ready()；手动duplex在初始化完成后才创建请求。20项Python通知验收均有Node对应项，语言差异见[node/PARITY.md](node/PARITY.md)，用法见[node/README.md](node/README.md)。
 
 ## 检查范围
 

@@ -1,4 +1,4 @@
-# Python SSE 事件流
+# Python / Node.js SSE 事件流
 
 同步和asyncio会话新增`session.sse(method, url, ...)`，继续支持`chrome/156/windows`等配置，复用现有HTTP/1.1、HTTP/2连接池、Cookie、解压、超时和取消。
 
@@ -7,7 +7,7 @@ from fastls import Session, Timeout
 
 with Session(profile="chrome/156/windows") as session:
     with session.sse("GET", "https://example.com/events",
-                     timeout=Timeout(total=None, read=45)) as events:
+                     timeout=Timeout(total=3600, read=45)) as events:
         for event in events:
             print(event.event, event.id, event.data)
 ```
@@ -19,7 +19,7 @@ async def receive(url):
     async with AsyncSession(profile="chrome/156/windows") as session:
         async with session.sse("POST", url, data='{"stream":true}',
                                headers={"Content-Type": "application/json"},
-                               timeout=Timeout(total=None, read=45)) as events:
+                               timeout=Timeout(total=3600, read=45)) as events:
             async for event in events:
                 if event.data == "[DONE]":
                     break
@@ -46,7 +46,7 @@ async def receive(url):
 
 本接口是一次请求的事件流，**不自动重连或重放请求**。应用可以保存`events.last_event_id`，再用`last_event_id=saved_id`发起下一次请求：此参数设置`Last-Event-ID`头，并作为新解析器的初始id。禁止NUL、CR、LF，支持显式空字符串。重连次数、延迟、POST是否可重复提交及事件去重均由应用决定。
 
-Session默认total仍为30秒；长连接可设置`Timeout(total=None, read=45)`，再由应用决定何时取消。`read`限制网络正文停顿，注释心跳也算网络进度；`total`不会因心跳而重置。关闭会话、取消异步读取任务、`events.cancel()`或退出上下文都会沿用原生请求清理；异步显式关闭可`await events.aclose()`。
+Session默认total仍为30秒；长连接可显式增加总时限，例如`Timeout(total=3600, read=45)`，再由应用决定何时取消。当前ABI的total范围为大于0且最多24小时，不支持None或关闭总超时。`read`限制网络正文停顿，注释心跳也算网络进度；`total`不会因心跳而重置。关闭会话、取消异步读取任务、`events.cancel()`或退出上下文都会沿用原生请求清理；异步显式关闭可`await events.aclose()`。
 
 `AsyncSession.sse(..., data=source(), duplex=True)`也可在HTTP/2中边上传边接收SSE；上传/响应结束规则与异常传播见[DUPLEX.md](DUPLEX.md)。同步SSE可以发送普通或流式上传正文；同步双向手动交互仍使用Session.duplex接口。
 
@@ -56,4 +56,6 @@ Session默认total仍为30秒；长连接可设置`Timeout(total=None, read=45)`
 
 `tests/test_sse.py`共23项验收，包含所有分割位置与逐字节向量、UTF-8/BOM/行尾、id/retry控制块、精确边界与超大整数、H1/H2真实库、gzip及校验失败、204/错误类型、POST与手动恢复、首事件早到、取消时同连接活动流继续完成、会话关闭、心跳与超时、40MiB事件流与背压，以及SSE和全双工组合。源码和wheel均加入六组原生Actions，证据为`build/stability-sse-*.json`。
 
-这是Python便利接口，无新增C符号或ABI版本变化，不包含浏览器EventSource对象、自动重连、完成通知或WebSocket；Node SDK的SSE接口需要独立实施。
+Node 0.4提供`await session.sse(method, url, options)`及`for await (const event of events)`；配置使用`maxEventBytes`、`lastEventId`和毫秒制`timeoutMs`，状态使用`lastEventId`，显式异步关闭为`closeAsync()`。23项Python SSE验收均有对应Node用例，源码与隔离npm安装包执行相同151项完整套件，包含40MiB事件流哈希、取消和双工组合。Promise与同步接口的差异记录在[node/PARITY.md](node/PARITY.md)，示例和生命周期见[node/README.md](node/README.md)。
+
+SSE属于语言便利接口，无新增C符号或ABI版本变化，不包含浏览器EventSource对象、自动重连或WebSocket。

@@ -94,3 +94,7 @@ Actions 先执行六组原生构建，每组只构建一次 library、fixture �
 所有消费者核对同一次 workflow 的提交、SDK 输入、依赖 SHA、目标架构和原生/wheel 哈希。下载的 Unix fixture 恢复执行权限；跨 runner 的 workspace 使用相同相对布局。`All native tests` 同时要求 dependencies、native、tests、extended 成功；短版检查不替代完整验收。工作流仍在每次代码 push/PR 执行，纯文档分类暂未实现。
 
 源码与 wheel 套件各自在一个 job 内顺序执行，避免其资源统计互相干扰。竞态与稳定性也不在同一 runner 上竞争。未来进一步拆分套件，须先验证端口、文件和全局统计隔离。
+
+## Node验收与签发
+
+Node六组功能检查、五项独立长测及候选汇总复用native作业的inputs，并加入required门禁。Node最低测试组合跟随main的Go1.27.3/Python3.10，使用Node22；其它组合Node24。node-release.yml仅手动接收成功main CI的run_id与精确Node版本，校验源码/安装证据和包哈希，签发GitHub预发布并生成来源证明。

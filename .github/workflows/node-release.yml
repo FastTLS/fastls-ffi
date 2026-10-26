@@ -1,0 +1,68 @@
+name: Sign Node packages on GitHub
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful main CI run ID to certify
+        type: string
+        required: true
+      version:
+        description: Exact version from node/package.json
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: node-github-release-${{ inputs.version }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - name: Resolve certified main run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" > certified-run.json
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          pattern: fastls-*
+          path: candidates
+      - name: Build thin JavaScript package
+        run: |
+          npm ci --prefix node
+          mkdir release-assets
+          npm pack ./node --pack-destination release-assets
+      - name: Verify platform candidates and prepare checksums
+        env:
+          NODE_RELEASE_VERSION: ${{ inputs.version }}
+        run: python node/scripts/assemble-release.py certified-run.json candidates release-assets
+      - name: Sign package provenance
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-checksums: release-assets/SHA256SUMS
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          cp "$BUNDLE_PATH" release-assets/provenance.sigstore.json
+          gh release create "node-v${VERSION}" release-assets/* --target "$GITHUB_SHA" --prerelease --title "@fasttls/fastls ${VERSION}" --notes-file release-assets/RELEASE_NOTES.md

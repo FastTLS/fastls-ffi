@@ -43,3 +43,7 @@ with Session(profile="chrome/156/windows") as session:
 `response.ok` 表示状态码小于 400；`raise_for_status()` 对 400–599 抛出 `FastlsHTTPError`，其它状态返回 `None`。异常提供 `.response`、`.status_code`，消息只含状态码。异步响应缓冲读取后共享这些方法；流式场景可在消费正文前检查状态，仍需通过上下文或 `aclose()` 回收请求。
 
 这是明确限定的便利 API，不承诺完整 Requests 兼容；不增加环境代理、自动重试、一次性正文重放或编码探测。
+
+## Node.js
+
+Node 0.8提供对应的params/json/form/files、流式multipart、encoding和raiseForStatus()，统一使用Promise接口。保留原始body并通过form显式编码表单；文件由调用方拥有的read(maxBytes, signal)读取器提供，不自动close。详细类型、字符集与MIME差异见[node/README.md](node/README.md)，16项行为映射及验收范围见[node/PARITY.md](node/PARITY.md)。WebSocket单独推进。

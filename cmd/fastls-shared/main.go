@@ -21,7 +21,7 @@ var engine = bridge.New()
 //export fastls_features
 func fastls_features() *C.char {
 	return result(func() (any, error) {
-		return []string{"websocket_cookies_v1", "websocket_v1", "https_proxy_tls", "proxy_tunnels", "session_notifications", "duplex_h2", "stream_upload", "write_timeout", "stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers", "request_trailers", "response_metadata"}, nil
+		return []string{"websocket_cookie_control_v1", "websocket_cookies", "websocket_cookies_v1", "websocket_v1", "https_proxy_tls", "proxy_tunnels", "session_notifications", "duplex_h2", "stream_upload", "write_timeout", "stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers", "request_trailers", "response_metadata"}, nil
 	})
 }
 

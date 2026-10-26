@@ -1,5 +1,23 @@
 # Fastls 跨语言封装实施规划
 
+## Node.js 接入
+
+新增 `node/` TypeScript SDK，通过 Koffi 复用现有 C ABI，无新增 Go 导出或 RPC 服务。
+提供 Session、Promise 请求、单消费者 AsyncIterable 正文、AbortSignal、多值头、原生 Cookie 和连接池管理。
+无损 JSON 和 bigint 保护 uint64 句柄精度；C 字符串逐次释放，动态库进程级持有。
+共享定时器和受限立即调用处理非阻塞轮询，正常 EOF、取消、异常与提前退出均回收句柄。
+Node 0.2默认流式解码，提供wireHeaders/decoded、结构化阶段超时、字节迭代器/Readable/AbortSignal工厂上传及大正文自动流式化。
+十三组Python行为测试的187个场景已有对应Node用例，加原有16项共203项；持续测试及语言差异见node/PARITY.md。
+Node 0.3新增HTTP/2双工的生产者与手动交换、半关闭、waitUpload和异步清理。
+Node 0.4新增SSE事件流、事件大小限制和手动恢复；源码及隔离安装包使用相同203项套件和ESM/CommonJS类型检查，按提交保存逐项验收证据。
+Node 0.5接入原生就绪通知，新增auto/required/poll、Session.open/ready及20项对应验收。
+已配置跨平台 Node 24 和最低 Node 22 CI；0.6新增内置Go动态库的平台候选tarball及隔离安装验收；公开npm分发、许可证补齐和发布仍待单独执行。
+Node 0.7新增HTTP/HTTPS CONNECT及SOCKS5代理、请求级覆盖/显式直连、原生能力门禁和14项代理行为验收。
+Node 0.8新增params/json/form/files、流式multipart、响应encoding及raiseForStatus，对应16项请求参数验收；WebSocket随后由0.9独立接入。
+Node 0.9接入WebSocket及21项行为映射，CI改为构建复用后并行运行SDK与独立资源任务；验收以对应提交的Actions与候选产物证据为准。
+用法和范围见 [node/README.md](node/README.md)。
+下一阶段按WebSocket接入、行为验收、CI与会话规则协调并行推进，批次、依赖与门禁见[node/NEXT_PHASE.md](node/NEXT_PHASE.md)。
+
 下一轮按三方对照结果推进：先建立公平性能/资源基准，再验收代理、常用Python参数、内置动态库分发及WebSocket。范围和完成条件见 [NEXT_PHASE.md](NEXT_PHASE.md)，N1执行入口见 [BENCHMARKS.md](BENCHMARKS.md)；功能和性能结论以实际验收记录为准。
 
 日期：2026-10-24。状态：第一阶段及三轮测试扩展已完成；第二阶段已实现会话/连接池、多值响应头、Cookie、流式解码及分层超时。第三阶段已完成流式上传、独立写入预算、HTTP/2全双工、SSE工具和状态通知，WebSocket和发布阶段待实施。开发候选，未发布。
