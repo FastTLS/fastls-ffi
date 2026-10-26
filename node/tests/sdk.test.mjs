@@ -305,19 +305,36 @@ check('128 mixed concurrent requests/cancellations keep event loop responsive', 
   const histogram = monitorEventLoopDelay({ resolution: 10 });
   histogram.enable();
   let ticks = 0;
-  const heartbeat = setInterval(() => ticks++, 10);
+  const controllers = [];
+  let armed = false, cancelStarted = false, expired = false;
+  const heartbeat = setInterval(() => {
+    ticks++;
+    // Observe heartbeats while cancellation targets still have native handles.
+    // A fixed 80ms timer can expire during setup on a busy/fast runner and leave
+    // only one sample, even though all operations yield to the event loop.
+    if (armed && !cancelStarted && ticks > 1 && s.stats().open_requests >= controllers.length) {
+      cancelStarted = true;
+      for (const controller of controllers) controller.abort();
+    }
+  }, 10);
+  const deadline = setTimeout(() => {
+    expired = true;
+    for (const controller of controllers) controller.abort();
+  }, 1000);
   try {
     const tasks = Array.from({ length: 128 }, (_, index) => {
       if (index % 2 === 0) return s.get(`${fixture.https2}/bytes?n=65536&id=mixed-${index}`).then(r => assert.equal(r.content.length, 65536));
       const controller = new AbortController();
+      controllers.push(controller);
       const task = assert.rejects(s.get(`${fixture.https2}/wait?id=mixed-${index}`, { signal: controller.signal }), { name: 'AbortError' });
-      setTimeout(() => controller.abort(), 80);
       return task;
     });
+    armed = true;
     await Promise.all(tasks);
+    assert.ok(cancelStarted && !expired, 'event loop did not advance with requests pending within 1000ms');
     assert.ok(ticks > 1, 'event loop heartbeat stopped');
     const maxDelayMs = histogram.max / 1e6;
     assert.ok(maxDelayMs < 1000, `event loop blocked for ${maxDelayMs}ms`);
     evidence.measurements.concurrency = { requests: 128, heartbeatTicks: ticks, maxDelayMs, p99DelayMs: histogram.percentile(99) / 1e6 };
-  } finally { clearInterval(heartbeat); histogram.disable(); }
+  } finally { clearInterval(heartbeat); clearTimeout(deadline); for (const controller of controllers) controller.abort(); histogram.disable(); }
 });
