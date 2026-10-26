@@ -41,7 +41,7 @@ def main():
         python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         pip = [python, "-m", "pip"]
 
-        run(pip + ["install", "--no-deps", sdist], cwd=temporary, env=clean)
+        run(pip + ["install", sdist], cwd=temporary, env=clean)
         probe(python, temporary, clean, """
 import importlib.metadata, pathlib, sys
 from fastls._native import Native
@@ -56,9 +56,9 @@ assert loaded == pathlib.Path(sys.argv[1]).resolve()
         old_env = dict(clean, FASTLS_PACKAGE_VERSION="0.0.0")
         run(pip + ["wheel", "--no-deps", "-w", old_dir, ROOT / "python"], cwd=temporary, env=old_env)
         old_wheel = one_from(old_dir, "*.whl", "baseline wheel")
-        run(pip + ["install", "--no-deps", old_wheel], cwd=temporary, env=clean)
+        run(pip + ["install", old_wheel], cwd=temporary, env=clean)
         probe(python, temporary, clean, "import importlib.metadata; assert importlib.metadata.version('fastls') == '0.0.0'")
-        run(pip + ["install", "--no-deps", "--upgrade", "--force-reinstall", wheel], cwd=temporary, env=clean)
+        run(pip + ["install", "--upgrade", "--force-reinstall", wheel], cwd=temporary, env=clean)
         probe(python, temporary, clean, """
 import hashlib, importlib.metadata, json, pathlib, sys
 from fastls._native import Native

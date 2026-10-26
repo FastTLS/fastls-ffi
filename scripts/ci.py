@@ -183,6 +183,8 @@ def run(stage="all"):
         return runner.execute(name, args, cwd, command_env or env)
 
     try:
+        if stage in ("all", "source", "contracts", "soak"):
+            execute("python-cookie-dependency", [sys.executable, "-m", "pip", "install", "publicsuffixlist>=1.1.2.20261023,<2"])
         if stage in ("all", "build"):
             sdk_before = sdk_inputs()
             for wheel in (ROOT / "dist").glob("*.whl"):
@@ -234,6 +236,7 @@ def run(stage="all"):
         if stage in ("all", "source"):
             execute("python-source", [sys.executable, "tests/test_python.py"])
             execute("api-source", [sys.executable, "tests/test_api.py"])
+            execute("sdk-sessions-source", [sys.executable, "tests/test_sdk_sessions.py"])
             execute("stability-source", [sys.executable, "tests/test_stability.py"])
             execute("network-source", [sys.executable, "tests/test_network.py"])
             execute("pooling-source", [sys.executable, "tests/test_pooling.py"])

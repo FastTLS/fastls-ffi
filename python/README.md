@@ -1,6 +1,6 @@
 # fastls Python SDK
 
-通过原生 Fastls 动态库发送带浏览器配置的 HTTP 请求，支持同步、asyncio、流式上传下载、HTTP/2 全双工、SSE 和 WebSocket。Python 发行包名与导入名均为 `fastls`，仓库名为 `fastls-ffi`。当前正式版本为 [0.1.4](https://pypi.org/project/fastls/0.1.4/)。
+通过原生 Fastls 动态库发送带浏览器配置的 HTTP 请求，支持同步、asyncio、流式上传下载、HTTP/2 全双工、SSE 和 WebSocket。Python 发行包名与导入名均为 `fastls`，仓库名为 `fastls-ffi`。本分支准备 Python **0.1.4**，尚未发布；当前 PyPI 正式版为 **0.1.3**。下面的 0.1.4 安装命令及新增 API 供正式发布后使用。
 
 ## 安装与平台
 
@@ -44,11 +44,49 @@ print(resp.status_code, resp.text)
 
 提供 `request()`、`get()`、`post()`、`put()`、`patch()`、`delete()`、`head()` 和 `options()`。请求参数沿用 `Session.request()`，例如 `params`、`headers`、`json`、`data`、`files`、`profile`、`proxy` 和 `timeout`。`library`、`ca_file`、`cookies` 与 `notifications` 用于配置本次临时会话，其中 `cookies` 是是否自动管理 Cookie 的布尔开关。
 
-这些入口附带完整关键字参数提示，返回类型为 `Response`；IDE 可识别 `.status_code: int`、`.text: str`、`.content: bytes` 和响应头类型。`.json()` 的结果取决于目标返回的 JSON，保留为 `Any`。类型提示支持 Python 3.10+，无需额外运行时依赖。
+这些入口附带完整关键字参数提示，返回类型为 `Response`；IDE 可识别 `.status_code: int`、`.text: str`、`.content: bytes` 和响应头类型。`.json()` 的结果取决于目标返回的 JSON，保留为 `Any`。类型提示支持 Python 3.10+，类型提示本身无需额外运行依赖；Cookie 公共后缀检查使用随包安装的 `publicsuffixlist`。
 
-每次调用会创建临时会话，完整缓存响应后关闭请求与会话；返回后仍可读取 `.content`、`.text`、`.json()` 和响应头。HTTP 4xx/5xx 默认返回响应，由 `raise_for_status()` 决定是否抛错。`head()` 沿用 Session 的重定向策略，需要禁止跳转时显式设置 `allow_redirects=False`。
+默认每次调用创建临时会话，完整缓存响应后关闭请求与会话；返回后仍可读取 `.content`、`.text`、`.json()` 和响应头。HTTP 4xx/5xx 默认返回响应，由 `raise_for_status()` 决定是否抛错。`head()` 默认不跟随重定向，与 requests 的习惯一致；可设置 `allow_redirects=True`。
 
-各次调用之间不保留 Cookie 或复用连接。连续请求、登录态、流式下载、SSE 或 WebSocket 请使用 `Session`；异步使用 `AsyncSession`。便捷方法同样受普通响应 32 MiB 缓存上限约束，不接受 `stream=True`，流式读取使用 `Session.stream()`。
+各次调用之间不保留 Cookie 或复用连接。连续请求、登录态、流式下载、SSE 或 WebSocket 请使用 `Session`；异步可选 `ClientSession` 或已有 `AsyncSession`。普通响应受 32 MiB 缓存上限约束；`stream=True` 返回未缓存响应，必须通过 `with` 或 `close()` 关闭。也可继续使用 `Session.stream()`。
+
+## 从 requests / aiohttp 迁移
+
+同步代码通常可把 `import requests` 改为 `import fastls as requests`；`get`、`Session`、`params/json/data/files`、`status_code/text/content/json()` 和 `raise_for_status()` 保持熟悉的写法。流式响应也可使用：
+
+```python
+import fastls
+
+with fastls.get("https://example.com/data", stream=True, profile="chrome/156/windows") as response:
+    response.raise_for_status()
+    for chunk in response.iter_content(65536):
+        print(len(chunk))
+```
+
+异步推荐 `ClientSession`，支持 `async with session.get(...)` 和异步读取：
+
+```python
+import asyncio
+import fastls
+
+async def main():
+    async with fastls.ClientSession(profile="chrome/156/windows", timeout=30) as session:
+        async with session.get("https://tls.peet.ws/api/all") as response:
+            response.raise_for_status()
+            print(response.status, await response.json())
+
+asyncio.run(main())
+```
+
+`await response.read()/text()/json()` 与 `response.content.iter_chunked(n)` 是该入口的常用读取方式；`response.release()` 或 `await response.wait_for_close()` 可显式释放。`ClientSession.close()` 为异步方法。已有 `AsyncSession` 保留其缓冲响应、`aread/aiter_bytes`、双工、SSE 和 WebSocket 接口。
+
+兼容以常用流程为目标，不承诺完整替换：不接受 requests 的 `auth/hooks/adapters/verify=False`，不自动读取环境代理；没有 aiohttp 的连接器、TraceConfig 或完整 StreamReader API。超时使用 Fastls 的秒数或 `Timeout`，证书使用 `ca_file`，代理使用 `proxy`。Cookie 仍以 URL 范围访问，不是 RequestsCookieJar 的完整兼容对象；不支持 `cookies={...}`，需要 `session.cookies.set(..., url=...)` 或显式 Cookie 头。未支持的关键字会报错。
+
+## 会话职责与重定向
+
+Python 管理默认参数、Cookie、重定向策略和响应历史；动态库只保留传输上下文、连接池、TLS/指纹、证书校验及底层收发。Node 使用独立的 JavaScript Cookie 罐，不与 Python 共享应用会话。关闭会话会清空 Cookie 并释放其底层资源；不写入磁盘。
+
+默认最多跟随 30 次重定向，可用 `max_redirects` 调整，或 `allow_redirects=False` 返回当前响应。总超时跨跳转累计；跨来源移除敏感请求头，再按目标 URL 选择 Cookie。307/308 不重放一次性流式上传。`response.history` 保存之前的响应，正文已读取且请求已关闭。
 
 ## 同步请求
 
@@ -64,7 +102,7 @@ with Session(profile="chrome/156/windows") as session:
 
 使用 `session.list_profiles()` 获取可用配置；创建会话会实际加载动态库，仅 `import fastls` 不足以验证安装。复用 Session 可复用连接池与 Cookie，退出上下文会关闭所属请求。浏览器配置选择不代表与真实浏览器的全部网络行为一致，可通过 `response.match` 查看选择结果。
 
-请求可设置 `headers`、`params`、`json`、`data`、`files`、`trailers`、`timeout`、`allow_redirects` 和单次 `profile`。任意方法使用 `session.request(method, url, ...)`；便利方法为 `get()` 和 `post()`。JSON 示例：
+请求可设置 `headers`、`params`、`json`、`data`、`files`、`trailers`、`timeout`、`allow_redirects` 和单次 `profile`。任意方法使用 `session.request(method, url, ...)`；便利方法包括 `get/post/put/patch/delete/head/options`。JSON 示例：
 
 ```python
 from fastls import Session

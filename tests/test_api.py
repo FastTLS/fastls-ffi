@@ -2,6 +2,7 @@
 import sys
 from pathlib import Path
 import threading
+import asyncio
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
@@ -61,6 +62,38 @@ class API(unittest.TestCase):
         self.assertIn("q=hello+world", first.url)
         self.assertEqual(first.content, BODY)
         self.assertIsNot(first._owner, second._owner)
+
+    def test_requests_style_stream_and_session_verbs(self):
+        with fastls.get(self.url + "/stream", stream=True) as response:
+            owner = response._owner
+            self.assertFalse(owner._closed)
+            self.assertEqual(next(response.iter_content(5)), b"first")
+            self.server.release.set()
+        self.assertTrue(owner._closed)
+        self.assertFalse(owner._handles)
+        with fastls.Session() as session:
+            for verb in ("put", "patch", "delete", "head", "options"):
+                response = getattr(session, verb)(self.url)
+                self.assertEqual(response.headers["X-Request-Method"], verb.upper())
+
+    def test_aiohttp_style_context_await_read_and_close(self):
+        async def run():
+            async with fastls.ClientSession() as session:
+                async with session.get(self.url + "/headers") as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertIsInstance(await response.json(), dict)
+                    self.assertEqual(await response.read(), await response.read())
+                response = await session.post(self.url, json={"hello": "world"})
+                self.assertEqual(await response.json(), {"hello": "world"})
+                response.release()
+                async with session.get(self.url + "/stream") as response:
+                    iterator = response.content.iter_chunked(5)
+                    self.assertEqual(await anext(iterator), b"first")
+                    self.server.release.set()
+                    await iterator.aclose()
+            self.assertTrue(session.closed)
+            self.assertFalse(session._session._handles)
+        asyncio.run(run())
 
     def test_module_http_methods_preserve_body_and_http_error_behavior(self):
         for method in ("post", "put", "patch", "delete", "options", "head"):

@@ -100,3 +100,9 @@ Actions 先执行六组原生构建，每组只构建一次 library、fixture �
 ## Node验收与签发
 
 Node六组功能检查、五项独立长测及候选汇总复用native作业的inputs，并加入required门禁。Node最低测试组合跟随main的Go1.27.3/Python3.10，使用Node22；其它组合Node24。node-release.yml仅手动接收成功main CI的run_id与精确Node版本，校验源码/安装证据和包哈希，签发GitHub预发布并生成来源证明。
+
+## 保留覆盖范围的耗时优化
+
+Node 六组平台/版本组合分别启动 source 与 package 两个独立 runner：源码回归与安装包验收并行，安装包仍顺序验证内嵌库候选及 npm 可选依赖包。三种入口均运行完整 231 项套件，包含新增 fetch 测试；不合并安装环境，不跳过平台。完整回归前重复的 test:quick 已从 CI 移除，该命令继续供本地开发使用。npm 缓存仅缓存下载，依然通过 npm ci 严格安装 lock 文件。
+
+所有作业复用同一份经过哈希校验的原生构建输入；source 只上传 JSON 证据，package 保留完整候选。node-candidates 及最终聚合门禁仍等待全部 Node 组合。独立 300 秒持续测试与 60 秒专项资源恢复测试保持原时长及阈值。不会通过并行同一进程中的资源测量测试缩短时间。

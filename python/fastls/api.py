@@ -12,15 +12,24 @@ def request(method: str, url: str, *, library: str | PathLike[str] | None = None
             ca_file: str | PathLike[str] | None = None, cookies: bool = True,
             notifications: Literal["auto", "required", "poll"] = "auto",
             **kwargs: Any) -> Response:
-    """Send a buffered request and release its temporary session before returning.
+    """Send a request using a temporary session.
 
     Request options match Session.request. library, ca_file, cookies and
     notifications configure the temporary session. Calls do not share cookies
-    or connections; use Session for reuse, streaming or asynchronous requests.
+    or connections. With stream=True, close the response to release its session.
+    Use Session for reuse and advanced APIs.
     """
-    with Session(library=library, ca_file=ca_file, cookies=cookies,
-                 notifications=notifications) as session:
-        return session.request(method, url, **kwargs)
+    session = Session(library=library, ca_file=ca_file, cookies=cookies, notifications=notifications)
+    try:
+        response = session.request(method, url, **kwargs)
+        if kwargs.get("stream"):
+            response._close_session = True
+        else:
+            session.close()
+        return response
+    except BaseException:
+        session.close()
+        raise
 
 
 def get(url: str, **kwargs: Any) -> Response:
@@ -49,7 +58,8 @@ def delete(url: str, **kwargs: Any) -> Response:
 
 
 def head(url: str, **kwargs: Any) -> Response:
-    """Send HEAD using the same redirect policy as Session.request."""
+    """Send HEAD without following redirects unless explicitly requested."""
+    kwargs.setdefault("allow_redirects", False)
     return request("HEAD", url, **kwargs)
 
 

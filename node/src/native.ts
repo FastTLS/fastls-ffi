@@ -115,6 +115,9 @@ export class Native {
       this.functions.read = lib.func("int fastls_read(uint64_t handle, _Out_ void *buffer, size_t capacity, _Out_ size_t *length)");
       this.functions.write = lib.func("int fastls_write(uint64_t handle, const void *buffer, size_t length, int end)");
       const features = new Set(this.call<string[]>("features"));
+      if (features.has("transport_context_v1")) {
+        this.functions.transport_create = lib.func("void *fastls_transport_create(void)");
+      }
       let websocketAvailable = false;
       if (features.has("websocket_v1")) {
         try {

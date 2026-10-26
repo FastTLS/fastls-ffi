@@ -81,7 +81,7 @@ try {
   process.stdout.write(run([resolve(root, 'scripts/test-cookie-compat.mjs')], temporary, env));
   const previous = new Set(readdirSync(evidenceDirectory));
   process.stdout.write(run(['--expose-gc', '--test', '--test-concurrency=1', ...[
-    'native.test.mjs', 'sdk.test.mjs', 'parity.test.mjs',
+    'native.test.mjs', 'sdk.test.mjs', 'fetch.test.mjs', 'parity.test.mjs',
   ].map(file => resolve(root, 'tests', file))], temporary, env));
   const records = readdirSync(evidenceDirectory).filter(file => file.startsWith('node-parity-package-') && file.endsWith('.json') && !previous.has(file));
   if (records.length !== 1) throw new Error('Missing or ambiguous installed parity evidence');

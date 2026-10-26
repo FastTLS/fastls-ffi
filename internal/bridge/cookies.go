@@ -50,6 +50,9 @@ func (e *Engine) SessionCookies(id uint64, raw []byte) (any, error) {
 	if s == nil {
 		return nil, errors.New("invalid or closed session handle")
 	}
+	if s.cookies == nil {
+		return nil, errors.New("transport context has no cookie store; manage cookies in the SDK")
+	}
 	switch command.Action {
 	case "clear":
 		s.cookies.Clear()

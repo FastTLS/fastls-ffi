@@ -36,7 +36,7 @@ asyncio.run(main())
 - Chrome 等选择器继续选择对应 TLS 配方和默认身份头；为常规 Upgrade，ALPN 仅提供 `http/1.1`，移除 h2 的 ALPS 扩展，Upgrade 头顺序由 Gorilla 管理。原始 profile match 记录表示选择结果，不表示修改后的握手与浏览器完全一致。`info["websocket"]["alpn_policy"]` 记录此适配；服务器可不协商 ALPN，此时仍是 HTTP/1.1。
 - 支持 text/binary、空消息、入站分片重组、分片间控制帧、自动回应 ping、主动 ping/pong，以及关闭握手。`subprotocols` 是最多 16 个合法 token 的列表/元组；`.subprotocol` 返回服务器选择。拒绝未提供的子协议/扩展。
 - 首版不支持 permessage-deflate、其它压缩扩展、HTTP/2/3 扩展 CONNECT、自动重连、自动重放、握手重定向或环境代理。握手响应最多读取 64 KiB。
-- 动态库提供 `websocket_cookies_v1` 时，握手自动共享 Session 的 HTTP Cookie 罐，`ws/wss` 分别按 `http/https` 规则匹配域名、路径、Secure 和有效期。显式 `Cookie`（包括空值）完整覆盖本次自动发送，不合并；`cookies=False` 禁止自动读写，手动认证头仍可使用。成功和失败握手响应的多个 `Set-Cookie` 均按原 URL 写回，与 HTTP 非成功响应一致；不跟随重定向。旧库仅有 `websocket_v1` 时仍需手动传递 Cookie。
+- Python 0.1.4 / Node 0.10.1 的握手由 SDK 共享 Session 的 HTTP Cookie 罐，动态库不保存 Cookie。`ws/wss` 分别按 `http/https` 规则匹配域名、路径、Secure 和有效期。显式 `Cookie`（包括空值）完整覆盖本次自动发送，不合并；`cookies=False` 禁止自动读写，手动认证头仍可使用。成功和失败握手响应的多个 `Set-Cookie` 均按原 URL 写回，与 HTTP 非成功响应一致；不跟随重定向。新 SDK 要求支持 transport_context_v1 的动态库；旧 SDK 与能力标记的兼容约定只适用于历史版本。
 - Origin 由调用方设置。`Connection`、`Upgrade`、`Sec-WebSocket-*`、长度/传输头及代理认证头由库管理，不能手动覆盖。
 
 ## 资源与并发
@@ -76,4 +76,4 @@ int fastls_ws_read(uint64_t handle, void *buffer, size_t capacity,
 
 协议依据：[RFC6455](https://www.rfc-editor.org/rfc/rfc6455.html)。消息实现基于仓库已固定的 [Gorilla WebSocket v1.5.3](https://pkg.go.dev/github.com/gorilla/websocket@v1.5.3)，额外实施 UTF-8、协商、长度和生命周期检查。测试靶场独立手写帧，不复用客户端的 WebSocket 库。
 
-Node SDK已合并：Promise接口与HTTP共享Cookie，支持cookieMode:manual。原生websocket_cookie_control_v1保证禁用自动收发及无效101不写回；历史能力标记保留，仅有websocket_cookies_v1的旧库拒绝manual。
+Node Promise 接口与 HTTP 共用 JavaScript Cookie 罐，支持 cookieMode:manual。SDK 为握手显式选择 Cookie，并仅在有效 101 或普通 HTTP 失败响应后写回 Set-Cookie；无效 101、TLS 失败及 manual 模式不自动写回。原生 Cookie 能力标记保留给历史客户端。

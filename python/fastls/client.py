@@ -8,13 +8,17 @@ import json
 from pathlib import Path
 import threading
 import time
-from typing import Any
+from typing import Any, TYPE_CHECKING
+if TYPE_CHECKING:
+    from typing_extensions import Unpack
+    from ._typing import RequestOptions, SyncRequestOptions
 from .upload import is_stream, chunks, async_chunks
 
 from ._native import Native, FastlsError, raise_response_error
 from .headers import Headers
 from .cookies import Cookies
 from .timeout import Timeout
+from .redirects import Redirects
 from .request_options import Multipart, prepare, response_encoding
 
 
@@ -66,6 +70,7 @@ class Response:
         self.http_version = info.get("protocol", "")
         self.url = info.get("final_url", "")
         self.headers = Headers(info.get("header_values"), fallback=info.get("headers", {}))
+        self.history: list[Response] = []
         self.wire_headers = Headers(info.get("wire_header_values"), fallback=dict(self.headers)) if info.get("wire_header_values") else self.headers
         self.trailers = Headers(info.get("trailer_values"))
         self.decoded = info.get("decoded", False)
@@ -96,6 +101,15 @@ class Response:
                 return
             else:
                 self._owner._wait(self._handle, 2)
+
+    def iter_content(self, chunk_size: int = 65536):
+        if self._content is not None:
+            if chunk_size < 1:
+                raise ValueError("chunk_size must be positive")
+            for offset in range(0, len(self._content), chunk_size):
+                yield self._content[offset:offset + chunk_size]
+        else:
+            yield from self.iter_bytes(chunk_size)
 
     def read(self) -> bytes:
         if self._content is None:
@@ -129,6 +143,9 @@ class Response:
         if self._handle is not None:
             self._owner._close_handle(self._handle)
             self._handle = None
+        if getattr(self, "_close_session", False):
+            self._close_session = False
+            self._owner.close()
 
     def __enter__(self):
         return self
@@ -175,6 +192,7 @@ class Session:
             raise FastlsError("notifications require a newer Fastls native library")
         self._native_notifications = self._native_notifications and notifications != "poll"
         self._handles = set()
+        self._cookie_handles = set()
         self._producers = {}
         self._lock = threading.Lock()
         self._closed = False
@@ -182,12 +200,11 @@ class Session:
             raise FastlsError("stream decoding and phase timeouts require a newer Fastls native library")
         if not hasattr(self._native.lib, "fastls_session_create"):
             raise FastlsError("connection pools require a newer Fastls native library")
-        if not hasattr(self._native.lib, "fastls_session_cookies"):
-            raise FastlsError("cookie management requires a newer Fastls native library")
-        self._session = self._native.call("fastls_session_create")
-        self.cookies = Cookies(self)
-        if not cookies:
-            self.cookies._command(action="configure", enabled=False)
+        if not hasattr(self._native.lib, "fastls_transport_create"):
+            raise FastlsError("SDK-owned sessions require the Fastls 0.1.4 native library or newer")
+        self._session = self._native.call("fastls_transport_create")
+        self.cookies = Cookies(self, enabled=cookies)
+        self._ws_cookie_requests = {}
 
     def close_idle_connections(self):
         with self._lock:
@@ -233,8 +250,11 @@ class Session:
         if duplex and "duplex_h2" not in self._native.call("fastls_features"):
             raise FastlsError("HTTP/2 duplex requires a newer Fastls native library")
         # Merge headers case-insensitively so request overrides win.
-        merged = {k.lower(): v for k, v in self.headers.items()}
-        merged.update({k.lower(): v for k, v in (headers or {}).items()})
+        merged = {k.lower(): v for k, v in (headers or {}).items()}
+        if "cookie" not in merged:
+            cookie_header = self.cookies.header(url)
+            if cookie_header:
+                merged["cookie"] = cookie_header
         if any(not isinstance(v, str) for v in merged.values()):
             raise TypeError("header values must be strings")
         normalized_trailers = {}
@@ -259,7 +279,7 @@ class Session:
         if isinstance(maximum, bool) or not isinstance(maximum, int) or not 1 <= maximum <= 1 << 40:
             raise ValueError("max_decoded_bytes must be 1..1099511627776")
         request = dict(url=url, method=method, profile=self.profile if profile is None else profile,
-                       session=self._session, headers=merged, disable_redirect=duplex or not allow_redirects,
+                       session=self._session, headers=merged, disable_redirect=True,
                        decode_content=decode, max_decoded_bytes=maximum, **limit.native_fields())
         if normalized_trailers:
             request["trailers"] = normalized_trailers
@@ -292,6 +312,8 @@ class Session:
 
     def _close_handle(self, handle):
         with self._lock:
+            self._ws_cookie_requests.pop(handle, None)
+            self._cookie_handles.discard(handle)
             producer = self._producers.pop(handle, None)
             if producer is not None:
                 _cancel_task(producer)
@@ -305,12 +327,17 @@ class Session:
         info = self._native.call("fastls_info", handle)
         if info["state"] == "error":
             raise_response_error(info)
+        if info.get("status") and handle not in self._cookie_handles:
+            self._accept_cookies(info)
+            self._cookie_handles.add(handle)
         return info
 
-    def _open(self, method, url, **kwargs):
+    def _accept_cookies(self, info):
+        self.cookies.extract(info.get("final_url", ""), Headers(info.get("header_values")).get_list("set-cookie"))
+
+    def _open_hop(self, method, url, **kwargs):
         if kwargs.get("duplex"):
             raise TypeError("use Session.duplex() for synchronous manual send/receive")
-        url, kwargs = prepare(url, kwargs, self.headers)
         data = kwargs.get("data")
         if hasattr(data, "__aiter__"):
             raise TypeError("async upload iterators require AsyncSession")
@@ -349,6 +376,21 @@ class Session:
                     self._close_handle(handle)
                     raise
 
+    def _open(self, method, url, **kwargs):
+        url, kwargs = prepare(url, kwargs, self.headers)
+        redirects = Redirects(method, url, kwargs, self.timeout)
+        while True:
+            method, url, options = redirects.request()
+            response = self._open_hop(method, url, **options)
+            try:
+                if not redirects.follow(response):
+                    return response
+                response.read()
+            except BaseException:
+                response.close()
+                raise
+            response.close()
+
     @contextmanager
     def duplex(self, method, url, **kwargs):
         """Manual synchronous H2 exchange; the caller controls send/receive order."""
@@ -382,16 +424,34 @@ class Session:
         finally:
             response.close()
 
-    def request(self, method, url, **kwargs):
+    def request(self, method: str, url: str, *, stream: bool = False, **kwargs: Unpack[RequestOptions]) -> Response:
+        if stream:
+            return self._open(method, url, **kwargs)
         with self.stream(method, url, **kwargs) as response:
             response.read()
             return response
 
-    def get(self, url, **kwargs):
+    def get(self, url: str, **kwargs: Unpack[SyncRequestOptions]) -> Response:
         return self.request("GET", url, **kwargs)
 
-    def post(self, url, **kwargs):
+    def post(self, url: str, **kwargs: Unpack[SyncRequestOptions]) -> Response:
         return self.request("POST", url, **kwargs)
+
+    def put(self, url: str, **kwargs: Unpack[SyncRequestOptions]) -> Response:
+        return self.request("PUT", url, **kwargs)
+
+    def patch(self, url: str, **kwargs: Unpack[SyncRequestOptions]) -> Response:
+        return self.request("PATCH", url, **kwargs)
+
+    def delete(self, url: str, **kwargs: Unpack[SyncRequestOptions]) -> Response:
+        return self.request("DELETE", url, **kwargs)
+
+    def head(self, url: str, **kwargs: Unpack[SyncRequestOptions]) -> Response:
+        kwargs.setdefault("allow_redirects", False)
+        return self.request("HEAD", url, **kwargs)
+
+    def options(self, url: str, **kwargs: Unpack[SyncRequestOptions]) -> Response:
+        return self.request("OPTIONS", url, **kwargs)
 
     def ws_connect(self, url, **kwargs):
         from .websocket import connect
@@ -409,6 +469,9 @@ class Session:
         with self._lock:
             if self._closed:
                 return
+            self.cookies.clear()
+            self._cookie_handles.clear()
+            self._ws_cookie_requests.clear()
             self._closed = True
             if self._notifier is not None:
                 self._notifier.stop()
@@ -574,8 +637,7 @@ class AsyncSession(Session):
         finally:
             await source.aclose()
 
-    async def _aopen(self, method, url, **kwargs):
-        url, kwargs = prepare(url, kwargs, self.headers)
+    async def _aopen_hop(self, method, url, **kwargs):
         await self._ensure_notifications()
         duplex = kwargs.get("duplex", False)
         handle = self._begin(method, url, **kwargs)
@@ -624,6 +686,21 @@ class AsyncSession(Session):
                     self._close_handle(handle)
                     raise
 
+    async def _aopen(self, method, url, **kwargs):
+        url, kwargs = prepare(url, kwargs, self.headers)
+        redirects = Redirects(method, url, kwargs, self.timeout)
+        while True:
+            method, url, options = redirects.request()
+            response = await self._aopen_hop(method, url, **options)
+            try:
+                if not redirects.follow(response):
+                    return response
+                await response.aread()
+            except BaseException:
+                await response.aclose()
+                raise
+            await response.aclose()
+
     @asynccontextmanager
     async def sse(self, method, url, *, max_event_bytes=1024 * 1024, last_event_id=None, **kwargs):
         from .sse import AsyncSSEStream, _request_options
@@ -643,16 +720,32 @@ class AsyncSession(Session):
         finally:
             await response.aclose()
 
-    async def request(self, method, url, **kwargs):
+    async def request(self, method: str, url: str, **kwargs: Unpack[RequestOptions]) -> AsyncResponse:
         async with self.stream(method, url, **kwargs) as response:
             await response.aread()
             return response
 
-    async def get(self, url, **kwargs):
+    async def get(self, url: str, **kwargs: Unpack[RequestOptions]) -> AsyncResponse:
         return await self.request("GET", url, **kwargs)
 
-    async def post(self, url, **kwargs):
+    async def post(self, url: str, **kwargs: Unpack[RequestOptions]) -> AsyncResponse:
         return await self.request("POST", url, **kwargs)
+
+    async def put(self, url: str, **kwargs: Unpack[RequestOptions]) -> AsyncResponse:
+        return await self.request("PUT", url, **kwargs)
+
+    async def patch(self, url: str, **kwargs: Unpack[RequestOptions]) -> AsyncResponse:
+        return await self.request("PATCH", url, **kwargs)
+
+    async def delete(self, url: str, **kwargs: Unpack[RequestOptions]) -> AsyncResponse:
+        return await self.request("DELETE", url, **kwargs)
+
+    async def head(self, url: str, **kwargs: Unpack[RequestOptions]) -> AsyncResponse:
+        kwargs.setdefault("allow_redirects", False)
+        return await self.request("HEAD", url, **kwargs)
+
+    async def options(self, url: str, **kwargs: Unpack[RequestOptions]) -> AsyncResponse:
+        return await self.request("OPTIONS", url, **kwargs)
 
     async def ws_connect(self, url, **kwargs):
         from .websocket import aconnect

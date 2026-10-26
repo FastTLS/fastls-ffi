@@ -4,6 +4,8 @@
 以构建生成的 `fastls.h` 为准确声明。接口均为 C 调用约定：
 
 - `fastls_abi_version()`：当前为1。
+- `fastls_transport_create()`：0.1.4 新增，返回不含应用 Cookie 状态的传输上下文句柄，供 Python/Node SDK 使用；以 `fastls_session_close/close_idle` 和通知函数管理其网络资源。SDK 发送单跳请求并自行处理重定向。
+- `fastls_session_create/cookies()`：保留给历史客户端，新 SDK 不使用。对 transport_create 创建的句柄调用 session_cookies 会明确报错。扩展能力标记为 `transport_context_v1`，不改变 ABI 号。
 - `fastls_profiles()`：返回规范ID数组的JSON结果。
 - `fastls_stats()`：返回只读诊断JSON结果，新增符号，不改变已有函数的ABI。
 - `fastls_wait()`与`fastls_session_watch/events/unwatch()`：原生就绪等待及会话通知，见[NOTIFICATIONS.md](NOTIFICATIONS.md)。

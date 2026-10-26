@@ -1,6 +1,8 @@
 # 多值响应头与会话Cookie
 
-Session和AsyncSession现在默认使用原生内存Cookie存储。它由同一Session内的所有profile/CA连接池共享，不同Session相互隔离；关闭Session会清空并禁用其存储。Cookie不会保存到磁盘。
+从 Python 0.1.4 / Node 0.10.1 起，应用 Cookie 由各语言 SDK 保存和管理。Python 使用 http.cookiejar 并以 publicsuffixlist 校验公共后缀，Node 使用 tough-cookie。动态库的 transport_context_v1 只持有连接池和请求资源，不保存 Cookie；旧 C Cookie 接口仅为旧客户端保留。
+
+同一 SDK Session 的各 profile 共用其 Cookie 罐，不同 Session 及不同语言进程不共享。SDK 逐跳处理重定向，先接收当前响应 Set-Cookie，再为目标 URL 选择 Cookie；总超时跨跳转累计。关闭 Session 清空 Cookie 并释放底层资源。Cookie 不会保存到磁盘。
 
 ```python
 from fastls import Session
@@ -43,6 +45,6 @@ Set-Cookie、Link等字段不会按逗号或旧的/,/分隔符拆分；每个解
 
 ## 验收
 
-tests/test_cookies.py包含13项真实动态库测试，覆盖H1/H2多值头、发送范围、服务端覆盖删除、Max-Age及Expires、重定向、手动头优先、会话/profile边界、禁用、32路异步更新、流式首块前可用的Cookie及非法输入。核心还检查公共后缀拒绝与并发Clear，并纳入race；Cookie实现已迁移到标准库cookiejar。
+tests/test_cookies.py包含13项真实动态库测试，覆盖H1/H2多值头、发送范围、服务端覆盖删除、Max-Age及Expires、重定向、手动头优先、会话/profile边界、禁用、32路异步更新、流式首块前可用的Cookie及非法输入。SDK 检查公共后缀拒绝、并发更新与 Clear；新增 test_sdk_sessions.py 验证原生上下文没有 Cookie 存储，且跳转失败不会泄漏请求。
 
 六组原生CI分别执行源码和wheel套件，并继续运行原有基础、连接池、网络异常、64MiB下载和Linux300秒持续测试；JSON证据随artifact保存到build/stability-cookies-*.json。

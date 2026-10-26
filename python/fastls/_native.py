@@ -70,6 +70,8 @@ class Native:
         }
         if hasattr(self.lib, "fastls_stats"):
             signatures["fastls_stats"] = []
+        if hasattr(self.lib, "fastls_transport_create"):
+            signatures["fastls_transport_create"] = []
         if hasattr(self.lib, "fastls_features"):
             signatures["fastls_features"] = []
         if hasattr(self.lib, "fastls_ws_start"):

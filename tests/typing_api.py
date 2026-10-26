@@ -5,6 +5,18 @@ from typing import TYPE_CHECKING, Any
 import fastls
 
 
+async def async_consumer() -> None:
+    async with fastls.ClientSession(profile="chrome/156/windows") as session:
+        async with session.get("https://example.com", params={"q": "hello"}) as response:
+            status: int = response.status
+            body: bytes = await response.read()
+            text: str = await response.text()
+            async for chunk in response.content.iter_chunked(1024):
+                part: bytes = chunk
+                del part
+            del status, body, text
+
+
 if TYPE_CHECKING:
     query: dict[str, str] = {"q": "hello"}
     repeated: dict[str, list[str]] = {"tag": ["a", "b"]}

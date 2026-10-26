@@ -54,8 +54,11 @@ def _start(owner, url, *, params=None, headers=None, profile=None, subprotocols=
                    timeout_ms=_milliseconds(handshake_timeout, "handshake_timeout"),
                    read_timeout_ms=0 if read_timeout is None else _milliseconds(read_timeout, "read_timeout"),
                    write_timeout_ms=_milliseconds(write_timeout, "write_timeout"))
-    if cookie_mode == "manual" and session_cookies:
-        request["disable_cookies"] = True
+    request["disable_cookies"] = True
+    if cookie_mode == "session" and "cookie" not in {name.lower() for name in request["headers"]}:
+        cookie_header = owner.cookies.header(url)
+        if cookie_header:
+            request["headers"]["Cookie"] = cookie_header
     selected = owner.proxy if proxy is _INHERIT_PROXY else proxy
     if selected is not None and not isinstance(selected, str):
         raise TypeError("proxy must be a URL string or None")
@@ -77,6 +80,8 @@ def _start(owner, url, *, params=None, headers=None, profile=None, subprotocols=
             raise FastlsError("session is closed")
         handle = owner._native.call("fastls_ws_start", raw, len(raw))
         owner._handles.add(handle)
+        if cookie_mode == "session":
+            owner._ws_cookie_requests[handle] = url
     return handle, close_timeout
 
 
@@ -96,6 +101,10 @@ class WebSocket:
 
     def _info(self):
         self._last = self._owner._native.call("fastls_info", self._id())
+        if self._last.get("status"):
+            url = self._owner._ws_cookie_requests.pop(self._handle, None)
+            if url and (self._last["status"] != 101 or self._last["state"] in ("headers", "eof")):
+                self._owner.cookies.extract(url, Headers(self._last.get("header_values")).get_list("set-cookie"))
         return self._last
 
     @property

@@ -40,7 +40,7 @@ export class WebSocket {
     if(external?.aborted)this.externalAbort();
   }
   private ensure():void { if(this.closed)throw this.failure??new FastlsError("WebSocket is closed"); }
-  get info(): NativeInfo { if(this.closed && this.last)return this.last; this.ensure(); return this.last=this.native.call<NativeInfo>("info",this.handle); }
+  get info(): NativeInfo { if(this.closed && this.last)return this.last; this.ensure(); const info=this.last=this.native.call<NativeInfo>("info",this.handle); if(info.status)this.headers=new Headers(info.header_values); return info; }
   get closeCode():number{return (this.closed?this.last:this.info)?.websocket?.close_code??1006;}
   get closeReason():string{return (this.closed?this.last:this.info)?.websocket?.close_reason??"";}
   private check(info:NativeInfo):void {

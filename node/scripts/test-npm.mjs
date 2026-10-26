@@ -57,7 +57,7 @@ try {
   process.stdout.write(await run([resolve(root, 'scripts/test-cookie-compat.mjs')], temporary, installedEnv));
   const build = resolve(root, '../build'), previous = new Set(readdirSync(build));
   process.stdout.write(await run(['--expose-gc', '--test', '--test-concurrency=1',
-    ...['native.test.mjs', 'sdk.test.mjs', 'parity.test.mjs'].map(file => resolve(root, 'tests', file))], temporary, installedEnv));
+    ...['native.test.mjs', 'sdk.test.mjs', 'fetch.test.mjs', 'parity.test.mjs'].map(file => resolve(root, 'tests', file))], temporary, installedEnv));
   // Keep the split-package evidence separate from the embedded candidate's
   // evidence, so GitHub candidate signing still validates exactly one suite.
   const evidence = readdirSync(build).filter(file => !previous.has(file) && /^node-(?:parity-)?package-.*\.json$/.test(file));

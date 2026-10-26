@@ -24,11 +24,13 @@ export class Transfer {
   private failure?: Error;
   private timer?: ReturnType<typeof setTimeout>;
   private deadline?: number;
+  private acceptedHeaders = false;
   private readonly externalAbort = () => this.close(new AbortError(undefined, { cause: this.external?.reason }));
 
   constructor(private readonly native: Native, private readonly handle: bigint,
     private readonly release: () => void, private readonly external?: AbortSignal,
-    readonly duplex = false, private readonly notifier?: Notifier) {}
+    readonly duplex = false, private readonly notifier?: Notifier,
+    private readonly acceptHeaders?: (info: NativeInfo) => void) {}
 
   private wait<T>(probe: () => T | undefined, signal: AbortSignal): Promise<T> {
     return this.notifier ? this.notifier.probe(this.handle, probe, signal) : scheduler.wait(probe, signal);
@@ -69,7 +71,9 @@ export class Transfer {
     return this.wait(() => {
       this.ensureOpen();
       const info = this.info();
-      return info.state === "pending" ? undefined : info;
+      if (info.state === "pending") return undefined;
+      if (!this.acceptedHeaders) { this.acceptHeaders?.(info); this.acceptedHeaders = true; }
+      return info;
     }, this.controller.signal);
   }
 

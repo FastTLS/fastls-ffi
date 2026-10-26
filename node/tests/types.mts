@@ -1,4 +1,17 @@
 import { Session, ServerSentEvent, type SSEOptions, type SSEStream, type RequestOptions, type Response, type StreamResponse } from '@fastls/fastls';
+import { fetch, type FetchResponse } from '@fastls/fastls';
+
+async function fetchConsumer(session: Session) {
+  const response: FetchResponse = await fetch(new URL('https://example.com'), { profile: 'chrome/156/windows', headers: new Headers({ X: 'yes' }) });
+  const native: globalThis.Response = response;
+  const body: string = await response.text();
+  const stream: ReadableStream<Uint8Array> | null = response.body;
+  await session.fetch(new Request('https://example.com'), { redirect: 'manual', signal: AbortSignal.timeout(1000) });
+  // @ts-expect-error Fetch body must use platform BodyInit, not a JSON object.
+  fetch('https://example.com', { body: { hello: 'world' } });
+  void native; void body; void stream;
+}
+void fetchConsumer;
 
 async function consume(session: Session): Promise<void> {
   const proxied = new Session({ proxy: 'https://127.0.0.1:8080', proxyCaFile: '/path/to/proxy-ca.pem' });

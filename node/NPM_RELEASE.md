@@ -1,6 +1,6 @@
 # npm 分发与发布
 
-所有命令从仓库根目录执行。当前开发包版本为 `0.10.1-dev.0`，使用 `next` 渠道；版本或发布状态以 `node/package.json`、npm registry 和成功工作流为准。用户 API 见 [README.md](README.md)，测试范围见 [PARITY.md](PARITY.md)。
+所有命令从仓库根目录执行。当前待发布版本为 `0.10.1`，正式发布使用 `latest`，须等待维护者确认；历史开发版为 `0.10.1-dev.0`；版本或发布状态以 `node/package.json`、npm registry 和成功工作流为准。用户 API 见 [README.md](README.md)，测试范围见 [PARITY.md](PARITY.md)。
 
 主包是 `@fastls/fastls`，原生库通过同版本的可选依赖分发：
 
@@ -26,7 +26,7 @@ npm run test:npm --prefix node
 python node/scripts/test-npm-release.py
 ```
 
-最后一步读取已通过完整安装测试的候选，不重建原生库；生成主包与本机平台包到 `dist/npm/`。临时 registry 只提供未发布的 @fastls 平台元数据，实际通过 npm 解析、过滤并安装可选依赖，其他依赖从正常 npm registry 获取。安装使用空编译工具路径并关闭生命周期脚本，随后运行 CJS/ESM、类型、Cookie 兼容和完整 225 项回归，检查版本错配及缺少可选依赖。拆分包的证据独立保存在 `dist/npm/`。
+最后一步读取已通过完整安装测试的候选，不重建原生库；生成主包与本机平台包到 `dist/npm/`。临时 registry 只提供未发布的 @fastls 平台元数据，实际通过 npm 解析、过滤并安装可选依赖，其他依赖从正常 npm registry 获取。安装使用空编译工具路径并关闭生命周期脚本，随后运行 CJS/ESM、类型、Cookie 兼容和完整 231 项回归，检查版本错配及缺少可选依赖。拆分包的证据独立保存在 `dist/npm/`。
 
 发布边界的 9 项检查验证成功汇总、授权待审拒绝、缺少平台、错误提交、失败 CI、损坏归档、失败行为证据和元数据错配。主分支 CI 对五个平台及额外 Node 22 组合运行这些步骤。发布使用五个 Node 24 候选。非本机平台只有对应 CI 验收通过后才能计为已验证。
 

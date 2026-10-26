@@ -1,10 +1,12 @@
 # Python / Node 验收对应关系
 
-当前范围是十五个 Python 行为套件的 209 个场景，加 2 项原生绑定和 14 项 Node 专有检查，共 225 项。源码、GitHub 内置库候选和 npm 拆分包分别运行完整套件。TypeScript、真实库 Cookie 兼容、安装门禁和 9 项发布边界检查另计。
+当前范围是十六个 Python 行为套件的 211 个场景，加 2 项原生绑定和 18 项 Node 专有检查，共 231 项。源码、GitHub 内置库候选和 npm 拆分包分别运行完整套件。TypeScript、真实库 Cookie 兼容、安装门禁和 9 项发布边界检查另计。
 
 ## Python 专有入口
 
-Python 0.1.4 新增模块级 request/get/post 等一次性同步调用，独立的 tests/test_api.py 覆盖临时会话、响应缓存与异常清理。该套件在 Python 源码和 wheel 验收中执行；Node 当前没有对应模块级便捷导出，未计入下方 209 项跨语言场景，不宣称该入口已在 Node 提供。
+Python 0.1.4 新增模块级 request/get/post 等一次性同步调用，独立的 tests/test_api.py 覆盖临时会话、响应缓存与异常清理。该套件在 Python 源码和 wheel 验收中执行；Node 另有 fetch 入口，其 4 项独立测试覆盖标准响应、输入、取消、Cookie 与重定向；没有 Python 同名便捷导出，未计入下方 211 项跨语言场景，不宣称该入口已在 Node 提供。
+
+- `test_sdk_sessions.py`：2 项，SDK Cookie 所有权与重定向限额清理。
 
 ## 行为清单与基线
 
@@ -93,13 +95,13 @@ python node/scripts/test-npm-release.py
 
 源码逐项证据为 `build/node-parity-source-*.json` 和 `build/node-source-*.json`。内置候选安装证据为 `build/node-parity-package-*.json`、`build/node-package-*.json`，归档及 `node-package-info.json` 在 `dist/`。拆分包的独立安装证据和 `npm-package-info.json` 在 `dist/npm/`，避免与内置候选证据混淆。
 
-原生绑定测试同样在完整进程退出状态中判定；它们不计入 209 项 Python 映射。发布汇总还要求同提交 main CI 成功、五平台齐备、包摘要与内容相符、SDK/行为证据完整、授权材料无待审项。GitHub artifact 存在或任务单独绿色不足以代替这些条件。
+原生绑定测试同样在完整进程退出状态中判定；它们不计入 211 项 Python 映射。发布汇总还要求同提交 main CI 成功、五平台齐备、包摘要与内容相符、SDK/行为证据完整、授权材料无待审项。GitHub artifact 存在或任务单独绿色不足以代替这些条件。
 
 主 CI 并行覆盖 Windows x64、Linux glibc x64/arm64、macOS x64/arm64 的 Node 24，并加 Linux x64 的 Node 22 / Go 1.27.3 / Python 3.10；其余组合使用 Go 1.26.10 / Python 3.11。共享 Go 契约、race、C 和 Python 门禁由原流水线执行，不用 Node 重写。
 
 ## 资源回收与独立长测
 
-完整功能套件内的资源回收测试默认持续 30 秒、32 路并发。Linux 当前工具链另执行通用 300 秒检查；双工、SSE、代理、WebSocket 分别在独立任务运行 60 秒混合长测，不计入 225 项功能用例。
+完整功能套件内的资源回收测试默认持续 30 秒、32 路并发。Linux 当前工具链另执行通用 300 秒检查；双工、SSE、代理、WebSocket 分别在独立任务运行 60 秒混合长测，不计入 231 项功能用例。
 
 ```sh
 npm run test:soak --prefix node

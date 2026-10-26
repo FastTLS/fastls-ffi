@@ -1,6 +1,6 @@
 # Fastls Node.js SDK
 
-Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。当前开发包版本为 `0.10.1-dev.0`，npm 预发布渠道使用 `next`。
+Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本分支准备正式版 **0.10.1**，尚未发布；npm 当前可用版本为 **0.10.1-dev.0**。新增接口需等待正式发布，或安装经 CI 验证的候选包。
 
 支持 HTTP/1.1、HTTP/2、流式上传下载、双工、SSE、WebSocket、会话 Cookie 和 HTTP/HTTPS/SOCKS 代理。网络请求由 Go 执行，通过 Koffi 在当前 Node 进程中调用；使用者无需 Python 或 RPC 服务。
 
@@ -13,10 +13,10 @@ Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明�
 
 ## 安装与快速开始
 
-`0.10.1-dev.0` 已发布到 npm，仍是开发版本。建议固定版本安装；`next` 用于后续预发布更新：
+以下是待发布正式版安装命令；当前 npm 只有开发版 0.10.1-dev.0，新 fetch 与 SDK Cookie 管理不可用于旧版本：
 
 ```sh
-npm install @fastls/fastls@0.10.1-dev.0
+npm install @fastls/fastls@0.10.1
 ```
 
 主包通过同版本的可选依赖自动安装当前平台的 Fastls 原生库。保留 optional dependencies；支持 Windows x64、Linux glibc x64/arm64、macOS x64/arm64。Linux musl 和其它架构没有内置包。具体系统最低版本见原生包的 `native/manifest.json`。
@@ -44,10 +44,34 @@ try {
 
 源码构建、测试和发包见 [开发指南](DEVELOPMENT.md)。普通 npm 用户不需要这些步骤。
 
+## 从 Node fetch 迁移
+
+新增 `fetch` 入口沿用 Node 原生 fetch 的主要调用习惯，并增加指纹、代理和证书配置：
+
+```js
+import { fetch } from '@fastls/fastls';
+
+const response = await fetch('https://tls.peet.ws/api/all', {
+  profile: 'chrome/156/windows',
+  headers: new Headers({ Accept: 'application/json' }),
+  signal: AbortSignal.timeout(10_000),
+});
+if (!response.ok) throw new Error(`HTTP ${response.status}`);
+console.log(await response.json());
+```
+
+接受字符串、URL、Request，以及标准 Headers、FormData、URLSearchParams、Blob、字节和可读流正文。流式请求使用 `duplex: 'half'`，一次性正文不会为 307/308 自动重放。返回 Node 标准 `Response`，在响应头到达时返回；`text/json/arrayBuffer()` 为异步方法，`body` 为 Web ReadableStream，`ok` 为 200–299。正文只消费一次；不用时必须 `await response.body?.cancel()`。另附只读 `match` 和 `httpVersion`。
+
+顶层 `fetch` 与 Node 一样不保存 Cookie，每次请求的临时资源会在正文读完或取消后关闭。需要 Cookie 和连接长期复用时，使用 `session.fetch(url, options)`，最后 `await session.closeAsync()`。会话级 `library/caFile` 应在构造 Session 时设置。HTTP 错误状态仍返回响应；`redirect` 支持 `follow/manual/error`。默认最多跟随 30 次，可设置 `maxRedirects`。
+
+这不是浏览器环境：不实现 CORS、缓存、自动认证、referrer、integrity 或 keepalive 策略。显式传入 `cache/credentials/integrity/keepalive/mode/referrer/referrerPolicy` 会报错。默认校验 TLS，不支持关闭验证；不接收 Node http/https Agent、dispatcher 或 Axios 配置。超时以毫秒计，使用 `timeoutMs` 或 AbortSignal。
+
+Fastls 原有 `Session.request/stream/duplex/sse/websocket` 保留，适合需要分阶段超时、原始字节、Trailer 和更精细资源控制的场景。Cookie、重定向和默认参数由 JavaScript SDK 管理；动态库负责网络传输、指纹、证书与连接池。旧 C Cookie 接口仅供旧客户端兼容，新 SDK 不使用原生 Cookie 存储。
+
 ## 请求和响应
 
-- `await session.request(method, url, options)`，以及 `get`、`post`，返回完整缓存的 Response。
-- 请求选项包括 `profile`、`headers`、`trailers`、`params`、`json`、`form`、`files`、`body`、`timeoutMs`、`allowRedirects`、`signal`、`proxy`、`proxyCaFile`、`decodeContent`、`maxDecodedBytes`、`duplex`。会话级选项还包括 `library`、`caFile`、`cookies`、`notifications`；以公开 TypeScript 类型为准。
+- `await session.request(method, url, options)`，以及 `get/post/put/patch/delete/head/options`，返回完整缓存的 Response。
+- 请求选项包括 `profile`、`headers`、`trailers`、`params`、`json`、`form`、`files`、`body`、`timeoutMs`、`allowRedirects`、`maxRedirects`、`signal`、`proxy`、`proxyCaFile`、`decodeContent`、`maxDecodedBytes`、`duplex`。会话级选项还包括 `library`、`caFile`、`cookies`、`notifications`；以公开 TypeScript 类型为准。
 - `body` 为字符串、Buffer、Uint8Array、同步/异步字节迭代器、Node Readable 或接收 AbortSignal 的生产者工厂。超过512 KiB的字符串/字节自动使用上传通道。
 - `timeoutMs` 为毫秒整数或 `{ total, connect?, write?, headers?, read? }`，每项范围1..86400000；默认总时限30000。请求级数字覆盖会清除会话分层限制，结构化覆盖替换整份策略。
 - 会话默认头和请求头按大小写不敏感方式合并，请求值优先，包括空字符串。
@@ -176,7 +200,7 @@ Session和请求的`proxy`接受URL字符串或null。请求省略或undefined�
 
 代理测试使用Node测试进程中的独立、仅访问loopback的CONNECT/RFC1928/RFC1929靶场；SDK本身不依赖Python或代理辅助进程。十三组Python行为映射、源码及内置库安装包统一验收；语言适配见PARITY.md。
 
-`npm run test:proxy:soak`默认以32路并发运行60秒，轮换正常请求、共享H2流取消、错误认证和停滞握手取消；四种scheme分别使用真实loopback代理。FASTLS_NODE_PROXY_SOAK_SECONDS可设为1..300。Linux当前Go/Node组合执行该独立测试，沿用现有RSS、Go堆、goroutine及句柄阈值，逐批记录写入build/node-proxy-recovery-*.json，不计入225项主套件。
+`npm run test:proxy:soak`默认以32路并发运行60秒，轮换正常请求、共享H2流取消、错误认证和停滞握手取消；四种scheme分别使用真实loopback代理。FASTLS_NODE_PROXY_SOAK_SECONDS可设为1..300。Linux当前Go/Node组合执行该独立测试，沿用现有RSS、Go堆、goroutine及句柄阈值，逐批记录写入build/node-proxy-recovery-*.json，不计入231项主套件。
 
 代理独立长测与SSE长测一样，显式使用`--max-semi-space-size=16`固定测试进程的V8半空间上限。本机Windows Node24默认策略在持续分配时将new_space保留空间从4MiB扩大至128MiB，而Go堆、原生请求和隧道已回收。该参数仅作用于独立测试进程，不修改SDK用户进程的运行配置，也不放宽RSS或句柄阈值。证据保存运行参数、V8空间快照，以及阈值判定之后的完整GC诊断；判定使用GC前的最终采样。
 
@@ -289,11 +313,11 @@ send/ping/pong等到原生写入完成；同时最多一名读者和一名写入
 
 复用Session的profile、头、CA、代理与代理CA；params、请求级覆盖/显式直连沿用HTTP规则。wss始终验证证书和主机名，ALPN适配HTTP/1.1；不承诺适配后的Upgrade头序与浏览器完全一致。使用websocket_v1和三个可选ABI符号，旧库的HTTP继续可用。通知默认共享一条会话连接，poll可显式选择，不阻塞主线程或增加网络线程。
 
-默认与HTTP共享Cookie罐，要求原生库提供websocket_cookies能力。cookieMode:"manual"可禁用本次握手的自动收发，并兼容旧库。显式Cookie头（包括空值）优先，默认仍接受握手Set-Cookie；Session的cookies:false禁用自动收发。域/路径/Secure/过期规则与HTTP一致。有效101及普通HTTP拒绝/重定向响应可写回；无效101或TLS失败不写回。Authorization/Origin由调用方设置。无压缩、H2/H3 CONNECT、握手重定向、自动心跳/重连或消息重放。ping只证明写入完成，可用info.websocket.pongs/last_pong_base64观察响应。协议细节与原生资源限制见根目录WEBSOCKET.md。
+默认与 HTTP 共享 SDK Cookie 罐；原生库不保存 Cookie。cookieMode:"manual" 可禁用本次握手的自动 Cookie 收发。显式Cookie头（包括空值）优先，默认仍接受握手Set-Cookie；Session的cookies:false禁用自动收发。域/路径/Secure/过期规则与HTTP一致。有效101及普通HTTP拒绝/重定向响应可写回；无效101或TLS失败不写回。Authorization/Origin由调用方设置。无压缩、H2/H3 CONNECT、握手重定向、自动心跳/重连或消息重放。ping只证明写入完成，可用info.websocket.pongs/last_pong_base64观察响应。协议细节与原生资源限制见根目录WEBSOCKET.md。
 
-npm run test:quick先运行类型、清单及WS/原生用例；test:ws针对25项WS和16项共享Cookie；test:ws:soak运行独立60秒/32路资源回收。快速反馈不能替代225项源码/安装包完整回归与六组平台验收。
+npm run test:quick先运行类型、清单及WS/原生用例；test:ws针对25项WS和16项共享Cookie；test:ws:soak运行独立60秒/32路资源回收。快速反馈不能替代231项源码/安装包完整回归与六组平台验收。
 
-原生websocket_cookie_control_v1明确保证按连接禁用自动Cookie，并保留0.10的websocket_cookies契约。仅提供websocket_cookies_v1的历史分发库需要升级：SDK会在建立连接前拒绝manual，防止Cookie被静默发送或保存。无自动Cookie的旧WS库仍支持manual。npm run test:compat用真实原生库验证收发、显式头和失败握手；可通过FASTLS_COOKIE_COMPAT_LIBRARIES传入含library与kind(full/legacy/automatic-only)的JSON数组，逐库在独立进程运行。源码快速检查与隔离安装包都会执行当前库兼容验收。
+0.10.1 SDK 使用不含 Cookie 的原生传输上下文，并在 JavaScript 中完成 Cookie 选择及响应更新。旧原生 Cookie 能力只为历史客户端保留。npm run test:compat 验证当前完整库的收发、显式头和失败握手。
 
 ## 原生就绪通知
 

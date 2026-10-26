@@ -1,21 +1,19 @@
-# fastls 0.1.4
+# Python 0.1.4 / Node 0.10.1 发布准备
 
-## 新增
+状态：尚未正式发布，等待维护者确认后一起发布；不得提前创建正式标签或上传正式包。
 
-- Python 模块级同步请求：`fastls.request()`、`get()`、`post()`、`put()`、`patch()`、`delete()`、`head()` 和 `options()`。
-- 便捷方法每次创建临时会话，完整缓存响应后关闭会话；返回后仍可读取正文和响应头。连续请求、登录态和流式操作继续使用 Session / AsyncSession。
-- 便捷方法的完整关键字参数类型提示，以及 Response、Headers 常用属性与方法的类型注解。wheel 和 sdist 包含 api.pyi 与 py.typed，支持 Python 3.10+，无新增 Python 运行依赖。
+## 用户可见改动
 
-## 文档与验证
+- Python 新增模块级 request/get/post/put/patch/delete/head/options，支持 stream=True、iter_content 和 IDE 关键字提示。HEAD 便捷方法默认不跟随重定向。
+- 新增 aiohttp 风格 ClientSession：async with session.get(...)，以及 await response.read/text/json。原 AsyncSession 与高级接口保留。
+- Node 新增 fetch / Session.fetch，接受标准 Request、URL、Headers 和正文，返回标准流式 Response；附加 profile、代理、证书和 match 信息。顶层 fetch 不保存 Cookie，Session.fetch 复用会话。补齐全部常用 HTTP 方法。
+- Cookie、重定向和默认请求配置由 Python/JavaScript SDK 管理。原生 transport_context_v1 仅持有连接和请求资源，旧 C Cookie 接口保留兼容。新 SDK 需要同版或更新动态库。
+- 保留浏览器指纹、连接复用、流式传输、分阶段超时、双工、SSE 和 WebSocket。兼容范围与不支持项见各 SDK README。
 
-- 完善 Python 使用与类型提示说明，整理 README 的使用入口、限制和维护文档。
-- 新的 Python 专有 API 测试接入源码和安装包验收；保留原有 209 项 Python/Node 跨语言测试基线，未宣称 Node 提供相同模块级入口。
-- 发布门禁检查类型提示文件完整性，并执行 Python 3.10 静态类型检查。
+## 依赖与验证
 
-## 安装
+Python 新增 publicsuffixlist 公共后缀数据依赖；Node 使用 tough-cookie。类型文件与 py.typed 随 Python 包交付，无需运行时 typing_extensions。原有 209 项共同行为测试全部保留，新增两项所有权/重定向测试，总共 211 项对应场景；另有 Python 便捷/异步入口与 Node fetch 专项。Node 源码及两种安装包各运行 231 项回归。
 
-```sh
-python -m pip install --only-binary=:all: fastls==0.1.4
-```
+CI 将源码与安装包放到独立 runner 并行，移除完整套件前的重复快速检查。全部平台、隔离安装、包摘要、发布门禁与持续测试时长不变。
 
-平台要求延续上一版：Python 3.10+；Windows x64、Linux glibc 2.39+ x64/ARM64、macOS 15+ Intel/Apple Silicon。不支持 Alpine/musl。Go 核心、C ABI 与 Node npm 版本不因本次 Python 版本发布而升级。
+平台延续原要求：Python 3.10+、Node 22+；Windows x64、Linux glibc 2.39+ x64/ARM64、macOS 15+ Intel/Apple Silicon，不支持 Alpine/musl。正式包及跨平台验证结果以同提交成功 CI 的候选清单为准。

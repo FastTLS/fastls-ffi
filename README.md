@@ -1,5 +1,7 @@
 # Fastls Python / Node.js SDK
 
+> 本分支准备 Python 0.1.4 与 Node 0.10.1，均等待确认后正式发布。当前可安装 Python 0.1.3 / Node 0.10.1-dev.0；新增接口见各 SDK 的迁移说明。
+
 [完整文档](https://fasttls.github.io/) · [Python 使用指南](python/README.md) · [Node 使用指南](node/README.md)
 
 在 Python 或 Node.js 进程内使用 Fastls 原生 HTTP 客户端，不需要运行 RPC 服务。平台包内置动态库，普通安装无需 Go 或 C 编译器。

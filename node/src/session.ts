@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Cookies } from "./cookies.js";
-import { AbortError, FastlsError } from "./errors.js";
+import { Headers } from "./headers.js";
+import { AbortError, FastlsError, FastlsTimeoutError } from "./errors.js";
 import { Native, asHandle, encodeNativeJSON } from "./native.js";
 import { Response, StreamResponse, Transfer } from "./response.js";
 import { timeoutFields, type Timeout } from "./timeout.js";
@@ -11,6 +12,7 @@ import { SSEStream, validateSSEOptions, type SSEOptions } from "./sse.js";
 import { Notifier } from "./notifications.js";
 import { prepare, type QueryParams, type JSONValue, type FormFields, type MultipartFiles } from "./request-options.js";
 import { WebSocket, wsBudget, type WebSocketOptions } from "./websocket.js";
+import { fetchWithSession, type FetchOptions, type FetchResponse } from "./fetch.js";
 
 export interface RequestOptions {
   /** Undefined inherits the session proxy; null or an empty string connects directly. */
@@ -23,6 +25,7 @@ export interface RequestOptions {
   /** Total deadline including response body consumption, in milliseconds. */
   timeoutMs?: Timeout;
   allowRedirects?: boolean;
+  maxRedirects?: number;
   body?: UploadBody;
   params?: QueryParams;
   json?: JSONValue;
@@ -143,18 +146,9 @@ export class Session {
     const supported = this.native.notificationsAvailable && this.native.call<string[]>("features").includes("session_notifications");
     if (notifications === "required" && !supported) throw new FastlsError("notifications require a newer Fastls native library");
     this.notificationMode = notifications !== "poll" && supported ? "async-events" : "poll";
-    this.handle = asHandle(this.native.call("session_create"));
-    this.cookies = new Cookies(input => {
-      this.ensureOpen();
-      const raw = encodeNativeJSON(input, 16384);
-      return this.native.call("session_cookies", this.handle, raw, raw.length);
-    });
-    try {
-      if (options.cookies === false) {
-        const raw = encodeNativeJSON({ action: "configure", enabled: false });
-        this.native.call("session_cookies", this.handle, raw, raw.length);
-      }
-    } catch (error) { this.close(); throw error; }
+    if (!this.native.call<string[]>("features").includes("transport_context_v1")) throw new FastlsError("SDK-owned sessions require the Fastls 0.1.4 native library or newer");
+    this.handle = asHandle(this.native.call("transport_create"));
+    this.cookies = new Cookies(() => this.ensureOpen(), options.cookies !== false);
   }
 
   private ensureOpen(): void {
@@ -191,13 +185,13 @@ export class Session {
     }
   }
 
-  private begin(method: string, url: string, options: RequestOptions, manual = false): { transfer: Transfer; body: UploadBody | undefined; streaming: boolean } {
+  private begin(method: string, url: string, options: RequestOptions, manual = false, completeHeaders = false): { transfer: Transfer; body: UploadBody | undefined; streaming: boolean } {
     this.ensureOpen();
     if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) {
       throw new TypeError("signal must be an AbortSignal");
     }
     if (options.signal?.aborted) throw new AbortError(undefined, { cause: options.signal.reason });
-    const headers = mergeHeaders(this.headers, options.headers);
+    const headers = mergeHeaders(completeHeaders ? undefined : this.headers, options.headers);
     for (const name of ["proxy-authorization", "proxy-connection"]) {
       if (name in headers) throw new FastlsError("proxy headers must not be sent as target headers; configure proxy URL credentials");
     }
@@ -218,6 +212,10 @@ export class Session {
     }
     const prepared = prepare(url, options, headers);
     url = prepared.url;
+    if (!("cookie" in headers)) {
+      const cookie = this.cookies.header(url);
+      if (cookie) headers.cookie = cookie;
+    }
     const body = prepared.body === undefined && duplex && !manual ? Buffer.alloc(0) : prepared.body;
     const streaming = isStreamingBody(body) || duplex;
     const bodyBytes = streaming || body === undefined ? undefined : Buffer.from(body as string | Uint8Array);
@@ -244,13 +242,14 @@ export class Session {
       session: this.handle, url, method, headers, trailers, proxy: proxy || undefined, proxy_ca_pem: proxyCaPem,
       profile: options.profile ?? this.profile,
       ...timeouts, decode_content: decodeContent, max_decoded_bytes: maxDecodedBytes,
-      disable_redirect: duplex || options.allowRedirects === false,
+      disable_redirect: true,
       ca_pem: this.caPem,
       body_base64: bodyBytes?.toString("base64"),
       stream_body: streaming || undefined,
       duplex: duplex || undefined,
     });
-    const transfer = new Transfer(this.native, handle, () => { this.active.delete(transfer); this.notifier?.forget(handle); }, options.signal, duplex, this.notifier);
+    const transfer = new Transfer(this.native, handle, () => { this.active.delete(transfer); this.notifier?.forget(handle); }, options.signal, duplex, this.notifier,
+      info => this.cookies.extract(info.final_url ?? url, new Headers(info.header_values, info.headers).getAll("set-cookie")));
     this.active.add(transfer);
     try {
       this.notifier?.track(handle);
@@ -259,9 +258,9 @@ export class Session {
     } catch (error) { transfer.close(); throw error; }
   }
 
-  async stream(method: string, url: string, options: RequestOptions = {}): Promise<StreamResponse> {
+  private async streamHop(method: string, url: string, options: RequestOptions): Promise<StreamResponse> {
     await this.ready(options.signal);
-    const { transfer, body, streaming } = this.begin(method, url, options);
+    const { transfer, body, streaming } = this.begin(method, url, options, false, true);
     try {
       const upload = streaming ? startUpload(transfer, body!) : undefined;
       if (upload) {
@@ -277,8 +276,42 @@ export class Session {
       }
       finally { if (upload && (!transfer.duplex || !info || info.status! >= 300)) { upload.stop(); await upload.done; } }
       transfer.ensureOpen();
-      return new StreamResponse(transfer, info, transfer.duplex ? upload : undefined);
+      const response = new StreamResponse(transfer, info, transfer.duplex ? upload : undefined);
+      return response;
     } catch (error) { transfer.close(); throw error; }
+  }
+
+  async stream(method: string, url: string, options: RequestOptions = {}): Promise<StreamResponse> {
+    const headers = mergeHeaders(this.headers, options.headers);
+    const prepared = prepare(url, options, headers);
+    url = prepared.url;
+    options = { ...options, headers, body: prepared.body };
+    for (const key of ["params", "json", "form", "files"] as const) delete options[key];
+    const maximum = options.maxRedirects ?? 30;
+    if (!Number.isSafeInteger(maximum) || maximum < 0) throw new RangeError("maxRedirects must be a non-negative integer");
+    const policy = options.timeoutMs === undefined ? this.timeouts : timeoutFields(options.timeoutMs);
+    const deadline = performance.now() + policy.timeout_ms;
+    for (let redirects = 0; ; redirects++) {
+      const remaining = Math.ceil(deadline - performance.now());
+      if (remaining <= 0) throw new FastlsTimeoutError("total deadline exceeded", "total");
+      options.timeoutMs = { total: remaining, connect: policy.connect_timeout_ms, write: policy.write_timeout_ms, headers: policy.headers_timeout_ms, read: policy.read_timeout_ms };
+      const response = await this.streamHop(method, url, options);
+      const location = response.headers.get("location");
+      if (options.duplex || options.allowRedirects === false || ![301,302,303,307,308].includes(response.status) || !location || ([307,308].includes(response.status) && isStreamingBody(options.body))) return response;
+      try {
+        if (redirects >= maximum) throw new FastlsError("maximum redirects exceeded");
+        const previous = new URL(url), target = new URL(location, url);
+        if (!["http:", "https:"].includes(target.protocol) || target.username || target.password) throw new FastlsError("invalid redirect URL");
+        target.hash = "";
+        if (previous.origin !== target.origin) for (const name of ["authorization", "cookie", "host"]) delete headers[name];
+        if (([302,303].includes(response.status) && method.toUpperCase() !== "HEAD") || (response.status === 301 && method.toUpperCase() === "POST")) {
+          method = "GET"; delete options.body; delete options.trailers;
+          for (const name of ["content-type", "content-length", "transfer-encoding"]) delete headers[name];
+        }
+        url = target.href;
+        await response.read();
+      } finally { await response.closeAsync(); }
+    }
   }
 
   async sse(method: string, url: string, options: SSEOptions = {}): Promise<SSEStream> {
@@ -313,6 +346,15 @@ export class Session {
   }
   get(url: string, options?: RequestOptions): Promise<Response> { return this.request("GET", url, options); }
   post(url: string, options?: RequestOptions): Promise<Response> { return this.request("POST", url, options); }
+  put(url: string, options?: RequestOptions): Promise<Response> { return this.request("PUT", url, options); }
+  patch(url: string, options?: RequestOptions): Promise<Response> { return this.request("PATCH", url, options); }
+  delete(url: string, options?: RequestOptions): Promise<Response> { return this.request("DELETE", url, options); }
+  head(url: string, options: RequestOptions = {}): Promise<Response> { return this.request("HEAD", url, { allowRedirects: false, ...options }); }
+  options(url: string, options?: RequestOptions): Promise<Response> { return this.request("OPTIONS", url, options); }
+  fetch(input: string | URL | Request, options: FetchOptions = {}): Promise<FetchResponse> {
+    if (options.library !== undefined || options.caFile !== undefined) throw new TypeError("library and caFile must be configured on Session");
+    return fetchWithSession(this, input, options);
+  }
 
   async websocket(url:string, options:WebSocketOptions={}):Promise<WebSocket> {
     await this.ready(options.signal);this.ensureOpen();
@@ -328,14 +370,18 @@ export class Session {
     if(!Number.isSafeInteger(maximum)||maximum<1||maximum>16777216)throw new RangeError("maxMessageBytes must be 1..16777216");
     const close=wsBudget((options.closeTimeoutMs===undefined?1000:options.closeTimeoutMs),"closeTimeoutMs",60000);
     const headers=mergeHeaders(this.headers,options.headers),prepared=prepare(url,{params:options.params},headers);
+    if(cookieMode==="session" && !("cookie" in headers)){
+      const cookie=this.cookies.header(prepared.url);if(cookie)headers.cookie=cookie;
+    }
     const proxy=proxyValue(options.proxy===undefined?this.proxy:options.proxy);
     const proxyCA=proxy?.toLowerCase().startsWith("https://")?(options.proxyCaFile===undefined?this.proxyCaPem:proxyTrust(options.proxyCaFile)):undefined;
     if(options.subprotocols!==undefined && (!Array.isArray(options.subprotocols)||options.subprotocols.some(p=>typeof p!=="string")))throw new TypeError("subprotocols must be an array of strings");
-    const handle=this.native.wsStart({url:prepared.url,session:this.handle,disable_cookies:sessionCookies&&cookieMode==="manual"?true:undefined,headers,profile:options.profile??this.profile,proxy:proxy||undefined,ca_pem:this.caPem,proxy_ca_pem:proxyCA,subprotocols:options.subprotocols??[],max_message_bytes:maximum,
+    const handle=this.native.wsStart({url:prepared.url,session:this.handle,disable_cookies:true,headers,profile:options.profile??this.profile,proxy:proxy||undefined,ca_pem:this.caPem,proxy_ca_pem:proxyCA,subprotocols:options.subprotocols??[],max_message_bytes:maximum,
       timeout_ms:wsBudget((options.handshakeTimeoutMs===undefined?30000:options.handshakeTimeoutMs),"handshakeTimeoutMs"),read_timeout_ms:options.readTimeoutMs===null||options.readTimeoutMs===undefined?0:wsBudget(options.readTimeoutMs,"readTimeoutMs"),write_timeout_ms:wsBudget((options.writeTimeoutMs===undefined?30000:options.writeTimeoutMs),"writeTimeoutMs")});
     const ws=new WebSocket(this.native,handle,()=>{this.websockets.delete(ws);this.notifier?.forget(handle);},maximum,close,this.notifier,options.signal);
     this.websockets.add(ws);
     try{this.notifier?.track(handle);return await ws.opened();}catch(error){ws.abort();throw error;}
+    finally{if(cookieMode==="session" && !this.closed){const info=ws.info;if(info.status!==101 || info.state==="headers" || info.state==="eof")this.cookies.extract(prepared.url,ws.headers.getAll("set-cookie"));}}
   }
 
   listProfiles(): string[] { this.ensureOpen(); return this.native.call("profiles"); }
@@ -343,6 +389,7 @@ export class Session {
   closeIdleConnections(): void { this.ensureOpen(); this.native.call("session_close_idle", this.handle); }
   close(): void {
     if (this.closed) return;
+    this.cookies.clear();
     this.closed = true;
     try {
       for (const transfer of this.active) transfer.close(new FastlsError("session is closed"));

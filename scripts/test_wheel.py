@@ -8,7 +8,7 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-SUITES = ("python", "api", "stability", "network", "pooling", "cookies", "decode-timeouts",
+SUITES = ("python", "api", "sdk-sessions", "stability", "network", "pooling", "cookies", "decode-timeouts",
           "upload", "duplex", "sse", "notifications", "proxy", "request-options", "websocket", "websocket-cookies")
 
 
@@ -35,7 +35,7 @@ def main():
     env["FASTLS_TEST_LABEL"] = "wheel"
     with tempfile.TemporaryDirectory(prefix="fastls-wheel-") as temporary:
         target = Path(temporary) / "site"
-        subprocess.run([sys.executable, "-m", "pip", "install", "--no-deps", "--no-compile",
+        subprocess.run([sys.executable, "-m", "pip", "install", "--no-compile",
                         "--target", str(target), str(wheels[0])], cwd=temporary, env=env, check=True)
         bootstrap = '''
 import hashlib, json, os, pathlib, queue, runpy, subprocess, sys, threading

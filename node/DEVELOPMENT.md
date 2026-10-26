@@ -21,7 +21,7 @@ Windows 测试服务文件名使用 `build/ffi-fixture.exe`，原生构建需要
 构建本平台Go动态库后，运行 `npm run pack:native`，产物位于上级 `dist/`。
 例如Windows x64：`fastls-fastls-0.10.1-dev.0-win32-x64.tgz`；Linux包名另带`-glibc`。
 在目标项目执行 `npm install <候选包绝对路径> --ignore-scripts`，随后即可 `new Session()`，无需Go、Python、编译器或FASTLS_LIBRARY。
-安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整225项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
+安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整231项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
 
 当前候选覆盖Windows x64、Linux glibc x64/arm64、macOS x64/arm64，Node22+。每个tarball只含一个系统/架构，不能将同名版本的这些变体当成可直接发布到npm的通用包。npm的os/cpu/libc字段限制安装目标；首次使用还检查平台、ABI声明、库SHA256及Linux的glibc版本。Linux最低glibc从ELF符号版本提取，macOS最低版本从Mach-O提取，具体要求及系统动态依赖见包内`native/manifest.json`，不将CI宿主机上的通过扩大为所有旧系统均已测试。musl不在当前范围。
 
@@ -44,7 +44,7 @@ npm run test:npm --prefix node
 python node/scripts/test-npm-release.py
 ```
 
-`test:quick` 提供类型、映射、原生绑定、WebSocket 和 Cookie 兼容的短反馈。`npm test`、`test:package`、`test:npm` 分别运行源码、内置库候选、npm 拆分包的完整 225 项套件：十五组 Python 的 209 项行为映射，加 2 项绑定和 14 项 Node 专有测试。类型、Cookie 真实库兼容、安装元数据和发布边界检查另计；当前发布边界测试为 9 项。
+`test:quick` 提供类型、映射、原生绑定、WebSocket 和 Cookie 兼容的短反馈。`npm test`、`test:package`、`test:npm` 分别运行源码、内置库候选、npm 拆分包的完整 231 项套件：十六组 Python 的 211 项行为映射，加 2 项绑定和 18 项 Node 专有测试。类型、Cookie 真实库兼容、安装元数据和发布边界检查另计；当前发布边界测试为 9 项。
 
 两类安装测试都在独立消费项目运行，关闭安装脚本、清除外部库环境变量并移除编译工具搜索路径。拆分包测试由临时 registry 提供尚未发布的本项目平台包，npm 自行按平台筛选；其它依赖仍使用正常 registry。
 

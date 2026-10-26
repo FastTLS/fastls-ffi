@@ -1,5 +1,7 @@
 > 历史维护/阶段记录：下文按当时阶段保存，不代表当前发布状态。当前安装、能力与限制以 [README](README.md)、[统一文档](https://fasttls.github.io/) 和实际发布标签为准。
 
+> 本文保留历史实施记录。当前待发布 Python 0.1.4 / Node 0.10.1 的应用 Cookie 和重定向已迁至 SDK；最新使用方法以 README、python/README.md 和 node/README.md 为准。
+
 # Fastls 跨语言封装实施规划
 
 ## Node.js 接入

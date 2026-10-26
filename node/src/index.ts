@@ -1,4 +1,6 @@
 export { Session } from "./session.js";
+export { fetch } from "./fetch.js";
+export type { FetchOptions, FetchResponse } from "./fetch.js";
 export type { SessionOptions, RequestOptions, DuplexOptions, Stats } from "./session.js";
 export { DuplexExchange } from "./duplex.js";
 export { WebSocket, WebSocketClosed } from "./websocket.js";

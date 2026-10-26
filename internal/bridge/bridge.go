@@ -121,14 +121,33 @@ type session struct {
 	cookies *fastls.CookieStore
 }
 
+// A non-nil, stateless jar prevents the Go client's legacy default jar.
+type transportCookies struct{}
+
+func (transportCookies) Cookies(*url.URL) []*http.Cookie     { return nil }
+func (transportCookies) SetCookies(*url.URL, []*http.Cookie) {}
+
 func (e *Engine) CreateSession() (uint64, error) {
+	return e.createSession(true)
+}
+
+// CreateTransport owns network resources, without application cookie state.
+func (e *Engine) CreateTransport() (uint64, error) {
+	return e.createSession(false)
+}
+
+func (e *Engine) createSession(legacyCookies bool) (uint64, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if len(e.sessions) >= 64 {
 		return 0, errors.New("too many open sessions (64)")
 	}
 	id := e.next.Add(1)
-	e.sessions[id] = &session{pools: make(map[string]*fastls.Session), cookies: fastls.NewCookieStore()}
+	s := &session{pools: make(map[string]*fastls.Session)}
+	if legacyCookies {
+		s.cookies = fastls.NewCookieStore()
+	}
+	e.sessions[id] = s
 	return id, nil
 }
 
@@ -147,7 +166,9 @@ func (e *Engine) CloseSession(id uint64) {
 		if s.watch != nil {
 			s.watch.close()
 		}
-		s.cookies.SetEnabled(false)
+		if s.cookies != nil {
+			s.cookies.SetEnabled(false)
+		}
 		for _, pool := range s.pools {
 			pool.Close()
 		}
@@ -343,7 +364,11 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 			poolOpts.Headers, poolOpts.HeaderValues, poolOpts.Body, poolOpts.Trailers = nil, nil, "", nil
 			poolOpts.UserAgent = poolOpts.FingerprintUserAgent
 			poolOpts.DisableRedirect = false
-			poolOpts.CookieJar = s.cookies
+			if s.cookies != nil {
+				poolOpts.CookieJar = s.cookies
+			} else {
+				poolOpts.CookieJar = transportCookies{}
+			}
 			pool, err = fastls.NewSession(poolOpts)
 			if err != nil {
 				e.mu.Unlock()

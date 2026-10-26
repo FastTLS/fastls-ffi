@@ -13,3 +13,4 @@ import './parity-request-options.mjs';
 import './parity-websocket.mjs';
 import './parity-websocket-cookies.mjs';
 import './parity-response-metadata.mjs';
+import './parity-sdk-sessions.mjs';

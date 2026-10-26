@@ -1,6 +1,6 @@
 {
   "name": "@fastls/fastls",
-  "version": "0.10.1-dev.0",
+  "version": "0.10.1",
   "description": "Node.js bindings for the Fastls C ABI",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -41,7 +41,8 @@
   },
   "dependencies": {
     "koffi": "3.3.3",
-    "lossless-json": "4.3.3"
+    "lossless-json": "4.3.3",
+    "tough-cookie": "6.0.0"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
