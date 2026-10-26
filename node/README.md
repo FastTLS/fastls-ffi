@@ -1,6 +1,6 @@
 # Fastls Node.js SDK
 
-Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本分支准备正式版 **0.10.1**，尚未发布；npm 当前可用版本为 **0.10.1-dev.0**。新增接口需等待正式发布，或安装经 CI 验证的候选包。
+Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应正式版 **0.10.1**，发行文件与版本状态以 npm registry 为准。
 
 支持 HTTP/1.1、HTTP/2、流式上传下载、双工、SSE、WebSocket、会话 Cookie 和 HTTP/HTTPS/SOCKS 代理。网络请求由 Go 执行，通过 Koffi 在当前 Node 进程中调用；使用者无需 Python 或 RPC 服务。
 
@@ -13,7 +13,7 @@ Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明�
 
 ## 安装与快速开始
 
-以下是待发布正式版安装命令；当前 npm 只有开发版 0.10.1-dev.0，新 fetch 与 SDK Cookie 管理不可用于旧版本：
+安装指定版本：
 
 ```sh
 npm install @fastls/fastls@0.10.1

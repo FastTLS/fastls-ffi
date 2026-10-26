@@ -1,6 +1,6 @@
 # fastls Python SDK
 
-通过原生 Fastls 动态库发送带浏览器配置的 HTTP 请求，支持同步、asyncio、流式上传下载、HTTP/2 全双工、SSE 和 WebSocket。Python 发行包名与导入名均为 `fastls`，仓库名为 `fastls-ffi`。本分支准备 Python **0.1.4**，尚未发布；当前 PyPI 正式版为 **0.1.3**。下面的 0.1.4 安装命令及新增 API 供正式发布后使用。
+通过原生 Fastls 动态库发送带浏览器配置的 HTTP 请求，支持同步、asyncio、流式上传下载、HTTP/2 全双工、SSE 和 WebSocket。Python 发行包名与导入名均为 `fastls`，仓库名为 `fastls-ffi`。本文对应 Python **0.1.4**，发行文件与版本状态以 PyPI 为准。
 
 ## 安装与平台
 

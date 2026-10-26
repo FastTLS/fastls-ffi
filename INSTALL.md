@@ -1,6 +1,6 @@
 # Python SDK 安装指南
 
-> 0.1.4 尚未发布，以下命令为待发布版本准备。当前 PyPI 正式版是 0.1.3；正式发布需维护者确认。
+> 本文对应 fastls 0.1.4；发行文件与版本状态以 PyPI 为准。
 
 本指南以 GitHub Release [v0.1.4](https://github.com/FastTLS/fastls-ffi/releases/tag/v0.1.4) 为例。平台 wheel 已包含原生动态库，普通安装不需要 Go、C 编译器、克隆源码或单独下载 DLL/dylib/so 文件。
 
@@ -150,6 +150,6 @@ SDK-only `.tar.gz` 不包含原生库，也不会在安装或导入时下载/编
 
 ## 8. PyPI 发布状态
 
-fastls 0.1.4 计划提供五个平台 wheel 和一个 SDK-only sdist，尚未发布。正式 `v*` 标签通过完整门禁后，由 `ci.yml` 使用 Trusted Publishing 上传；普通分支、PR 和开发快照不上传 PyPI。Linux wheel 的 `manylinux_2_39` 标签要求 glibc 2.39+，不支持 Alpine/musl。维护说明见 [PYPI.md](PYPI.md)。
+fastls 0.1.4 的发行包包含五个平台 wheel 和一个 SDK-only sdist。正式 `v*` 标签通过完整门禁后，由 `ci.yml` 使用 Trusted Publishing 上传；普通分支、PR 和开发快照不上传 PyPI。Linux wheel 的 `manylinux_2_39` 标签要求 glibc 2.39+，不支持 Alpine/musl。维护说明见 [PYPI.md](PYPI.md)。
 
 PyPI 官方说明：[通过 Trusted Publisher 创建项目](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)、[GitHub Actions 发布](https://docs.pypi.org/trusted-publishers/using-a-publisher/)。

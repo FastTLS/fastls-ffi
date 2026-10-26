@@ -1,6 +1,6 @@
 # npm 分发与发布
 
-所有命令从仓库根目录执行。当前待发布版本为 `0.10.1`，正式发布使用 `latest`，须等待维护者确认；历史开发版为 `0.10.1-dev.0`；版本或发布状态以 `node/package.json`、npm registry 和成功工作流为准。用户 API 见 [README.md](README.md)，测试范围见 [PARITY.md](PARITY.md)。
+所有命令从仓库根目录执行。当前正式版本为 `0.10.1`，正式发布使用 `latest`；历史开发版为 `0.10.1-dev.0`；版本或发布状态以 `node/package.json`、npm registry 和成功工作流为准。用户 API 见 [README.md](README.md)，测试范围见 [PARITY.md](PARITY.md)。
 
 主包是 `@fastls/fastls`，原生库通过同版本的可选依赖分发：
 

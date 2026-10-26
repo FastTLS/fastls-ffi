@@ -1,6 +1,6 @@
 # Fastls Python / Node.js SDK
 
-> 本分支准备 Python 0.1.4 与 Node 0.10.1，均等待确认后正式发布。当前可安装 Python 0.1.3 / Node 0.10.1-dev.0；新增接口见各 SDK 的迁移说明。
+> 本文对应 Python 0.1.4 与 Node 0.10.1；发行状态以 PyPI 和 npm registry 为准，新增接口见各 SDK 的迁移说明。
 
 [完整文档](https://fasttls.github.io/) · [Python 使用指南](python/README.md) · [Node 使用指南](node/README.md)
 
@@ -28,10 +28,10 @@ print(response.status_code, response.text)
 
 ## Node.js：安装与使用
 
-需要 Node.js 22+。已发布 `@fastls/fastls@0.10.1-dev.0`，仍为开发版本；即使 registry 的 latest 指向它，也不代表稳定性已升级。
+需要 Node.js 22+。以下命令安装正式版 `@fastls/fastls@0.10.1`。
 
 ```sh
-npm install @fastls/fastls@0.10.1-dev.0
+npm install @fastls/fastls@0.10.1
 ```
 
 ```js
