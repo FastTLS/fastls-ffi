@@ -6,10 +6,9 @@ import {createRequire} from 'node:module';
 import {resolve,dirname} from 'node:path';
 import {writeFileSync} from 'node:fs';
 const root=resolve(import.meta.dirname,'../..'),require=createRequire(import.meta.url);
-const entry=process.env.FASTLS_NODE_PACKAGE?createRequire(resolve(process.env.FASTLS_NODE_PACKAGE,'package.json')).resolve('@fasttls/fastls'):resolve(root,'node/dist/index.js');
-const name=process.platform==='win32'?'fastls.dll':process.platform==='darwin'?'libfastls.dylib':'libfastls.so';
+const entry=process.env.FASTLS_NODE_PACKAGE?createRequire(resolve(process.env.FASTLS_NODE_PACKAGE,'package.json')).resolve('@fastls/fastls'):resolve(root,'node/dist/index.js');
 if(!process.argv[2]){
-  const defaultLibrary=process.env.FASTLS_NODE_PACKAGE?resolve(dirname(entry),'../native',name):resolve(root,'dist',name);
+  const defaultLibrary=require(resolve(dirname(entry),'library-path.js')).libraryPath();
   const libraries=process.env.FASTLS_COOKIE_COMPAT_LIBRARIES?JSON.parse(process.env.FASTLS_COOKIE_COMPAT_LIBRARIES):[{library:defaultLibrary,kind:'full'}];
   const results=[];
   for(const spec of libraries){

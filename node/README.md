@@ -1,60 +1,71 @@
 # Fastls Node.js SDK
 
-未发布的开发版本。Node.js 22+，TypeScript 类型声明、ESM 和 CommonJS 入口。
-通过 Koffi 复用 fastls-ffi 的 C ABI v1，无需 Python 进程或 RPC 服务。
-当前仅支持 Node.js 主线程；暂不支持 worker_threads、Electron、Bun 或浏览器。
+Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。当前开发包版本为 `0.10.1-dev.0`，npm 预发布渠道使用 `next`。
 
-0.2 开发版本对齐 Python 的解压、分层超时和上传能力：默认解压响应，大于512 KiB的字符串/字节自动流式上传。新版SDK要求带 stream_decode、phase_timeouts、stream_upload 和 write_timeout 的动态库。
-0.3 增加显式 HTTP/2 双工读写；使用时另检查原生库的 duplex_h2 能力。
-0.4 增加 SSE 事件流，按需解析 UTF-8 事件，支持手动恢复、事件大小限制及与双工上传组合。
+支持 HTTP/1.1、HTTP/2、流式上传下载、双工、SSE、WebSocket、会话 Cookie 和 HTTP/HTTPS/SOCKS 代理。网络请求由 Go 执行，通过 Koffi 在当前 Node 进程中调用；使用者无需 Python 或 RPC 服务。
 
-## 本地构建与使用
+只支持 Node.js 主线程。暂不支持 worker_threads、Electron、Bun 或浏览器。默认校验证书；生成的客户端身份不代表已获得与真实浏览器完全相同的线上指纹。
 
-先按上级 README 构建 Go 动态库，再在本目录执行：
+- 用户 API 与安装方式：本文。
+- Python 行为对应、语言差异与测试证据：[PARITY.md](https://github.com/FastTLS/fastls-ffi/blob/main/node/PARITY.md)。
+- 维护者打包、首次发布和 Trusted Publisher：[NPM_RELEASE.md](https://github.com/FastTLS/fastls-ffi/blob/main/node/NPM_RELEASE.md)。
+- 当前交付状态及后续批次：[NEXT_PHASE.md](https://github.com/FastTLS/fastls-ffi/blob/main/node/NEXT_PHASE.md)。
 
-```shell
-npm ci
-npm run build
+## 安装与快速开始
+
+npm 的 `next` 版本发布后，在消费项目中安装：
+
+```sh
+npm install @fastls/fastls@next
 ```
 
-源码默认查找仓库 `dist/`。安装到其它项目后，设置 `FASTLS_LIBRARY` 为动态库绝对路径，
-或向 Session 传 `library`。普通 `npm pack` 仍生成需外部动态库的轻量包。
-0.6新增内置本机动态库的候选包，见下节；两类包均不会自动下载或编译Go库。
-Koffi 自身需要对应平台的原生组件，其依赖不等同于 Fastls 动态库。
+主包通过同版本的可选依赖自动安装当前平台的 Fastls 原生库。保留 optional dependencies；支持 Windows x64、Linux glibc x64/arm64、macOS x64/arm64。Linux musl 和其它架构没有内置包。具体系统最低版本见原生包的 `native/manifest.json`。
 
-可运行 `npm pack` 生成本地安装包，再在目标项目中执行 `npm install <安装包绝对路径>`。
-包名暂定 `@fasttls/fastls`，不表示已占用 npm 名称或已发布。
+npm 分发包没有 Fastls 编译或下载脚本；安装成功后不需要 Go、Python、C 编译器或 `FASTLS_LIBRARY`。Koffi 自身也使用对应平台的原生组件。
 
 ```js
-import { Session } from '@fasttls/fastls';
-// CommonJS: const { Session } = require('@fasttls/fastls');
+import { Session } from '@fastls/fastls';
+// CommonJS: const { Session } = require('@fastls/fastls');
 
-const session = new Session({
-  profile: 'chrome/156/windows',
-  timeoutMs: 30_000,
-  // library: '/absolute/path/to/libfastls.so',
-});
+const session = new Session({ profile: 'chrome/156/windows', timeoutMs: 30_000 });
 try {
   const response = await session.get('https://example.com', {
     headers: { 'User-Agent': 'my-client/1.0' },
     signal: AbortSignal.timeout(5_000),
   });
-  console.log(response.status, response.text(), response.match);
+  response.raiseForStatus();
+  console.log(response.status, response.url, response.httpVersion, response.text());
 } finally {
-  session.close();
+  await session.closeAsync();
 }
 ```
+
+后续片段假定 `session` 已创建且未关闭；`consume`、`produceBytes` 等是应用自行实现的业务函数。每次实际使用均应关闭会话和未消费完的响应。
+
+从源码开发时，在仓库根目录构建动态库和测试服务，再安装 Node 开发依赖：
+
+```sh
+python scripts/build.py
+go build -o build/ffi-fixture ./cmd/ffi-fixture
+npm ci --prefix node
+npm run build --prefix node
+```
+
+Windows 测试服务文件名使用 `build/ffi-fixture.exe`，原生构建需要可用的 C 编译器，可通过 `--cc` 指定。`scripts/build.py --local` 会生成忽略跟踪的 `go.work`，使用同级源码仓库；也可用 `FASTLS_LOCAL_FASTLS`、`FASTLS_LOCAL_FTRANSPORT`、`FASTLS_LOCAL_IMITATE` 指向固定副本。当前脚本没有 `--workspace` 参数。正式发布消费同提交 CI 的固定依赖构建，不能用任意本地构建替代。
+
+源码默认加载仓库 `dist/`；普通 `npm pack ./node` 生成需要外部动态库的 thin 包。thin 包可通过 `FASTLS_LIBRARY` 或 `new Session({ library: '/absolute/path/to/library' })` 指定库。GitHub 内置库候选和 npm 拆分包的区别见下文。
+
 
 ## 请求和响应
 
 - `await session.request(method, url, options)`，以及 `get`、`post`，返回完整缓存的 Response。
-- 请求选项：`profile`、`headers`、`body`、`timeoutMs`、`allowRedirects`、`signal`。
+- 请求选项包括 `profile`、`headers`、`trailers`、`params`、`json`、`form`、`files`、`body`、`timeoutMs`、`allowRedirects`、`signal`、`proxy`、`proxyCaFile`、`decodeContent`、`maxDecodedBytes`、`duplex`。会话级选项还包括 `library`、`caFile`、`cookies`、`notifications`；以公开 TypeScript 类型为准。
 - `body` 为字符串、Buffer、Uint8Array、同步/异步字节迭代器、Node Readable 或接收 AbortSignal 的生产者工厂。超过512 KiB的字符串/字节自动使用上传通道。
 - `timeoutMs` 为毫秒整数或 `{ total, connect?, write?, headers?, read? }`，每项范围1..86400000；默认总时限30000。请求级数字覆盖会清除会话分层限制，结构化覆盖替换整份策略。
 - 会话默认头和请求头按大小写不敏感方式合并，请求值优先，包括空字符串。
-- `Response` 提供 `status`、`ok`、`headers`、`wireHeaders`、`decoded`、`match`、`content: Buffer`，以及同步 `text()` / `json()`。
+- `Response` 提供 `status`、`ok`、`headers`、`wireHeaders`、`decoded`、`match`、`httpVersion`、`url`、`trailers`、`content: Buffer`，以及同步 `text()` / `json()`。
 
-0.8 中 `ok` 改为状态小于400，与Python一致，因此302/304也为true。
+`ok` 表示状态小于400，与Python一致，因此302/304也为true。
 `raiseForStatus()` 只对400–599抛出 `FastlsHTTPError`，异常包含原响应 `response` 和 `status`，消息仅含状态码；流式响应可在读取正文前检查，随后仍需关闭。
 `encoding` 从Content-Type的charset初始化，缺省utf-8，可修改；`text()`替换坏字节，未知编码报错。Latin-1保留完整字节映射，其它字符集使用Node内置TextDecoder的WHATWG编码表，不自动猜测。
 `json()`直接读取原始字节，支持UTF-8/16/32及BOM，独立于encoding；JSON数字仍受JavaScript数字精度限制。
@@ -65,9 +76,50 @@ try {
 
 未知 profile 报错；Match 保留生成身份和协议基线信息，不承诺与真实浏览器指纹完全等价。
 
+`request('PUT', url, options)` 等可使用其它合法方法；便捷方法只有 `get` 和 `post`。请求头的值为字符串；`trailers` 的值为字符串或只读字符串数组，名称和值由原生层继续验证，且要求 `request_trailers` 能力。
+
+`url` 是最终响应 URL，`httpVersion` 是实际 HTTP 协议版本。缓存响应已经读到 EOF，包含最终 `trailers`；流式响应先消费正文，再读取最终尾部字段。提前关闭不代表已经收到全部 trailers。
+
+## 请求参数
+
+```ts
+const response = await session.get('https://example.com/search?old=a%20b#fragment', {
+  params: [['q', '中文'], ['tag', ['a', 'b']], ['empty', '']],
+});
+response.raiseForStatus();
+await session.post('https://example.com/api', { json: null });
+await session.post('https://example.com/form', { form: { tag: ['a', 'b'], enabled: true } });
+
+// FileHandle归调用方拥有；适配read签名，从当前位置读取，始终由调用方关闭。
+const file = await open('/path/to/archive.bin', 'r'); // import { open } from 'node:fs/promises'
+try {
+  await session.post('https://example.com/upload', {
+    form: { description: '附件' },
+    files: { file: ['archive.bin', {
+      async read(maxBytes, signal) {
+        signal.throwIfAborted();
+        const buffer = Buffer.allocUnsafe(maxBytes);
+        const { bytesRead } = await file.read(buffer, 0, maxBytes, null);
+        return buffer.subarray(0, bytesRead);
+      },
+    }, 'application/octet-stream'] },
+  });
+} finally { await file.close(); }
+```
+
+- `params`/`form`接受普通对象、Map或键值对数组。列表值展开成重复键；null/undefined值省略，空字符串保留；布尔值与Python一致为True/False，Unicode用UTF-8，空格为+。键可用字符串/Uint8Array，值可用字符串/Uint8Array、有限数或布尔值。与Python不同，查询及表单拒绝非有限数。
+- `params`另接受不含#的已编码ASCII字符串，原查询编码和fragment保留。fragment不发送到服务器。
+- `json`只接受严格JSON值、普通对象及数组，拒绝NaN/Infinity、undefined、bigint、稀疏数组、循环和toJSON。显式null发送null；省略json无正文。`json`与body/form/files冲突；`body`与form/files冲突。不要把Python的data映射直接传给body；Node用form显式编码，现有字节块数组仍是原始body。
+- JSON/表单在内存中编码；超过512KiB自动转为流式上传，不是大型数据增量编码器。默认Content-Type仅在没有会话/请求自定义头时设置；编码正文拒绝Content-Length/Transfer-Encoding。原始body沿用原有规则。
+- `files`接受对象、Map或重复字段对数组。每个文件是Uint8Array、`MultipartReader`，或`[filename, body, contentType?]`；filename为null省略filename参数。默认从读取器name/字段名取文件名；内置固定MIME推断只覆盖txt/json/html/csv/png/jpg/jpeg/pdf，其它类型请显式指定，缺省application/octet-stream。不支持自定义分部头。
+- multipart可配合form字段，每次read最多64KiB，空Uint8Array表示EOF；支持同步/Promise读取器。无需seek/长度/临时文件，不全量缓存文件；调用方负责close和重新定位，成功、失败、取消均保留读取器所有权。提供给read的AbortSignal可中断自定义等待；不可取消的Promise会延后closeAsync清理。Node Readable及FileHandle不能直接作为此读取器，应适配其读取接口；现有原始body的Readable销毁规则不变。
+- multipart管理随机boundary及Content-Type，拒绝会话或请求中显式Content-Type；元数据拒绝控制字符。正文仅使用一次，307/308不自动重放，301/302/303沿用核心GET转换规则。
+- request/get/post/stream/sse与自动duplex共享参数处理；multipart不支持duplex。手动duplex只接受params，正文继续send()/finishUpload()。自动双工支持JSON/表单且关闭重定向。
+
 ## 流式下载和取消
 
 ```js
+const controller = new AbortController();
 const response = await session.stream('GET', 'https://example.com/large-file', {
   signal: controller.signal,
 });
@@ -85,7 +137,7 @@ try {
 可通过 `Readable.from(response.body, { objectMode: false })` 接入 Node 流并使用 `pipeline()`。
 
 `StreamResponse.read()` / `text()` / `json()` 异步读取完整正文，上限同普通请求的 32 MiB；更大响应必须逐块消费。
-默认在Go侧逐块解码gzip、deflate、br及zstd，`decodeContent: false`取得原始字节；`text()` 按 UTF-8 解码，替换非法字节。
+默认在Go侧逐块解码gzip、deflate、br及zstd，`decodeContent: false`取得原始字节；`text()` 按响应 `encoding` 解码，缺省 UTF-8，替换非法字节；JSON 解码规则与缓存响应相同。
 解码时headers移除Content-Encoding/Content-Length，wireHeaders保留线上字段；decoded表示解码视图。
 `maxDecodedBytes`默认256 MiB，范围1..1 TiB，只限制解码输出；普通缓存32 MiB限制仍独立适用。未知编码、校验失败、截断或超限抛出FastlsDecodeError。
 
@@ -114,6 +166,36 @@ session.cookies.clear();
 始终校验证书。可通过 `caFile` 使用仅属于本会话的私有根证书（替代系统根）；文件在构造时读取。
 不修改系统信任库，不提供关闭 TLS 验证选项。
 
+## 代理
+
+```js
+const session = new Session({
+  proxy: 'http://user:password@127.0.0.1:8080',
+  timeoutMs: { total: 30000, connect: 5000 },
+});
+try {
+  await session.get('https://example.com/');
+  await session.get('https://example.com/', { proxy: null }); // 显式直连
+  await session.get('https://example.com/', { proxy: 'socks5h://127.0.0.1:1080' });
+} finally { await session.closeAsync(); }
+```
+
+Session和请求的`proxy`接受URL字符串或null。请求省略或undefined继承会话默认值；null或空字符串直连。普通请求、stream、sse、自动/手动duplex遵循相同规则。传入其它类型会报TypeError。显式代理要求原生`proxy_tunnels`能力；旧ABI-v1库仍可直连，代理请求在登记请求句柄前报错。
+
+`http://`对HTTP和HTTPS目标均使用HTTP/1.1 CONNECT，默认端口80。`socks5://`本机解析目标域名，`socks5h://`交给代理解析，默认端口1080。支持HTTP Basic和SOCKS用户名/密码认证，凭据按URL规则转义，例如密码中的@写成%40。不读取HTTP_PROXY、HTTPS_PROXY、ALL_PROXY、NO_PROXY及其小写形式。`https://`在代理TLS中运行HTTP/1.1 CONNECT，默认端口443，证书和主机名验证始终开启，不回退到明文。HTTPS代理另要求原生`https_proxy_tls`能力；暂不支持SOCKS4或PAC，详情见上级PROXY.md。
+
+`proxyCaFile`只控制HTTPS代理信任，`caFile`只控制目标信任，两者互不代替。未设置代理CA使用系统根；提供文件则替换系统根。构造Session时读取默认代理CA一次，请求指定路径时重新读取；请求undefined继承默认，null恢复系统根。直连、HTTP和SOCKS忽略代理CA默认值及请求覆盖。代理地址及凭据、profile、代理CA和目标CA共同隔离连接池。目标证书仍需验证；目标请求禁止设置Proxy-Authorization和Proxy-Connection。认证只用于代理握手，错误消息不回显凭据或代理任意响应短语。握手计入connect和total预算，AbortSignal取消会关闭未建立的隧道；取消单条H2流继续复用健康的共享隧道。代理拒绝后不降级或自动重试。
+
+代理测试使用Node测试进程中的独立、仅访问loopback的CONNECT/RFC1928/RFC1929靶场；SDK本身不依赖Python或代理辅助进程。十三组Python行为映射、源码及内置库安装包统一验收；语言适配见PARITY.md。
+
+`npm run test:proxy:soak`默认以32路并发运行60秒，轮换正常请求、共享H2流取消、错误认证和停滞握手取消；四种scheme分别使用真实loopback代理。FASTLS_NODE_PROXY_SOAK_SECONDS可设为1..300。Linux当前Go/Node组合执行该独立测试，沿用现有RSS、Go堆、goroutine及句柄阈值，逐批记录写入build/node-proxy-recovery-*.json，不计入225项主套件。
+
+代理独立长测与SSE长测一样，显式使用`--max-semi-space-size=16`固定测试进程的V8半空间上限。本机Windows Node24默认策略在持续分配时将new_space保留空间从4MiB扩大至128MiB，而Go堆、原生请求和隧道已回收。该参数仅作用于独立测试进程，不修改SDK用户进程的运行配置，也不放宽RSS或句柄阈值。证据保存运行参数、V8空间快照，以及阈值判定之后的完整GC诊断；判定使用GC前的最终采样。
+
+私有HTTPS代理示例：`new Session({ proxy: 'https://proxy.example:443', proxyCaFile: '/path/to/proxy-ca.pem', caFile: '/path/to/target-ca.pem' })`。两类CA分别验证代理与目标；请求可用`{ proxyCaFile: null }`恢复代理系统信任，或指定其它代理CA文件，均不会复用不相符的已有隧道。
+
+代理长测按靶场握手阶段同步取消，避免固定毫秒计时在慢runner上提前中止TLS而未触达待测CONNECT阶段。HTTPS靶场延迟50毫秒处理CONNECT，确保该时序在本地也能覆盖。H2可合并同一代理的在途建连；每批每种scheme至少触发一次真实握手取消，并逐批核对启动/回收计数，不依赖请求数等于物理建连数。资源阈值保持不变。
+
 ## HTTP/2 双工
 
 `duplex: true` 允许响应头到达后继续上传，可同时读取响应。仅支持 HTTP/2，并始终禁止自动重定向；普通上传仍拒绝未完成上传时提前返回的 2xx。
@@ -137,11 +219,12 @@ try {
 ```js
 const exchange = session.duplex('POST', url);
 try {
-  const response = await exchange.response;
-  const reading = consumeResponse(response.body);
-  await exchange.send(Buffer.from('first'));
-  await exchange.finishUpload();
-  await reading;
+  const reading = exchange.response.then(response => consumeResponse(response.body));
+  const writing = (async () => {
+    await exchange.send(Buffer.from('first'));
+    await exchange.finishUpload();
+  })();
+  await Promise.all([reading, writing]);
 } finally {
   exchange.close();
 }
@@ -198,9 +281,35 @@ HTTP/2可组合 `{ duplex: true, body: signal => source(signal) }` 边上传边�
 `npm run test:sse:soak` 默认以32路并发重复运行60秒，验证正常结束、提前退出、错误头、解析超限和解码失败后的资源回收；可设置FASTLS_NODE_SSE_SOAK_SECONDS为1..300。Linux当前Go组合纳入CI。
 该独立长测固定V8年轻代参数以比较RSS增量，保留原有资源阈值，记录运行参数和堆空间快照；不会更改SDK用户进程的配置，说明见PARITY.md。
 
+## WebSocket
+
+```ts
+const ws = await session.websocket('wss://example.com/chat', {
+  subprotocols: ['chat.v1'], handshakeTimeoutMs: 30000,
+  readTimeoutMs: null, writeTimeoutMs: 30000, closeTimeoutMs: 1000,
+  maxMessageBytes: 1024 * 1024,
+});
+try {
+  await ws.send('你好');
+  const message = await ws.recv(); // string或Buffer，空消息也是有效消息
+} finally { await ws.closeAsync(1000, 'done'); }
+```
+
+send/ping/pong等到原生写入完成；同时最多一名读者和一名写入者，重叠调用立即报错。recv返回完整消息，入站分片重组由原生完成。默认1MiB消息上限，可设置1..16MiB；控制帧最多125字节。Node组装、复制和返回当前消息另占有界内存，业务持有的消息不计入原生队列。不是无限文件流接口。
+
+正常远端关闭抛出WebSocketClosed(code/reason)，连接保留closeCode/closeReason。closeAsync的整个握手受closeTimeoutMs约束（最多60000），超时直接释放；abort立即中断。连接级AbortSignal中断当前及后续操作，Session关闭回收全部所属WS。读/写/握手超时使连接终止，FastlsTimeoutError.phase为read/write/handshake；HTTP会话总超时不限定WS寿命。
+
+复用Session的profile、头、CA、代理与代理CA；params、请求级覆盖/显式直连沿用HTTP规则。wss始终验证证书和主机名，ALPN适配HTTP/1.1；不承诺适配后的Upgrade头序与浏览器完全一致。使用websocket_v1和三个可选ABI符号，旧库的HTTP继续可用。通知默认共享一条会话连接，poll可显式选择，不阻塞主线程或增加网络线程。
+
+默认与HTTP共享Cookie罐，要求原生库提供websocket_cookies能力。cookieMode:"manual"可禁用本次握手的自动收发，并兼容旧库。显式Cookie头（包括空值）优先，默认仍接受握手Set-Cookie；Session的cookies:false禁用自动收发。域/路径/Secure/过期规则与HTTP一致。有效101及普通HTTP拒绝/重定向响应可写回；无效101或TLS失败不写回。Authorization/Origin由调用方设置。无压缩、H2/H3 CONNECT、握手重定向、自动心跳/重连或消息重放。ping只证明写入完成，可用info.websocket.pongs/last_pong_base64观察响应。协议细节与原生资源限制见根目录WEBSOCKET.md。
+
+npm run test:quick先运行类型、清单及WS/原生用例；test:ws针对25项WS和16项共享Cookie；test:ws:soak运行独立60秒/32路资源回收。快速反馈不能替代225项源码/安装包完整回归与六组平台验收。
+
+原生websocket_cookie_control_v1明确保证按连接禁用自动Cookie，并保留0.10的websocket_cookies契约。仅提供websocket_cookies_v1的历史分发库需要升级：SDK会在建立连接前拒绝manual，防止Cookie被静默发送或保存。无自动Cookie的旧WS库仍支持manual。npm run test:compat用真实原生库验证收发、显式头和失败握手；可通过FASTLS_COOKIE_COMPAT_LIBRARIES传入含library与kind(full/legacy/automatic-only)的JSON数组，逐库在独立进程运行。源码快速检查与隔离安装包都会执行当前库兼容验收。
+
 ## 原生就绪通知
 
-0.5默认使用`notifications: 'auto'`：新库带session_notifications能力且符号完整时启用，旧ABI-v1库继续轮询。`required`缺少能力时在创建原生会话前报错；`poll`显式使用原调度器。
+默认使用`notifications: 'auto'`：新库带session_notifications能力且符号完整时启用，旧ABI-v1库继续轮询。`required`缺少能力时在创建原生会话前报错；`poll`显式使用原调度器。
 
 ```js
 const session = await Session.open({ notifications: 'required' });
@@ -226,147 +335,52 @@ try {
 显式poll或旧库回退使用共享约10ms定时器，保留每轮处理数量及时间上限。
 
 句柄使用 bigint，无损解析和序列化 ABI JSON 数字；返回的 C 字符串逐次由 fastls_free 释放。
-加载时检查ABI及所需能力，并使用系统级固定加载（Windows PIN / POSIX NODELETE），避免Node环境清理时卸载仍有Go后台线程的动态库。
+外部动态库基础能力要求为 `stream_decode`、`phase_timeouts`、`stream_upload`、`write_timeout`；双工、代理、WebSocket 和请求 trailers 在调用时另检查对应能力。加载时检查 ABI 及所需能力，并使用系统级固定加载（Windows PIN / POSIX NODELETE），避免Node环境清理时卸载仍有Go后台线程的动态库。
 原生限制仍适用：最多 64 会话、256 未关闭请求，每会话最多 16 种传输配置。
-代理支持HTTP/HTTPS CONNECT、socks5及socks5h，见下节；WebSocket另见0.9节。
+代理支持HTTP/HTTPS CONNECT、socks5及socks5h，见下节；WebSocket见对应章节。
 
-## 验证
-
-仓库中需先构建 `build/ffi-fixture[.exe]`（`go build -o build/ffi-fixture ./cmd/ffi-fixture`；Windows 使用 .exe 后缀）。
-
-```shell
-npm test
-npm run test:package
-```
-
-测试使用真实动态库和本地靶场，覆盖 H1/H2、证书、连接池、Cookie、多值头、二进制、取消、超时、
-异常正文、64 MiB 下载、32 MiB 缓存限制和 128 路并发。安装包测试在临时项目安装 npm tarball，
-重新执行全部测试并检查包名导入和 TypeScript 声明。证据写入仓库 build/node-*.json。
-十五组Python套件的209个场景已有对应项，包含13项双工、23项SSE、21项通知和14项代理验收，连同原有16项，共225项。映射检查由 `npm run test:parity` 执行；Python新增用例未映射会使检查失败。源码和隔离安装包均运行同一套测试，逐项结果与适配说明写入 `build/node-parity-*.json`。
-持续测试默认30秒，检查RSS、操作系统句柄/描述符、Go堆和goroutine回收。Linux当前Go/Node组合另跑300秒；设置 `FASTLS_NODE_SOAK_SECONDS=300` 后执行 `npm run test:soak` 可复现。
-
-## 与Python的语言差异
-
-Node统一使用Promise API，不提供Python同步Session或共享同步会话多线程调用；对应场景采用同步迭代器输入和96路Promise请求验证，不宣称线程安全。Node Readable按自身流的生命周期管理文件句柄，区别于Python保留调用方文件对象。
-JavaScript无法强行中断任意Promise：取消会立即释放原生请求，并请求迭代器return/destroy；生产者正在等待的自定义I/O必须支持取消，才能保证其finally及时执行。推荐使用接收AbortSignal的上传工厂。Python的协程强制取消场景对应为工厂信号取消，报告中明确标记适配。
-安装包验证检查必需入口、类型声明、平台元数据和文件白名单；只允许本平台动态库、清单和依赖声明进入候选包。
-通过后，实际测试过的 tarball、对应 `.sha256` 和 `node-package-info.json` 保存到仓库 `dist/`，
-并随平台 CI artifact 一起保留。清单记录 Node 版本、系统/架构、npm 包及所用动态库的 SHA256；
-CI 运行时还记录提交 SHA。测试前后会核对动态库未被替换。清单用于匹配测试产物，不代表数字签名或公开发布。
-
-## 内置动态库的候选安装包（0.6）
+## 候选包与原生库加载
 
 构建本平台Go动态库后，运行 `npm run pack:native`，产物位于上级 `dist/`。
-例如Windows x64：`fasttls-fastls-0.6.0-dev.0-win32-x64.tgz`；Linux包名另带`-glibc`。
+例如Windows x64：`fastls-fastls-0.10.1-dev.0-win32-x64.tgz`；Linux包名另带`-glibc`。
 在目标项目执行 `npm install <候选包绝对路径> --ignore-scripts`，随后即可 `new Session()`，无需Go、Python、编译器或FASTLS_LIBRARY。
 安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整225项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
 
 当前候选覆盖Windows x64、Linux glibc x64/arm64、macOS x64/arm64，Node22+。每个tarball只含一个系统/架构，不能将同名版本的这些变体当成可直接发布到npm的通用包。npm的os/cpu/libc字段限制安装目标；首次使用还检查平台、ABI声明、库SHA256及Linux的glibc版本。Linux最低glibc从ELF符号版本提取，macOS最低版本从Mach-O提取，具体要求及系统动态依赖见包内`native/manifest.json`，不将CI宿主机上的通过扩大为所有旧系统均已测试。musl不在当前范围。
 
-加载优先级：Session的`library` → FASTLS_LIBRARY → 包内动态库；源码工作区最后才回退到仓库dist目录。显式覆盖仍检查ABI和能力。包内文件损坏、缺失或平台不符会报错，不静默寻找其它库。SHA256用于完整性核对，不能替代签名或信任来源。
+加载顺序：显式 `SessionOptions.library` → `FASTLS_LIBRARY` → 包内 `native/manifest.json` 对应的库 → 已安装主包的本平台可选依赖；源码目录没有内置 manifest 时使用仓库 `dist/`。已安装的 thin 包没有仓库回退。可选原生包必须与主包同版本；缺包、错误平台、glibc 不兼容或摘要不一致均报错。显式路径覆盖仍检查 ABI 与必需能力。SHA-256 只验证内容完整性，不能替代来源签名。
 
-清单还保存Go构建来源摘要、模块版本/校验和、FastTLS仓库提交和收集到的许可证文本。`native/THIRD_PARTY_NOTICES.txt`仅是可用材料清单。当前FastTLS各仓库缺少根LICENSE/COPYING，已明确记为公开发布前的待处理项，不能据此推定已有再分发授权。候选包标记private且没有安装/构建脚本；本阶段仅生成CI验收产物，不发布npm或Release。
+清单还保存Go构建来源摘要、模块版本/校验和、FastTLS仓库提交和收集到的许可证文本。`native/THIRD_PARTY_NOTICES.txt`仅是可用材料清单。依赖许可证按实际构建输入收集；imitate已补齐Apache-2.0许可证，npm发布要求所有平台的licenseReviewRequired均为空。GitHub内置库候选保持private且没有安装/构建脚本；npm主包与平台包的发布流程见NPM_RELEASE.md。
 
-## 代理（0.7）
+npm 拆分包通过 `npm run test:package` 后再执行 `npm run test:npm` 生成，主包与本机原生包位于 `dist/npm/`。五个同名同版本的 GitHub 内置库候选不能作为五个 npm 版本发布。首次 registry 发布必须使用同提交 main CI 汇总得到的六包组，详见 NPM_RELEASE.md。
 
-```js
-const session = new Session({
-  proxy: 'http://user:password@127.0.0.1:8080',
-  timeoutMs: { total: 30000, connect: 5000 },
-});
-try {
-  await session.get('https://example.com/');
-  await session.get('https://example.com/', { proxy: null }); // 显式直连
-  await session.get('https://example.com/', { proxy: 'socks5h://127.0.0.1:1080' });
-} finally { await session.closeAsync(); }
+## 验证
+
+所有命令从仓库根目录执行，先完成动态库和测试服务构建。
+
+```sh
+npm run test:quick --prefix node
+npm test --prefix node
+npm run test:package --prefix node
+npm run test:npm --prefix node
+python node/scripts/test-npm-release.py
 ```
 
-Session和请求的`proxy`接受URL字符串或null。请求省略或undefined继承会话默认值；null或空字符串直连。普通请求、stream、sse、自动/手动duplex遵循相同规则。传入其它类型会报TypeError。显式代理要求原生`proxy_tunnels`能力；旧ABI-v1库仍可直连，代理请求在登记请求句柄前报错。
+`test:quick` 提供类型、映射、原生绑定、WebSocket 和 Cookie 兼容的短反馈。`npm test`、`test:package`、`test:npm` 分别运行源码、内置库候选、npm 拆分包的完整 225 项套件：十五组 Python 的 209 项行为映射，加 2 项绑定和 14 项 Node 专有测试。类型、Cookie 真实库兼容、安装元数据和发布边界检查另计；当前发布边界测试为 9 项。
 
-`http://`对HTTP和HTTPS目标均使用HTTP/1.1 CONNECT，默认端口80。`socks5://`本机解析目标域名，`socks5h://`交给代理解析，默认端口1080。支持HTTP Basic和SOCKS用户名/密码认证，凭据按URL规则转义，例如密码中的@写成%40。不读取HTTP_PROXY、HTTPS_PROXY、ALL_PROXY、NO_PROXY及其小写形式。`https://`在代理TLS中运行HTTP/1.1 CONNECT，默认端口443，证书和主机名验证始终开启，不回退到明文。HTTPS代理另要求原生`https_proxy_tls`能力；暂不支持SOCKS4或PAC，详情见上级PROXY.md。
+两类安装测试都在独立消费项目运行，关闭安装脚本、清除外部库环境变量并移除编译工具搜索路径。拆分包测试由临时 registry 提供尚未发布的本项目平台包，npm 自行按平台筛选；其它依赖仍使用正常 registry。
 
-`proxyCaFile`只控制HTTPS代理信任，`caFile`只控制目标信任，两者互不代替。未设置代理CA使用系统根；提供文件则替换系统根。构造Session时读取默认代理CA一次，请求指定路径时重新读取；请求undefined继承默认，null恢复系统根。直连、HTTP和SOCKS忽略代理CA默认值及请求覆盖。代理地址及凭据、profile、代理CA和目标CA共同隔离连接池。目标证书仍需验证；目标请求禁止设置Proxy-Authorization和Proxy-Connection。认证只用于代理握手，错误消息不回显凭据或代理任意响应短语。握手计入connect和total预算，AbortSignal取消会关闭未建立的隧道；取消单条H2流继续复用健康的共享隧道。代理拒绝后不降级或自动重试。
+主 CI 覆盖五个平台的 Node 24，以及 Linux x64 的 Node 22 组合，复用固定的原生构建输入。源码证据位于 `build/node-*.json`；内置候选和摘要在 `dist/`；拆分包、`npm-package-info.json` 和独立安装证据在 `dist/npm/`。具体映射、资源阈值及长测命令见 PARITY.md。功能检查和资源长测分开执行，不把清单存在或历史绿色结果当作新提交已通过。
 
-代理测试使用Node测试进程中的独立、仅访问loopback的CONNECT/RFC1928/RFC1929靶场；SDK本身不依赖Python或代理辅助进程。十三组Python行为映射、源码及内置库安装包统一验收；语言适配见PARITY.md。
+## 与 Python 的语言差异
 
-`npm run test:proxy:soak`默认以32路并发运行60秒，轮换正常请求、共享H2流取消、错误认证和停滞握手取消；四种scheme分别使用真实loopback代理。FASTLS_NODE_PROXY_SOAK_SECONDS可设为1..300。Linux当前Go/Node组合执行该独立测试，沿用现有RSS、Go堆、goroutine及句柄阈值，逐批记录写入build/node-proxy-recovery-*.json，不计入225项主套件。
+Node统一使用Promise API，不提供Python同步Session或共享同步会话多线程调用；对应场景采用同步迭代器输入和96路Promise请求验证，不宣称线程安全。Node Readable按自身流的生命周期管理文件句柄，区别于Python保留调用方文件对象。
+JavaScript无法强行中断任意Promise：取消会立即释放原生请求，并请求迭代器return/destroy；生产者正在等待的自定义I/O必须支持取消，才能保证其finally及时执行。推荐使用接收AbortSignal的上传工厂。Python的协程强制取消场景对应为工厂信号取消，报告中明确标记适配。
 
-代理独立长测与SSE长测一样，显式使用`--max-semi-space-size=16`固定测试进程的V8半空间上限。本机Windows Node24默认策略在持续分配时将new_space保留空间从4MiB扩大至128MiB，而Go堆、原生请求和隧道已回收。该参数仅作用于独立测试进程，不修改SDK用户进程的运行配置，也不放宽RSS或句柄阈值。证据保存运行参数、V8空间快照，以及阈值判定之后的完整GC诊断；判定使用GC前的最终采样。
+## 发布与授权
 
-私有HTTPS代理示例：`new Session({ proxy: 'https://proxy.example:443', proxyCaFile: '/path/to/proxy-ca.pem', caFile: '/path/to/target-ca.pem' })`。两类CA分别验证代理与目标；请求可用`{ proxyCaFile: null }`恢复代理系统信任，或指定其它代理CA文件，均不会复用不相符的已有隧道。
+维护者在 main 的同提交完整 CI 成功后，运行 `npm-publish.yml` 准备或发布 npm 六包组；首次发布、账号权限、2FA、Trusted Publisher 和重试步骤见 NPM_RELEASE.md。
 
-代理长测按靶场握手阶段同步取消，避免固定毫秒计时在慢runner上提前中止TLS而未触达待测CONNECT阶段。HTTPS靶场延迟50毫秒处理CONNECT，确保该时序在本地也能覆盖。H2可合并同一代理的在途建连；每批每种scheme至少触发一次真实握手取消，并逐批核对启动/回收计数，不依赖请求数等于物理建连数。资源阈值保持不变。
+`node-release.yml` 单独签发 GitHub 内置库候选和 thin 包，生成 SHA256SUMS、Sigstore 来源证明及清单，不会发布 npm。既有 `node-v0.10.1-dev.0` GitHub 预发布使用历史包名 `@fasttls/fastls`；本次 npm 包名为 `@fastls/fastls`，两套归档不能互换。后续 GitHub 签发使用新版本号，不能覆盖既有 tag 的来源记录。
 
-## 请求参数（0.8）
-
-```ts
-const response = await session.get('https://example.com/search?old=a%20b#fragment', {
-  params: [['q', '中文'], ['tag', ['a', 'b']], ['empty', '']],
-});
-response.raiseForStatus();
-await session.post('https://example.com/api', { json: null });
-await session.post('https://example.com/form', { form: { tag: ['a', 'b'], enabled: true } });
-
-// FileHandle归调用方拥有；适配read签名，从当前位置读取，始终由调用方关闭。
-const file = await open('/path/to/archive.bin', 'r'); // import { open } from 'node:fs/promises'
-try {
-  await session.post('https://example.com/upload', {
-    form: { description: '附件' },
-    files: { file: ['archive.bin', {
-      async read(maxBytes, signal) {
-        signal.throwIfAborted();
-        const buffer = Buffer.allocUnsafe(maxBytes);
-        const { bytesRead } = await file.read(buffer, 0, maxBytes, null);
-        return buffer.subarray(0, bytesRead);
-      },
-    }, 'application/octet-stream'] },
-  });
-} finally { await file.close(); }
-```
-
-- `params`/`form`接受普通对象、Map或键值对数组。列表值展开成重复键；null/undefined值省略，空字符串保留；布尔值与Python一致为True/False，Unicode用UTF-8，空格为+。键可用字符串/Uint8Array，值可用字符串/Uint8Array、有限数或布尔值。与Python不同，查询及表单拒绝非有限数。
-- `params`另接受不含#的已编码ASCII字符串，原查询编码和fragment保留。fragment不发送到服务器。
-- `json`只接受严格JSON值、普通对象及数组，拒绝NaN/Infinity、undefined、bigint、稀疏数组、循环和toJSON。显式null发送null；省略json无正文。`json`与body/form/files冲突；`body`与form/files冲突。不要把Python的data映射直接传给body；Node用form显式编码，现有字节块数组仍是原始body。
-- JSON/表单在内存中编码；超过512KiB自动转为流式上传，不是大型数据增量编码器。默认Content-Type仅在没有会话/请求自定义头时设置；编码正文拒绝Content-Length/Transfer-Encoding。原始body沿用原有规则。
-- `files`接受对象、Map或重复字段对数组。每个文件是Uint8Array、`MultipartReader`，或`[filename, body, contentType?]`；filename为null省略filename参数。默认从读取器name/字段名取文件名；内置固定MIME推断只覆盖txt/json/html/csv/png/jpg/jpeg/pdf，其它类型请显式指定，缺省application/octet-stream。不支持自定义分部头。
-- multipart可配合form字段，每次read最多64KiB，空Uint8Array表示EOF；支持同步/Promise读取器。无需seek/长度/临时文件，不全量缓存文件；调用方负责close和重新定位，成功、失败、取消均保留读取器所有权。提供给read的AbortSignal可中断自定义等待；不可取消的Promise会延后closeAsync清理。Node Readable及FileHandle不能直接作为此读取器，应适配其读取接口；现有原始body的Readable销毁规则不变。
-- multipart管理随机boundary及Content-Type，拒绝会话或请求中显式Content-Type；元数据拒绝控制字符。正文仅使用一次，307/308不自动重放，301/302/303沿用核心GET转换规则。
-- request/get/post/stream/sse与自动duplex共享参数处理；multipart不支持duplex。手动duplex只接受params，正文继续send()/finishUpload()。自动双工支持JSON/表单且关闭重定向。
-
-本阶段新增16项请求参数行为验收；0.9已另增WebSocket21项，完整范围见PARITY.md。仍为内部候选，未发布npm。
-
-## WebSocket（0.9）
-
-```ts
-const ws = await session.websocket('wss://example.com/chat', {
-  subprotocols: ['chat.v1'], handshakeTimeoutMs: 30000,
-  readTimeoutMs: null, writeTimeoutMs: 30000, closeTimeoutMs: 1000,
-  maxMessageBytes: 1024 * 1024,
-});
-try {
-  await ws.send('你好');
-  const message = await ws.recv(); // string或Buffer，空消息也是有效消息
-} finally { await ws.closeAsync(1000, 'done'); }
-```
-
-send/ping/pong等到原生写入完成；同时最多一名读者和一名写入者，重叠调用立即报错。recv返回完整消息，入站分片重组由原生完成。默认1MiB消息上限，可设置1..16MiB；控制帧最多125字节。Node组装、复制和返回当前消息另占有界内存，业务持有的消息不计入原生队列。不是无限文件流接口。
-
-正常远端关闭抛出WebSocketClosed(code/reason)，连接保留closeCode/closeReason。closeAsync的整个握手受closeTimeoutMs约束（最多60000），超时直接释放；abort立即中断。连接级AbortSignal中断当前及后续操作，Session关闭回收全部所属WS。读/写/握手超时使连接终止，FastlsTimeoutError.phase为read/write/handshake；HTTP会话总超时不限定WS寿命。
-
-复用Session的profile、头、CA、代理与代理CA；params、请求级覆盖/显式直连沿用HTTP规则。wss始终验证证书和主机名，ALPN适配HTTP/1.1；不承诺适配后的Upgrade头序与浏览器完全一致。使用websocket_v1和三个可选ABI符号，旧库的HTTP继续可用。通知默认共享一条会话连接，poll可显式选择，不阻塞主线程或增加网络线程。
-
-0.10默认与HTTP共享Cookie罐，要求原生库提供websocket_cookies能力。cookieMode:"manual"可禁用本次握手的自动收发，并兼容旧库。显式Cookie头（包括空值）优先，默认仍接受握手Set-Cookie；Session的cookies:false禁用自动收发。域/路径/Secure/过期规则与HTTP一致。有效101及普通HTTP拒绝/重定向响应可写回；无效101或TLS失败不写回。Authorization/Origin由调用方设置。无压缩、H2/H3 CONNECT、握手重定向、自动心跳/重连或消息重放。ping只证明写入完成，可用info.websocket.pongs/last_pong_base64观察响应。协议细节与原生资源限制见根目录WEBSOCKET.md。
-
-npm run test:quick先运行类型、清单及WS/原生用例；test:ws针对21项WS和16项共享Cookie；test:ws:soak运行独立60秒/32路资源回收。快速反馈不能替代225项源码/安装包完整回归与六组平台验收。
-
-## 0.10.1兼容修复
-
-原生websocket_cookie_control_v1明确保证按连接禁用自动Cookie，并保留0.10的websocket_cookies契约。仅提供websocket_cookies_v1的历史分发库需要升级：SDK会在建立连接前拒绝manual，防止Cookie被静默发送或保存。无自动Cookie的旧WS库仍支持manual。npm run test:compat用真实原生库验证收发、显式头和失败握手；可通过FASTLS_COOKIE_COMPAT_LIBRARIES传入含library与kind(full/legacy/automatic-only)的JSON数组，逐库在独立进程运行。源码快速检查与隔离安装包都会执行当前库兼容验收。
-
-源码目录默认加载上级dist动态库；同步TypeScript代码后还需重建原生库和靶场。scripts/build.py的--workspace允许指定既有go.work，并且不会改写它；打包时需使用同一GOWORK和依赖版本。
-
-## GitHub预发布安装包
-
-主分支CI复用原生/Python构建，验证六组Node组合后，node-release工作流可为指定成功run签发GitHub预发布。提供五种平台内置库tgz及一个外置库thin tgz、SHA256SUMS、Sigstore来源证明和完整manifest。版本来自package.json，签发绑定main的已验收提交，不发布npm仓库。原生依赖许可证待审项保留在manifest和第三方材料中，不新增授权声明。
-
-请求可使用trailers传入字符串或字符串数组。响应的httpVersion、url、trailers在读到EOF后刷新；流式调用应先消费正文再读取最终trailers。
+每次构建收集原生依赖许可证，npm 发布要求五个平台的 `licenseReviewRequired` 均为空。`imitate` 已固定到补齐 Apache-2.0 的提交；是否满足要求以本次候选清单为准。发布状态以 npm registry 和已完成的工作流为准。

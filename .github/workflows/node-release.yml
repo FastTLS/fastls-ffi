@@ -65,4 +65,4 @@ jobs:
         run: |
           set -euo pipefail
           cp "$BUNDLE_PATH" release-assets/provenance.sigstore.json
-          gh release create "node-v${VERSION}" release-assets/* --target "$GITHUB_SHA" --prerelease --title "@fasttls/fastls ${VERSION}" --notes-file release-assets/RELEASE_NOTES.md
+          gh release create "node-v${VERSION}" release-assets/* --target "$GITHUB_SHA" --prerelease --title "@fastls/fastls ${VERSION}" --notes-file release-assets/RELEASE_NOTES.md

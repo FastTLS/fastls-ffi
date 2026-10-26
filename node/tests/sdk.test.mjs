@@ -14,7 +14,7 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 const require = createRequire(import.meta.url);
 const repository = resolve(import.meta.dirname, '../..');
 const entry = process.env.FASTLS_NODE_PACKAGE
-  ? createRequire(resolve(process.env.FASTLS_NODE_PACKAGE, 'package.json')).resolve('@fasttls/fastls')
+  ? createRequire(resolve(process.env.FASTLS_NODE_PACKAGE, 'package.json')).resolve('@fastls/fastls')
   : require.resolve('..');
 const { Session, AbortError, FastlsError, Headers } = require(entry);
 let fixture, processFixture, exitFixture, monitor;
