@@ -202,4 +202,3 @@ def options(
     cookies: bool = True,
     notifications: Literal["auto", "required", "poll"] = "auto",
 ) -> Response: ...
-
