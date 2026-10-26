@@ -1,12 +1,13 @@
 # fastls-ffi
 
-Fastls 的 C ABI 动态库和 Python SDK。正式 wheel、SDK-only sdist 和签发材料仅通过 GitHub Releases 发布，不上传 PyPI。
+Fastls 的 C ABI 动态库和 Python SDK。Python 新发行包名为 `fastls`，代码继续使用 `from fastls import Session`。GitHub v0.1.2 的历史发行名仍为 `fastls-ffi`；PyPI 发布工作流已接入，首次成功上传后才可从 PyPI 安装。
 指纹生成复用独立 `FastTLS/imitate`，请求侧复用 `FastTLS/fastls`；Python 无需手动接入 Provider。
 
 ## 安装 Python SDK
 
 普通用户可直接从 GitHub Release 安装内置动态库的平台 wheel，无需 Go 或 C 编译器。
 完整命令、五个平台的选择、安装验证、升级卸载及常见问题见 [安装指南](INSTALL.md)。
+维护者的 Trusted Publisher 配置、Linux wheel 验收和正式发布步骤见 [PyPI 发布说明](PYPI.md)。
 
 ## 本地构建
 
