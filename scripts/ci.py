@@ -243,6 +243,7 @@ def run(stage="all"):
             execute("proxy-source", [sys.executable, "tests/test_proxy.py"])
             execute("request-options-source", [sys.executable, "tests/test_request_options.py"])
             execute("websocket-source", [sys.executable, "tests/test_websocket.py"])
+            execute("websocket-cookies-source", [sys.executable, "tests/test_websocket_cookies.py"])
         if stage in ("all", "wheel"):
             execute("wheel-tests", [sys.executable, "scripts/test_wheel.py", "--all"])
         if stage in ("all", "release"):
@@ -271,6 +272,6 @@ def run(stage="all"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=("resolve", "run"))
-    parser.add_argument("--stage", choices=("all", "build", "contracts", "source", "wheel", "release", "race", "soak"), default="all")
+    parser.add_argument("--stage", choices=("all", "build", "contracts", "source", "wheel", "release", "race", "soak", "verify"), default="all")
     args = parser.parse_args()
     raise SystemExit(resolve() if args.command == "resolve" else run(args.stage))

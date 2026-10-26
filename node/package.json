@@ -1,0 +1,48 @@
+{
+  "name": "@fasttls/fastls",
+  "version": "0.10.1-dev.0",
+  "description": "Node.js bindings for the Fastls C ABI",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc && node -e \"require('node:fs').copyFileSync('src/index.mjs', 'dist/index.mjs')\"",
+    "test": "npm run build && npm run test:types && npm run test:parity && node --expose-gc --test --test-concurrency=1 tests/*.test.mjs",
+    "test:parity": "node scripts/check-parity.mjs",
+    "test:soak": "node --expose-gc --test --test-name-pattern=test_soak_and_resource_recovery tests/parity.test.mjs",
+    "test:duplex:soak": "node --expose-gc --test tests/duplex-recovery.mjs",
+    "test:sse:soak": "node --expose-gc --max-semi-space-size=16 --test tests/sse-recovery.mjs",
+    "test:proxy:soak": "node --expose-gc --max-semi-space-size=16 --test tests/proxy-recovery.mjs",
+    "test:types": "tsc --ignoreConfig --noEmit --strict --module NodeNext --target ES2022 --types node tests/types.mts tests/types.cts",
+    "test:package": "node scripts/test-package.mjs",
+    "prepack": "npm run build",
+    "pack:native": "node scripts/pack-native.mjs",
+    "test:ws": "npm run build && node --expose-gc --test tests/parity-websocket.mjs tests/parity-websocket-cookies.mjs",
+    "test:quick": "npm run build && npm run test:types && npm run test:parity && node --expose-gc --test --test-concurrency=1 tests/native.test.mjs tests/parity-websocket.mjs tests/parity-websocket-cookies.mjs && node scripts/test-cookie-compat.mjs",
+    "test:ws:soak": "node --expose-gc --max-semi-space-size=16 --test tests/ws-recovery.mjs",
+    "test:compat": "npm run build && node scripts/test-cookie-compat.mjs"
+  },
+  "dependencies": {
+    "koffi": "3.3.3",
+    "lossless-json": "4.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2"
+  },
+  "license": "Apache-2.0"
+}

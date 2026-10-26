@@ -133,3 +133,7 @@ python scripts/check.py
 稳定性验收增加HTTPS H1/H2、128路混合请求/取消、64MiB流式下载、资源回收及持续运行测试；范围、阈值与时间上限见 [TESTING_STAGE2.md](TESTING_STAGE2.md)。这些检查不表示尚未实现的功能已交付。
 
 网络异常测试覆盖握手停滞、截断和畸形响应、HTTP2流重置、读取截止时间、重定向与跨主机敏感头处理；源码及wheel均纳入CI，见[TESTING_STAGE3.md](TESTING_STAGE3.md)。
+
+## Node.js SDK
+
+Node >=22支持CommonJS/ESM和TypeScript，功能及安装方式见[node/README.md](node/README.md)。主CI复用同一原生构建并验收源码、真实安装包与资源长测。GitHub预发布包由独立node-release流程绑定已通过的main提交签发，包含SHA256与Sigstore来源证明；不自动发布npm。

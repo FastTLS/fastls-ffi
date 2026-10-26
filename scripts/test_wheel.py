@@ -9,7 +9,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SUITES = ("python", "stability", "network", "pooling", "cookies", "decode-timeouts",
-          "upload", "duplex", "sse", "notifications", "proxy", "request-options", "websocket")
+          "upload", "duplex", "sse", "notifications", "proxy", "request-options", "websocket", "websocket-cookies")
 
 
 def main():

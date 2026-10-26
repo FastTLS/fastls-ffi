@@ -7,3 +7,6 @@ __pycache__/
 *.egg-info/
 .venv/
 *.log
+/node/node_modules/
+/node/dist/
+/node/*.tgz
