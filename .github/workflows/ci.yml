@@ -2,7 +2,8 @@ name: Native library and Python SDK
 permissions:
   contents: read
 env:
-  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.1.0.dev{0}', github.run_number) }}
+  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.1.0.dev{0}', github.run_number)
+    }}
   FASTLS_RELEASE_MODE: ${{ github.ref_type == 'tag' && 'true' || 'false' }}
 concurrency:
   group: ffi-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -31,8 +32,8 @@ jobs:
     - name: Verify standalone remote module graph
       env:
         GOWORK: 'off'
-      run: "go mod download\ngo mod verify\ngo list -m all\nif go mod graph | grep -F 'github.com/FastTLS/fhttp'; then\n \
-        \ echo 'legacy fhttp dependency remains in the module graph' >&2\n  exit 1\nfi\n"
+      run: "go mod download\ngo mod verify\ngo list -m all\nif go mod graph | grep -F 'github.com/FastTLS/fhttp';\
+        \ then\n  echo 'legacy fhttp dependency remains in the module graph' >&2\n  exit 1\nfi\n"
     - name: Require reviewed dependency commits
       id: refs
       env:
@@ -40,6 +41,8 @@ jobs:
         FTRANSPORT_REF: ${{ inputs.ftransport_ref || vars.FTRANSPORT_REF }}
         IMITATE_REF: ${{ inputs.imitate_ref || vars.IMITATE_REF }}
       run: python scripts/ci.py resolve
+    - name: Test package publication boundaries
+      run: python tests/test_pypi.py
   native:
     needs: dependencies
     name: Build / ${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
@@ -91,6 +94,9 @@ jobs:
     - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
       with:
         python-version: ${{ matrix.config.python }}
+    - name: Install pinned Linux wheel audit tools
+      if: runner.os == 'Linux'
+      run: python -m pip install auditwheel==6.8.2 patchelf==0.19.1.0
     - name: Build native library, fixture and bundled wheel
       run: python scripts/ci.py run --stage build
     - name: Share immutable platform inputs
@@ -117,7 +123,8 @@ jobs:
     needs:
     - dependencies
     - native
-    name: ${{ matrix.stage }} / ${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+    name: ${{ matrix.stage }} / ${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python
+      }}
     strategy:
       fail-fast: false
       matrix:
@@ -357,13 +364,13 @@ jobs:
         path: candidates
     - name: Assemble canonical GitHub assets
       shell: bash
-      run: "set -euo pipefail\nmkdir release-assets\nfor directory in candidates/release-candidate-*-go1.26.10-*; do\n  target=\"\
-        $(basename \"${directory}\" | sed -E 's/^release-candidate-(.*)-go1\\.26\\.10-py.*/\\1/')\"\n  cp \"${directory}\"\
-        /*.whl release-assets/\n  cp \"${directory}/release-manifest.json\" \"release-assets/release-manifest-${target}.json\"\
+      run: "set -euo pipefail\nmkdir release-assets\nfor directory in candidates/release-candidate-*-go1.26.10-*;\
+        \ do\n  target=\"$(basename \"${directory}\" | sed -E 's/^release-candidate-(.*)-go1\\.26\\.10-py.*/\\1/')\"\
+        \n  cp \"${directory}\"/*.whl release-assets/\n  cp \"${directory}/release-manifest.json\" \"release-assets/release-manifest-${target}.json\"\
         \n  cp \"${directory}/build-info.json\" \"release-assets/build-info-${target}.json\"\n  cp \"${directory}/native-audit.json\"\
         \ \"release-assets/native-audit-${target}.json\"\ndone\ncp \"$(find candidates -path '*linux-amd64-go1.26.10-py3.11/*.tar.gz'\
-        \ -print -quit)\" release-assets/\ntest \"$(find release-assets -name '*.whl' | wc -l)\" -eq 5\ntest \"$(find release-assets\
-        \ -name '*.tar.gz' | wc -l)\" -eq 1\n(cd release-assets && sha256sum * > SHA256SUMS)\n"
+        \ -print -quit)\" release-assets/\ntest \"$(find release-assets -name '*.whl' | wc -l)\" -eq 5\ntest \"\
+        $(find release-assets -name '*.tar.gz' | wc -l)\" -eq 1\n(cd release-assets && sha256sum * > SHA256SUMS)\n"
     - name: Sign release provenance
       id: attest
       uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
@@ -377,7 +384,8 @@ jobs:
 
         cp ''${{ steps.attest.outputs.bundle-path }}'' release-assets/provenance.sigstore.json
 
-        gh release create "${GITHUB_REF_NAME}" release-assets/* --verify-tag --generate-notes --title "fastls-ffi ${GITHUB_REF_NAME}"
+        gh release create "${GITHUB_REF_NAME}" release-assets/* --verify-tag --generate-notes --title "fastls-ffi
+        ${GITHUB_REF_NAME}"
 
         '
   node:
@@ -437,7 +445,8 @@ jobs:
     needs:
     - dependencies
     - native
-    name: Node / ${{ matrix.target }} / Go ${{ matrix.go }} / Python ${{ matrix.python }} / Node ${{ matrix.node }}
+    name: Node / ${{ matrix.target }} / Go ${{ matrix.go }} / Python ${{ matrix.python }} / Node ${{ matrix.node
+      }}
     steps:
     - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       with:
@@ -493,7 +502,8 @@ jobs:
       if: always()
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
       with:
-        name: node-functional-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
+        name: node-functional-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node
+          }}
         path: 'workspace/fastls-ffi/dist/
 
           workspace/fastls-ffi/build/
@@ -691,7 +701,8 @@ jobs:
     steps:
     - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
-        name: node-functional-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
+        name: node-functional-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node
+          }}
         path: candidate
     - if: matrix.race
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -705,6 +716,68 @@ jobs:
         path: candidate/
         if-no-files-found: error
         retention-days: 14
+  pypi-candidate:
+    name: Validate PyPI package set
+    needs: required
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        persist-credentials: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: '3.11'
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        pattern: ${{ github.ref_type == 'tag' && 'release-candidate-*' || format('development-snapshot-{0}-*', github.run_number)
+          }}
+        path: candidates
+    - name: Verify identity, provenance and all five platform tags
+      shell: bash
+      run: 'set -euo pipefail
+
+        flags=()
+
+        if [[ "$FASTLS_RELEASE_MODE" == true ]]; then flags+=(--formal); fi
+
+        python scripts/prepare_pypi.py candidates pypi-dist "${flags[@]}"
+
+        python -m pip install twine==7.0.0
+
+        python -m twine check --strict pypi-dist/*
+
+        '
+    - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: pypi-validated
+        path: pypi-dist/
+        if-no-files-found: error
+        retention-days: 14
+  publish-pypi:
+    name: Publish fastls to PyPI
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs:
+    - pypi-candidate
+    - publish-github-release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/fastls
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: pypi-validated
+        path: dist/
+    - name: Publish using PyPI Trusted Publishing
+      uses: pypa/gh-action-pypi-publish@106e0b0b7c337fa67ed433972f777c6357f78598
+      with:
+        packages-dir: dist/
+        attestations: true
 'on':
   push: null
   pull_request: null
