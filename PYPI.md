@@ -32,6 +32,10 @@ Python 新发行名为 `fastls`，导入名仍为 `fastls`；GitHub 仓库和 C 
 
 若上传拒绝授权，核对 Publisher 的四个 GitHub 字段和 PyPI 项目名；若只有部分文件上传成功，先核对服务端已接受文件的摘要，再制定恢复方案，不移动标签或重新构建同名版本来覆盖。默认没有 `skip-existing`，避免隐藏不一致。
 
+若上传工具在连接 PyPI 前失败，可以从 main 手动运行 `ci.yml`，填写原正式标签 CI 的 `pypi_run_id` 和 `pypi_version`（如 `0.1.3`）。该模式只执行 `Resume certified PyPI upload`：验证原运行是同仓库的已完成标签 push、标签提交未移动、原生/包集合/GitHub 发布门禁均已通过，再下载该运行的 `pypi-validated`，逐文件与正式 GitHub Release 的 SHA256SUMS、包元数据和原生来源摘要比较。不会重新编译、创建 GitHub Release 或跳过已有 PyPI 文件。普通完整 CI 不受该模式影响。
+
+发布 Action 固定到 PyPA v1.14.3 的提交 `7245906fb61fa33a13554f9d5fb856fe61758086`；更新时还须确认对应 GHCR 容器镜像存在，不能只确认 Git tag 存在。
+
 当前文档和配置不等于已经在 PyPI 发布成功。首次上传完成后，还需要在支持的系统安装 `python -m pip install --only-binary=:all: fastls==实际版本`，创建 Session、列配置并运行真实请求，以索引返回的包验证分发链路。
 
 源码包仅含 SDK，不编译或下载原生库。为避免不受支持的平台静默装入 SDK-only 包，普通用户推荐 `--only-binary=:all:`。安装及从旧包迁移见 [INSTALL.md](INSTALL.md)。

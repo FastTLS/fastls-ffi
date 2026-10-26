@@ -6,8 +6,9 @@ env:
     }}
   FASTLS_RELEASE_MODE: ${{ github.ref_type == 'tag' && 'true' || 'false' }}
 concurrency:
-  group: ffi-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ffi-ci-${{ github.workflow }}-${{ inputs.pypi_run_id != '' && format('pypi-{0}', inputs.pypi_version) ||
+    github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' || inputs.pypi_run_id == '' }}
 jobs:
   dependencies:
     runs-on: ubuntu-24.04
@@ -43,6 +44,7 @@ jobs:
       run: python scripts/ci.py resolve
     - name: Test package publication boundaries
       run: python tests/test_pypi.py
+    if: github.event_name != 'workflow_dispatch' || inputs.pypi_run_id == ''
   native:
     needs: dependencies
     name: Build / ${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
@@ -305,7 +307,7 @@ jobs:
         retention-days: 14
   required:
     name: All native tests
-    if: always()
+    if: always() && (github.event_name != 'workflow_dispatch' || inputs.pypi_run_id == '')
     needs:
     - dependencies
     - native
@@ -774,7 +776,48 @@ jobs:
         name: pypi-validated
         path: dist/
     - name: Publish using PyPI Trusted Publishing
-      uses: pypa/gh-action-pypi-publish@106e0b0b7c337fa67ed433972f777c6357f78598
+      uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
+      with:
+        packages-dir: dist/
+        attestations: true
+  resume-pypi:
+    name: Resume certified PyPI upload
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.pypi_run_id != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/p/fastls
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      PYPI_SOURCE_RUN: ${{ inputs.pypi_run_id }}
+      PYPI_VERSION: ${{ inputs.pypi_version }}
+    steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        persist-credentials: false
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+      with:
+        python-version: '3.11'
+    - name: Require certified tag, source run and successful release gates
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: python scripts/resume_pypi.py validate-run
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: pypi-validated
+        path: dist/
+        run-id: ${{ inputs.pypi_run_id }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Verify exact published bytes, package identity and source commit
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: python scripts/resume_pypi.py verify-files
+    - name: Upload original artifacts using the configured Trusted Publisher
+      uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
       with:
         packages-dir: dist/
         attestations: true
@@ -791,4 +834,10 @@ jobs:
         type: string
       imitate_ref:
         description: Reviewed FastTLS/imitate commit SHA (optional override)
+        type: string
+      pypi_run_id:
+        description: 'Resume only the PyPI upload from this certified tag-push run ID (blank: normal full CI)'
+        type: string
+      pypi_version:
+        description: Existing official X.Y.Z version to upload without rebuilding (used with pypi_run_id)
         type: string
