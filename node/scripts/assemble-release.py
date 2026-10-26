@@ -61,7 +61,7 @@ with tarfile.open(thin) as archive:
 pending=sorted({name for r in records for name in r['native']['release']['licenseReviewRequired']})
 report={'version':version,'revision':sha,'run_id':run['id'],'ci_url':run['html_url'],'python_scenarios':len(expected),'platforms':records,'thin':{'file':thin.name,'sha256':hashlib.sha256(thin.read_bytes()).hexdigest()},'npm_registry_published':False,'candidate_only':True,'license_review_required':pending}
 (destination/'node-release-manifest.json').write_text(json.dumps(report,indent=2)+'\n')
-notes=[f'@fastls/fastls {version} — GitHub prerelease', '',f'Validated source: `{sha}`.',f'Full CI: {run["html_url"]}.','',f'Each platform candidate passed {len(expected)+16} source and isolated installed checks.','', 'Install the matching platform archive using npm install and its GitHub download URL. The unsuffixed thin archive requires an external Fastls library.','', 'Platform candidates:']
+notes=[f'@fastls/fastls {version} — GitHub prerelease', '',f'Validated source: `{sha}`.',f'Full CI: {run["html_url"]}.','',f'Each platform candidate passed {len(expected)+20} source and isolated installed checks.','', 'Install the matching platform archive using npm install and its GitHub download URL. The unsuffixed thin archive requires an external Fastls library.','', 'Platform candidates:']
 notes += [f'- `{r["package"]["file"]}`' for r in records]
 notes += ['', 'Packages are distributed on GitHub only; nothing was published to the npm registry. Linux candidates require glibc; system requirements and native dependency licenses are recorded in each native manifest.', '', 'Verify SHA256SUMS and the GitHub artifact attestations. provenance.sigstore.json contains the signing bundle.']
 if pending:

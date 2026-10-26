@@ -728,6 +728,11 @@ jobs:
         name: node-functional-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node
           }}
         path: candidate
+    - name: Merge matching source evidence into the candidate
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: node-source-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
+        path: candidate/build
     - if: matrix.race
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
