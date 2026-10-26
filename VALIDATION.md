@@ -1,5 +1,7 @@
 # 第一阶段本地验收
 
+> 历史记录：本页仅描述 2026-10-23 的第一阶段本地候选。后续跨平台门禁和正式发布已经完成，当前状态见 [CI.md](CI.md)、[PACKAGING.md](PACKAGING.md) 和 [`v0.1.2` Release](https://github.com/FastTLS/fastls-ffi/releases/tag/v0.1.2)。
+
 日期：2026-10-23（Asia/Shanghai）。平台：Windows x64，Go1.26.10、Python3.11、已有Zig0.14.1工具链。
 
 ## 实际通过

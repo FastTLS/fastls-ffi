@@ -2,6 +2,8 @@
 
 正式版本生成内置动态库的 wheel 与 SDK-only sdist，只发布到 GitHub Releases，不上传 PyPI 或其他索引。验证结果以标签对应的 GitHub Actions 为准。
 
+当前正式版为 [`v0.1.2`](https://github.com/FastTLS/fastls-ffi/releases/tag/v0.1.2)，包含五个平台 wheel、一个 SDK-only sdist、逐平台构建/审计清单、`SHA256SUMS` 和 `provenance.sigstore.json`。`v0.1.0`、`v0.1.1` 是修复发布流程时保留的历史标签，没有对应正式 Release。
+
 普通 CI 使用唯一的 `0.1.0.dev<run-number>` 开发版本。只有通过平台 `release` 验收后，wheel、sdist、原生审计记录和 `development-snapshot.json` 才会作为 `development-snapshot-*` 产物保留14天，并标记 `development-only`、`publishable: false`。
 
 推送 `v*` 标签时，版本号由标签确定；同一矩阵生成 `release-manifest.json`，标记 `official`、`publishable: true`。汇总作业只选择 Go 1.26.10 的五个平台认证结果，生成 `SHA256SUMS` 和 Sigstore/GitHub 来源证明，并创建 GitHub Release。前瞻 Go 版本仍参与兼容性门禁，但不重复发布同平台 wheel。仓库中的 `python/VERSION` 保持本地开发默认值；标签构建不会上传 PyPI。

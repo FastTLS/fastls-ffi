@@ -1,6 +1,10 @@
 # fastls-ffi
 
 Fastls 的 C ABI 动态库和 Python SDK。正式 wheel、SDK-only sdist 和签发材料仅通过 GitHub Releases 发布，不上传 PyPI。
+
+> 当前正式版：[`v0.1.2`](https://github.com/FastTLS/fastls-ffi/releases/tag/v0.1.2)。该版本包含 Windows amd64、Linux amd64/arm64、macOS amd64/arm64 wheel、SDK-only sdist、SHA-256 校验和和 Sigstore/GitHub 来源证明。
+
+完整自定义Spec输入与ABI能力协商的下一步评估见[profile.Spec输入计划](PROFILE_SPEC_PLAN.md)；当前`profile`参数仍为规范ID字符串。
 指纹生成复用独立 `FastTLS/imitate`，请求侧复用 `FastTLS/fastls`；Python 无需手动接入 Provider。
 
 ## 本地构建
@@ -114,7 +118,7 @@ Session默认自动管理Cookie，提供session.cookies查询、设置、删除�
 Python默认流式解码gzip、deflate、br及zstd，可通过decode_content=False取得原始正文。Timeout支持总时限及连接、响应头、正文读取预算；用法、原始头视图与解码上限见[STREAMING_TIMEOUTS.md](STREAMING_TIMEOUTS.md)。
 已支持同步/异步流式上传及write超时，见[STREAMING_UPLOAD.md](STREAMING_UPLOAD.md)。HTTP/2支持显式全双工：异步使用duplex=True，同步使用Session.duplex()手动交互，见[DUPLEX.md](DUPLEX.md)。Python同步与asyncio新增session.sse()按事件消费SSE，支持id/retry、手动恢复及大小限制，见[SSE.md](SSE.md)。代理与WebSocket支持分别见[PROXY.md](PROXY.md)和[WEBSOCKET.md](WEBSOCKET.md)；当前不提供自定义完整Spec，text按UTF-8解码，也不提供完整requests/httpx兼容。
 指纹TCP TLS请求始终启用证书校验；未提供关闭校验选项。
-本仓库尚未公开发布。许可证、sdist、升级/卸载和Linux glibc范围已经纳入release门禁；最终版本号、发布签署及目标索引凭据仍由维护者决定，不能把本地构建或Actions artifact当成已发布版本。
+许可证、sdist、升级/卸载和 Linux glibc 范围均已纳入 release 门禁。只有 GitHub Release 中与正式标签对应的附件属于正式版本；普通 Actions artifact 仍是限时开发产物，不能替代正式发布附件。
 
 ```shell
 go test ./internal/bridge

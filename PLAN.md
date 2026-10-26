@@ -1,8 +1,10 @@
 # Fastls 跨语言封装实施规划
 
+> 归档说明：本文记录首版实施过程。WebSocket、跨平台 wheel、发布门禁和正式发布均已完成；当前正式版为 [`v0.1.2`](https://github.com/FastTLS/fastls-ffi/releases/tag/v0.1.2)。后续状态以 README、CI.md、PACKAGING.md 和 GitHub Release 为准。
+
 下一轮按三方对照结果推进：先建立公平性能/资源基准，再验收代理、常用Python参数、内置动态库分发及WebSocket。范围和完成条件见 [NEXT_PHASE.md](NEXT_PHASE.md)，N1执行入口见 [BENCHMARKS.md](BENCHMARKS.md)；功能和性能结论以实际验收记录为准。
 
-日期：2026-10-24。状态：第一阶段及三轮测试扩展已完成；第二阶段已实现会话/连接池、多值响应头、Cookie、流式解码及分层超时。第三阶段已完成流式上传、独立写入预算、HTTP/2全双工、SSE工具和状态通知，WebSocket和发布阶段待实施。开发候选，未发布。
+日期：2026-10-24。历史状态：本文后续各节按实施时点记录，不用其中的“待实施/未发布”判断当前版本。
 
 ## 目标与仓库边界
 

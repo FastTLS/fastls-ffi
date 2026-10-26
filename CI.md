@@ -24,11 +24,11 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 可将这个检查设为分支保护的必需检查。
 
 每组上传独立命名的artifact，保留14天：动态库、C头文件、wheel、C示例可执行文件、构建摘要和检查日志。
-当前候选 wheel 内置动态库；使用范围与尚未完成的发布认证见 [PACKAGING.md](PACKAGING.md)。
+正式 wheel 内置动态库；平台范围、安装方式和发布认证见 [PACKAGING.md](PACKAGING.md)。
 
-## 上线前必须绑定当前依赖
+## 固定的正式依赖
 
-F3 本地集成分支已生成不可变提交，`ci/dependencies.json` 固定以下候选；执行远端矩阵前须先推送这些提交，当前文档不把本地提交声称为已发布：
+`ci/dependencies.json` 固定以下已发布提交；更新任一依赖后必须重新执行完整远端矩阵：
 
 - fastls：a57a7c51852b80976a07d7ce50ab758c22d44434（`v0.1.1`）。
 - ftransport：2e1d66a7983b4fe730d18c3b8b90831ae6e93db5（`v0.1.0`）。
@@ -43,7 +43,7 @@ Fastls依赖包含连接生命周期、隔离的私有CA根配置、可复用Ses
 2. 仓库Actions变量FASTLS_REF、FTRANSPORT_REF、IMITATE_REF。
 3. 提交到ci/dependencies.json的fastls_ref、ftransport_ref、imitate_ref。
 
-不接受浮动分支名。上游依赖使用 `v0.1.0` 正式标签，可在关闭 `go.work`、没有 `replace` 的干净模块中解析；本地 `go.work` 仍显式绑定标签对应的同一批提交。
+不接受浮动分支名。上游依赖使用 `fastls v0.1.1`、`ftransport v0.1.0` 和 `imitate v0.1.0` 正式标签，可在关闭 `go.work`、没有 `replace` 的干净模块中解析；本地 `go.work` 仍显式绑定标签对应的同一批提交。
 本仓库push会启动工作流；工作流不是本地文件写好后就已在GitHub执行。
 
 ## 本地复现
@@ -58,7 +58,7 @@ python scripts/ci.py run
 CI脚本核对Go目标与runner架构一致；跨平台二进制必须在相应runner上实际加载。
 运行证据写入 `build/ci-*/<stage>/results.json`，包含整体结果、每项开始时间、耗时、退出码及检出的仓库提交；子进程日志实时输出，逐项持久化，失败保留先前记录。
 
-当前状态：工作流已配置，上游提交已推送并绑定。远端运行结果应以GitHub Actions实际作业及artifact为准。
+当前状态：[`v0.1.2` 正式矩阵](https://github.com/FastTLS/fastls-ffi/actions/runs/40188168622)及标签基准测试已通过，并创建对应 GitHub Release。后续运行结果仍以具体 GitHub Actions 作业及附件为准。
 
 ## 稳定性扩展
 
