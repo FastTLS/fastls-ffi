@@ -93,7 +93,7 @@ def main():
                     for name, path in (("fastls-ffi", ROOT), ("fastls", fastls),
                                        ("ftransport", ftransport), ("imitate", imitate))} if args.local else {},
         "library_sha256": hashlib.sha256((out / name).read_bytes()).hexdigest(),
-        "note": "Unpublished development build. A local workspace build does not validate remote dependency availability.",
+        "note": "Native build metadata. Consult the release manifest for publication and certification status.",
     }, indent=2) + "\n", encoding="utf-8")
     print(out / name)
 

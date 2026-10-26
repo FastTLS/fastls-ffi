@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel>=0.43"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fastls-ffi"
+name = "fastls"
 dynamic = ["version"]
-description = "Python bindings for the Fastls shared library (development preview)"
+description = "Browser-profile HTTP client with streaming Python bindings to Fastls"
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.10"

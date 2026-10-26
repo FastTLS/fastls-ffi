@@ -196,6 +196,8 @@ def run(stage="all"):
             execute("native-audit", [sys.executable, "scripts/native_audit.py", str(ROOT / "dist" / library_name())])
             wheel_env = dict(env, FASTLS_BUNDLE_LIBRARY=str(ROOT / "dist" / library_name()))
             execute("wheel-build", [sys.executable, "-m", "pip", "wheel", "./python", "--no-deps", "-w", "dist"], command_env=wheel_env)
+            if sys.platform == "linux":
+                execute("manylinux-wheel", [sys.executable, "scripts/repair_linux_wheel.py"])
             execute("sdist-build", [sys.executable, "setup.py", "sdist", "--dist-dir", str(ROOT / "dist")], ROOT / "python")
             if sdk_inputs() != sdk_before:
                 raise RuntimeError("SDK inputs changed during build; rebuild the candidate")
