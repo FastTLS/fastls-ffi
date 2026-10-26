@@ -11,7 +11,7 @@ import { randomUUID, createHash } from 'node:crypto';
 export { assert, delay, readFileSync, randomUUID };
 export const root = resolve(import.meta.dirname, '../..');
 const require = createRequire(import.meta.url);
-const entry = process.env.FASTLS_NODE_PACKAGE ? createRequire(resolve(process.env.FASTLS_NODE_PACKAGE, 'package.json')).resolve('@fasttls/fastls') : require.resolve('..');
+const entry = process.env.FASTLS_NODE_PACKAGE ? createRequire(resolve(process.env.FASTLS_NODE_PACKAGE, 'package.json')).resolve('@fastls/fastls') : require.resolve('..');
 if(process.env.FASTLS_NODE_PACKAGE)assert.ok(entry.startsWith(realpathSync(resolve(process.env.FASTLS_NODE_PACKAGE,'node_modules'))+'/')||entry.startsWith(realpathSync(resolve(process.env.FASTLS_NODE_PACKAGE,'node_modules'))+'\\'),'installed suite resolved repository sources');
 export const sdkEntry = entry;
 export const sdk = require(entry);

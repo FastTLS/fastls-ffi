@@ -1,4 +1,4 @@
-import { Session, ServerSentEvent, type SSEOptions, type SSEStream, type RequestOptions, type Response, type StreamResponse } from '@fasttls/fastls';
+import { Session, ServerSentEvent, type SSEOptions, type SSEStream, type RequestOptions, type Response, type StreamResponse } from '@fastls/fastls';
 
 async function consume(session: Session): Promise<void> {
   const proxied = new Session({ proxy: 'https://127.0.0.1:8080', proxyCaFile: '/path/to/proxy-ca.pem' });

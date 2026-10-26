@@ -498,6 +498,11 @@ jobs:
       run: npm test --prefix node
     - name: Full installed native package suite
       run: npm run test:package --prefix node
+    - name: Verify npm platform dependency installation
+      run: npm run test:npm --prefix node
+    - name: Verify npm release rejection paths
+      if: matrix.target == 'linux-amd64' && matrix.node == '24'
+      run: python node/scripts/test-npm-release.py
     - name: Save binaries and evidence
       if: always()
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f

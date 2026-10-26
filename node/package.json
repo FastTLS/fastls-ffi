@@ -1,5 +1,5 @@
 {
-  "name": "@fasttls/fastls",
+  "name": "@fastls/fastls",
   "version": "0.10.1-dev.0",
   "description": "Node.js bindings for the Fastls C ABI",
   "main": "./dist/index.js",
@@ -34,7 +34,10 @@
     "test:ws": "npm run build && node --expose-gc --test tests/parity-websocket.mjs tests/parity-websocket-cookies.mjs",
     "test:quick": "npm run build && npm run test:types && npm run test:parity && node --expose-gc --test --test-concurrency=1 tests/native.test.mjs tests/parity-websocket.mjs tests/parity-websocket-cookies.mjs && node scripts/test-cookie-compat.mjs",
     "test:ws:soak": "node --expose-gc --max-semi-space-size=16 --test tests/ws-recovery.mjs",
-    "test:compat": "npm run build && node scripts/test-cookie-compat.mjs"
+    "test:compat": "npm run build && node scripts/test-cookie-compat.mjs",
+    "pack:npm": "node scripts/pack-npm.mjs",
+    "test:npm": "node scripts/test-npm.mjs",
+    "publish:npm": "node scripts/publish-npm.mjs"
   },
   "dependencies": {
     "koffi": "3.3.3",
@@ -44,5 +47,14 @@
     "@types/node": "22.20.5",
     "typescript": "7.0.2"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FastTLS/fastls-ffi.git",
+    "directory": "node"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }
