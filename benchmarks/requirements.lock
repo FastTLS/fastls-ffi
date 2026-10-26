@@ -1,4 +1,5 @@
-# Benchmark-only dependencies. The SDK still has no third-party Python runtime dependencies.
+# Locked benchmark clients and the Fastls SDK's cookie-policy dependency.
+publicsuffixlist==1.1.2.20261023
 certifi==2026.10.23
 charset-normalizer==3.5.2
 idna==3.20
