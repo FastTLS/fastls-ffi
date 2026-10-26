@@ -3,6 +3,11 @@
 Fastls 的 C ABI 动态库和 Python SDK。正式 wheel、SDK-only sdist 和签发材料仅通过 GitHub Releases 发布，不上传 PyPI。
 指纹生成复用独立 `FastTLS/imitate`，请求侧复用 `FastTLS/fastls`；Python 无需手动接入 Provider。
 
+## 安装 Python SDK
+
+普通用户可直接从 GitHub Release 安装内置动态库的平台 wheel，无需 Go 或 C 编译器。
+完整命令、五个平台的选择、安装验证、升级卸载及常见问题见 [安装指南](INSTALL.md)。
+
 ## 本地构建
 
 从源码开发需要 Go 1.26+ 与目标平台的 cgo C 编译器。修改多个上游仓库时可使用本地兄弟仓库：
