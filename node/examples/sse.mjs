@@ -1,4 +1,4 @@
-import { Session } from '@fasttls/fastls';
+import { Session } from '@fastls/fastls';
 
 const url = process.argv[2];
 if (!url) throw new Error('Usage: node examples/sse.mjs https://example.com/events');

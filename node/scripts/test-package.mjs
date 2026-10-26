@@ -56,7 +56,7 @@ try {
   // verify the required package gate using a copy of our actual metadata with
   // a deliberately incompatible CPU declaration.
   const incompatibleSource = resolve(incompatible, 'source'); mkdirSync(incompatibleSource);
-  const targetMetadata = JSON.parse(readFileSync(resolve(temporary, 'node_modules/@fasttls/fastls/package.json'), 'utf8'));
+  const targetMetadata = JSON.parse(readFileSync(resolve(temporary, 'node_modules/@fastls/fastls/package.json'), 'utf8'));
   const wrongMetadata = { ...targetMetadata, cpu: ['wrong-architecture'] }; delete wrongMetadata.dependencies;
   writeFileSync(resolve(incompatibleSource, 'package.json'), JSON.stringify(wrongMetadata));
   const [wrongPackage] = JSON.parse(run([npmCLI, 'pack', '--json', '--ignore-scripts', '--pack-destination', incompatible], incompatibleSource, env));
@@ -66,12 +66,12 @@ try {
     process.stderr.write(rejected.stderr ?? '');
     throw rejected.error ?? Error(`npm did not reject an incompatible candidate (exit ${rejected.status})`);
   }
-  const installed = resolve(temporary, 'node_modules/@fasttls/fastls');
+  const installed = resolve(temporary, 'node_modules/@fastls/fastls');
   const nativePath = resolve(installed, 'native', packed.native.file);
   const nativeHash = sha256(nativePath);
   // Resolve from the consumer; resolving inside this package uses self-reference
   // even when require.resolve receives a different paths array.
-  run(['-e', `const assert=require('node:assert/strict');const {createRequire}=require('node:module');const path=require('node:path');const req=createRequire(path.join(process.cwd(),'package.json'));const entry=req.resolve('@fasttls/fastls');assert.equal(entry,require('node:fs').realpathSync(process.argv[1]));const {Native}=req(path.join(path.dirname(entry),'native.js'));assert.equal(Native.load().path,require('node:fs').realpathSync(process.argv[2]));`, resolve(installed,'dist/index.js'), nativePath], temporary, env);
+  run(['-e', `const assert=require('node:assert/strict');const {createRequire}=require('node:module');const path=require('node:path');const req=createRequire(path.join(process.cwd(),'package.json'));const entry=req.resolve('@fastls/fastls');assert.equal(entry,require('node:fs').realpathSync(process.argv[1]));const {Native}=req(path.join(path.dirname(entry),'native.js'));assert.equal(Native.load().path,require('node:fs').realpathSync(process.argv[2]));`, resolve(installed,'dist/index.js'), nativePath], temporary, env);
   if (nativeHash !== packed.native.sha256) throw Error('Bundled native library differs from manifest');
   for (const file of ['types.mts', 'types.cts']) copyFileSync(resolve(root, 'tests', file), resolve(temporary, file));
   run([resolve(root, 'node_modules/typescript/bin/tsc'), '--ignoreConfig', '--noEmit', '--strict',
@@ -89,20 +89,20 @@ try {
   if (parity.cases.length !== scenarioCount || !parity.cases.every(test => test.passed)) throw new Error('Incomplete Python parity suite');
   // Exercise package exports by name, not just by absolute entry filenames.
   process.stdout.write(run(['--input-type=module', '-e',
-    "import {Session,ServerSentEvent,SSEStream} from '@fasttls/fastls'; import {createRequire} from 'node:module'; const cjs=createRequire(import.meta.url)('@fasttls/fastls'); if(Session!==cjs.Session||ServerSentEvent!==cjs.ServerSentEvent||SSEStream!==cjs.SSEStream)throw Error('entry mismatch'); if(new ServerSentEvent('{\"ok\":true}').json().ok!==true)throw Error('event JSON'); const s=new Session(); try {if(!s.listProfiles().includes('chrome/156/windows'))throw Error('missing profile')}finally{s.close()}"], temporary, env));
+    "import {Session,ServerSentEvent,SSEStream} from '@fastls/fastls'; import {createRequire} from 'node:module'; const cjs=createRequire(import.meta.url)('@fastls/fastls'); if(Session!==cjs.Session||ServerSentEvent!==cjs.ServerSentEvent||SSEStream!==cjs.SSEStream)throw Error('entry mismatch'); if(new ServerSentEvent('{\"ok\":true}').json().ok!==true)throw Error('event JSON'); const s=new Session(); try {if(!s.listProfiles().includes('chrome/156/windows'))throw Error('missing profile')}finally{s.close()}"], temporary, env));
   // Validate candidate failures in fresh processes, before the library is loaded.
   const manifestPath = resolve(installed, 'native/manifest.json');
   const originalManifest = readFileSync(manifestPath, 'utf8');
   const installedPackage = JSON.parse(readFileSync(resolve(installed, 'package.json'), 'utf8'));
   if (!installedPackage.private || installedPackage.scripts || installedPackage.os[0] !== process.platform || installedPackage.cpu[0] !== process.arch) throw Error('Candidate package metadata is unsafe or incorrect');
-  const rejectCandidate = pattern => run(['-e', `const assert=require('node:assert/strict');const {Session}=require('@fasttls/fastls');assert.throws(()=>new Session(),e=>${pattern}.test(String(e.cause)));`], temporary, env);
+  const rejectCandidate = pattern => run(['-e', `const assert=require('node:assert/strict');const {Session}=require('@fastls/fastls');assert.throws(()=>new Session(),e=>${pattern}.test(String(e.cause)));`], temporary, env);
   try {
     writeFileSync(manifestPath, JSON.stringify({ ...packed.native, arch: 'wrong-architecture' }));
     rejectCandidate('/platform mismatch/');
     // Explicit options and environment overrides must still work when the
     // embedded candidate cannot be used; both load the actual installed DLL.
-    run(['-e', `const {Session}=require('@fasttls/fastls');const s=new Session({library:process.argv[1]});s.close();` , nativePath], temporary, env);
-    run(['-e', `const {Session}=require('@fasttls/fastls');const s=new Session();s.close();`], temporary, { ...env, FASTLS_LIBRARY: nativePath });
+    run(['-e', `const {Session}=require('@fastls/fastls');const s=new Session({library:process.argv[1]});s.close();` , nativePath], temporary, env);
+    run(['-e', `const {Session}=require('@fastls/fastls');const s=new Session();s.close();`], temporary, { ...env, FASTLS_LIBRARY: nativePath });
     writeFileSync(manifestPath, JSON.stringify({ ...packed.native, sha256: '0'.repeat(64) }));
     rejectCandidate('/SHA-256 mismatch/');
     if (process.platform === 'linux') {

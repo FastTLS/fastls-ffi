@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import { createRequire } from "node:module";
 import { FastlsError } from "./errors.js";
 
 const verified = new Set<string>();
@@ -14,7 +15,25 @@ export function libraryPath(library?: string, packageRoot = resolve(__dirname, "
     : process.platform === "darwin" ? "libfastls.dylib" : "libfastls.so";
   try {
     if (override !== undefined) return realpathSync(resolve(override));
-    const manifestPath = resolve(packageRoot, "native/manifest.json");
+    let nativeRoot = packageRoot;
+    let manifestPath = resolve(nativeRoot, "native/manifest.json");
+    if (!existsSync(manifestPath) && !existsSync(resolve(packageRoot, "src/native.ts"))) {
+      const suffix = `${process.platform}-${process.arch}${process.platform === "linux" ? "-glibc" : ""}`;
+      const require = createRequire(resolve(packageRoot, "package.json"));
+      let metadataPath: string;
+      try {
+        metadataPath = require.resolve(`@fastls/fastls-${suffix}/package.json`);
+      } catch (cause) {
+        throw new Error(`no native manifest or optional package for ${suffix}; reinstall with optional dependencies enabled or supply an external library`, { cause });
+      }
+      const installed = JSON.parse(readFileSync(metadataPath, "utf8"));
+      const wrapper = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8"));
+      if (installed.name !== `@fastls/fastls-${suffix}` || installed.version !== wrapper.version) {
+        throw new Error("native package version mismatch; reinstall matching Fastls packages");
+      }
+      nativeRoot = resolve(metadataPath, "..");
+      manifestPath = resolve(nativeRoot, "native/manifest.json");
+    }
     if (!existsSync(manifestPath)) {
       if (!existsSync(resolve(packageRoot, "src/native.ts"))) throw new Error("installed package has no native manifest; supply an external library");
       return realpathSync(resolve(packageRoot, "../dist", name));
@@ -36,7 +55,7 @@ export function libraryPath(library?: string, packageRoot = resolve(__dirname, "
       const [major, minor] = current.split(".").map(Number), [minMajor, minMinor] = minimum.split(".").map(Number);
       if (major < minMajor || (major === minMajor && minor < minMinor)) throw new Error(`candidate requires glibc >= ${minimum}; found ${current}`);
     }
-    const path = realpathSync(resolve(packageRoot, "native", name)), stat = statSync(path);
+    const path = realpathSync(resolve(nativeRoot, "native", name)), stat = statSync(path);
     const key = `${path}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}:${manifest.sha256}`;
     if (!verified.has(key)) {
       if (createHash("sha256").update(readFileSync(path)).digest("hex") !== manifest.sha256) throw new Error("candidate library SHA-256 mismatch");

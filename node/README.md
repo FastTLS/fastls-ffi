@@ -23,11 +23,11 @@ npm run build
 Koffi 自身需要对应平台的原生组件，其依赖不等同于 Fastls 动态库。
 
 可运行 `npm pack` 生成本地安装包，再在目标项目中执行 `npm install <安装包绝对路径>`。
-包名暂定 `@fasttls/fastls`，不表示已占用 npm 名称或已发布。
+包名为 `@fastls/fastls`，尚未发布 npm。npm 分发采用主包加五个平台原生库包，自动安装对应平台依赖；发布准备、账号配置与验收步骤见 [NPM_RELEASE.md](NPM_RELEASE.md)。
 
 ```js
-import { Session } from '@fasttls/fastls';
-// CommonJS: const { Session } = require('@fasttls/fastls');
+import { Session } from '@fastls/fastls';
+// CommonJS: const { Session } = require('@fastls/fastls');
 
 const session = new Session({
   profile: 'chrome/156/windows',
@@ -257,7 +257,7 @@ CI 运行时还记录提交 SHA。测试前后会核对动态库未被替换。�
 ## 内置动态库的候选安装包（0.6）
 
 构建本平台Go动态库后，运行 `npm run pack:native`，产物位于上级 `dist/`。
-例如Windows x64：`fasttls-fastls-0.6.0-dev.0-win32-x64.tgz`；Linux包名另带`-glibc`。
+例如Windows x64：`fastls-fastls-0.6.0-dev.0-win32-x64.tgz`；Linux包名另带`-glibc`。
 在目标项目执行 `npm install <候选包绝对路径> --ignore-scripts`，随后即可 `new Session()`，无需Go、Python、编译器或FASTLS_LIBRARY。
 安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整225项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
 
