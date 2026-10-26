@@ -14,7 +14,7 @@ Python 新发行名为 `fastls`，导入名仍为 `fastls`；GitHub 仓库和 C 
 
 对应仓库文件为 `.github/workflows/ci.yml`，上传 job 声明 `environment: pypi` 和 `id-token: write`。GitHub 仓库可在 Settings → Environments 配置 `pypi` 的保护规则。无需提供密码或长期 API Token。
 
-用户已确认添加 Publisher；该操作不上传文件、不创建项目，也不保留包名。首次成功上传后才会创建项目；包名是否可用仍以 PyPI 服务端为准。[官方说明](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
+添加 Pending Publisher 本身不上传文件、不创建项目，也不保留包名。首次成功上传后才会创建项目；包名是否可用仍以 PyPI 服务端为准。[官方说明](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
 
 ## 构建和上传条件
 
@@ -32,6 +32,18 @@ Python 新发行名为 `fastls`，导入名仍为 `fastls`；GitHub 仓库和 C 
 
 若上传拒绝授权，核对 Publisher 的四个 GitHub 字段和 PyPI 项目名；若只有部分文件上传成功，先核对服务端已接受文件的摘要，再制定恢复方案，不移动标签或重新构建同名版本来覆盖。默认没有 `skip-existing`，避免隐藏不一致。
 
-当前文档和配置不等于已经在 PyPI 发布成功。首次上传完成后，还需要在支持的系统安装 `python -m pip install --only-binary=:all: fastls==实际版本`，创建 Session、列配置并运行真实请求，以索引返回的包验证分发链路。
+若上传工具在连接 PyPI 前失败，可以从 main 手动运行 `ci.yml`，填写原正式标签 CI 的 `pypi_run_id` 和 `pypi_version`（如 `0.1.3`）。该模式只执行 `Resume certified PyPI upload`：验证原运行是同仓库的已完成标签 push、标签提交未移动、原生/包集合/GitHub 发布门禁均已通过，再下载该运行的 `pypi-validated`，逐文件与正式 GitHub Release 的 SHA256SUMS、包元数据和原生来源摘要比较。不会重新编译、创建 GitHub Release 或跳过已有 PyPI 文件。普通完整 CI 不受该模式影响。
+
+发布 Action 固定到 PyPA v1.14.3 的提交 `7245906fb61fa33a13554f9d5fb856fe61758086`；更新时还须确认对应 GHCR 容器镜像存在，不能只确认 Git tag 存在。
+
+每次上传完成后，还需要在支持的系统安装 `python -m pip install --only-binary=:all: fastls==实际版本`，创建 Session、列配置并运行真实请求，以索引返回的包验证分发链路。
 
 源码包仅含 SDK，不编译或下载原生库。为避免不受支持的平台静默装入 SDK-only 包，普通用户推荐 `--only-binary=:all:`。安装及从旧包迁移见 [INSTALL.md](INSTALL.md)。
+
+## v0.1.3 发布记录
+
+2026-10-26，[fastls 0.1.3](https://pypi.org/project/fastls/0.1.3/) 首次发布成功，包含五个平台 wheel 和一个 SDK-only sdist。[原正式 CI](https://github.com/FastTLS/fastls-ffi/actions/runs/40309964336) 完成运行验收与 GitHub Release，但旧版上传 Action 的容器镜像不存在，上传前失败。更新上传工具后，[恢复上传](https://github.com/FastTLS/fastls-ffi/actions/runs/40314270279) 使用同一批通过认证的文件成功发布。六个文件均已与正式 GitHub Release 的 SHA256SUMS 比较通过；原标签和运行时源码提交 `f87f44148b79c7f60d92d0d3bf98ab7a29800f90` 保持不变。
+
+原 CI 的 macOS ARM64 Node 大响应测试曾超时；同源码和同产物完整重跑该任务后，源码与安装包各 225 项通过，未重现超时。该次重跑没有放宽超时、跳过测试或修改运行时代码；原始失败记录保留在正式 CI 中。
+
+发布后在全新 Windows x64 虚拟环境中从官方 PyPI 安装 `fastls==0.1.3`，确认下载来源为 files.pythonhosted.org，包摘要同时匹配 PyPI 与 GitHub，原生库位于虚拟环境且 ABI 为 1。使用 `chrome/156/windows` 通过独立本地 CA 靶场验证 HTTPS HTTP/1.1、HTTP/2、64 MiB 流式下载及正文摘要、WebSocket 回显和 asyncio 请求。该安装复验仅在 Windows 本机运行；其它平台的认证来自原正式 CI。
