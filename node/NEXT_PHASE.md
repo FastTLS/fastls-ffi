@@ -105,3 +105,5 @@ C先落地最小调度改造，让A/B尽快获得独立反馈；随后与根目�
 ## main合并及GitHub签发
 
 本轮保留main的ftransport依赖与Python发布流水线，将Node功能/长测复用同一构建并纳入required。整合main新增的Cookie、尾部字段和响应元数据行为后，本地源码及真正隔离安装包各225项通过（209项Python行为/15套件/43适配）。node-release.yml在验证指定main成功run后生成GitHub预发布、SHA256与来源证明；npm仓库发布不在流程内。原生imitate依赖授权待审事项随候选manifest保留。
+
+macOS ARM首次安装回归的心跳检查暴露固定80ms采样窗口问题；改为在原生等待请求存活期间观测两个心跳再取消，仍限制1秒内推进及最大事件循环延迟1秒，不放宽回收或内存阈值。
