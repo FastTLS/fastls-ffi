@@ -1,5 +1,7 @@
 # Fastls Node.js SDK
 
+> 发布状态（2026-10-27）：0.10.1 已完成认证，尚待 npm 账号验证后上传。当前可安装 0.10.1-dev.0；下文新增接口与 0.10.1 安装命令需正式发布后使用。
+
 Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应正式版 **0.10.1**，发行文件与版本状态以 npm registry 为准。
 
 支持 HTTP/1.1、HTTP/2、流式上传下载、双工、SSE、WebSocket、会话 Cookie 和 HTTP/HTTPS/SOCKS 代理。网络请求由 Go 执行，通过 Koffi 在当前 Node 进程中调用；使用者无需 Python 或 RPC 服务。
@@ -88,7 +90,7 @@ Fastls 原有 `Session.request/stream/duplex/sse/websocket` 保留，适合需�
 
 未知 profile 报错；Match 保留生成身份和协议基线信息，不承诺与真实浏览器指纹完全等价。
 
-`request('PUT', url, options)` 等可使用其它合法方法；便捷方法只有 `get` 和 `post`。请求头的值为字符串；`trailers` 的值为字符串或只读字符串数组，名称和值由原生层继续验证，且要求 `request_trailers` 能力。
+`request('PUT', url, options)` 等可使用其它合法方法；便捷方法包括 `get/post/put/patch/delete/head/options`。请求头的值为字符串；`trailers` 的值为字符串或只读字符串数组，名称和值由原生层继续验证，且要求 `request_trailers` 能力。
 
 `url` 是最终响应 URL，`httpVersion` 是实际 HTTP 协议版本。缓存响应已经读到 EOF，包含最终 `trailers`；流式响应先消费正文，再读取最终尾部字段。提前关闭不代表已经收到全部 trailers。
 
@@ -125,7 +127,7 @@ try {
 - JSON/表单在内存中编码；超过512KiB自动转为流式上传，不是大型数据增量编码器。默认Content-Type仅在没有会话/请求自定义头时设置；编码正文拒绝Content-Length/Transfer-Encoding。原始body沿用原有规则。
 - `files`接受对象、Map或重复字段对数组。每个文件是Uint8Array、`MultipartReader`，或`[filename, body, contentType?]`；filename为null省略filename参数。默认从读取器name/字段名取文件名；内置固定MIME推断只覆盖txt/json/html/csv/png/jpg/jpeg/pdf，其它类型请显式指定，缺省application/octet-stream。不支持自定义分部头。
 - multipart可配合form字段，每次read最多64KiB，空Uint8Array表示EOF；支持同步/Promise读取器。无需seek/长度/临时文件，不全量缓存文件；调用方负责close和重新定位，成功、失败、取消均保留读取器所有权。提供给read的AbortSignal可中断自定义等待；不可取消的Promise会延后closeAsync清理。Node Readable及FileHandle不能直接作为此读取器，应适配其读取接口；现有原始body的Readable销毁规则不变。
-- multipart管理随机boundary及Content-Type，拒绝会话或请求中显式Content-Type；元数据拒绝控制字符。正文仅使用一次，307/308不自动重放，301/302/303沿用核心GET转换规则。
+- multipart管理随机boundary及Content-Type，拒绝会话或请求中显式Content-Type；元数据拒绝控制字符。正文仅使用一次，307/308不自动重放，301/302/303按 SDK 规则转换方法和丢弃正文。
 - request/get/post/stream/sse与自动duplex共享参数处理；multipart不支持duplex。手动duplex只接受params，正文继续send()/finishUpload()。自动双工支持JSON/表单且关闭重定向。
 
 ## 流式下载和取消
@@ -162,7 +164,7 @@ try {
 
 Session 复用原生会话的 H1 keep-alive 和 H2 多路复用；不同 Session 隔离。
 `session.closeIdleConnections()` 释放空闲连接，保留 Cookie。
-Cookie 自动管理和重定向处理均由 Go 完成：
+Cookie 自动管理和重定向处理均由 JavaScript SDK 完成；原生上下文只负责传输：
 
 ```js
 session.cookies.set('token', 'value', { url: 'https://example.com', path: '/', secure: true });
@@ -192,13 +194,13 @@ try {
 } finally { await session.closeAsync(); }
 ```
 
-Session和请求的`proxy`接受URL字符串或null。请求省略或undefined继承会话默认值；null或空字符串直连。普通请求、stream、sse、自动/手动duplex遵循相同规则。传入其它类型会报TypeError。显式代理要求原生`proxy_tunnels`能力；旧ABI-v1库仍可直连，代理请求在登记请求句柄前报错。
+Session和请求的`proxy`接受URL字符串或null。请求省略或undefined继承会话默认值；null或空字符串直连。普通请求、stream、sse、自动/手动duplex遵循相同规则。传入其它类型会报TypeError。显式代理要求原生`proxy_tunnels`能力；当前 SDK 始终要求 transport_context_v1；缺少代理能力时，代理请求在登记句柄前报错。
 
 `http://`对HTTP和HTTPS目标均使用HTTP/1.1 CONNECT，默认端口80。`socks5://`本机解析目标域名，`socks5h://`交给代理解析，默认端口1080。支持HTTP Basic和SOCKS用户名/密码认证，凭据按URL规则转义，例如密码中的@写成%40。不读取HTTP_PROXY、HTTPS_PROXY、ALL_PROXY、NO_PROXY及其小写形式。`https://`在代理TLS中运行HTTP/1.1 CONNECT，默认端口443，证书和主机名验证始终开启，不回退到明文。HTTPS代理另要求原生`https_proxy_tls`能力；暂不支持SOCKS4或PAC，详情见上级PROXY.md。
 
 `proxyCaFile`只控制HTTPS代理信任，`caFile`只控制目标信任，两者互不代替。未设置代理CA使用系统根；提供文件则替换系统根。构造Session时读取默认代理CA一次，请求指定路径时重新读取；请求undefined继承默认，null恢复系统根。直连、HTTP和SOCKS忽略代理CA默认值及请求覆盖。代理地址及凭据、profile、代理CA和目标CA共同隔离连接池。目标证书仍需验证；目标请求禁止设置Proxy-Authorization和Proxy-Connection。认证只用于代理握手，错误消息不回显凭据或代理任意响应短语。握手计入connect和total预算，AbortSignal取消会关闭未建立的隧道；取消单条H2流继续复用健康的共享隧道。代理拒绝后不降级或自动重试。
 
-代理测试使用Node测试进程中的独立、仅访问loopback的CONNECT/RFC1928/RFC1929靶场；SDK本身不依赖Python或代理辅助进程。十三组Python行为映射、源码及内置库安装包统一验收；语言适配见PARITY.md。
+代理测试使用Node测试进程中的独立、仅访问loopback的CONNECT/RFC1928/RFC1929靶场；SDK本身不依赖Python或代理辅助进程。16 组 Python 行为映射由源码、内置库候选及 npm 拆分包统一验收；语言适配见PARITY.md。
 
 `npm run test:proxy:soak`默认以32路并发运行60秒，轮换正常请求、共享H2流取消、错误认证和停滞握手取消；四种scheme分别使用真实loopback代理。FASTLS_NODE_PROXY_SOAK_SECONDS可设为1..300。Linux当前Go/Node组合执行该独立测试，沿用现有RSS、Go堆、goroutine及句柄阈值，逐批记录写入build/node-proxy-recovery-*.json，不计入231项主套件。
 
@@ -311,7 +313,7 @@ send/ping/pong等到原生写入完成；同时最多一名读者和一名写入
 
 正常远端关闭抛出WebSocketClosed(code/reason)，连接保留closeCode/closeReason。closeAsync的整个握手受closeTimeoutMs约束（最多60000），超时直接释放；abort立即中断。连接级AbortSignal中断当前及后续操作，Session关闭回收全部所属WS。读/写/握手超时使连接终止，FastlsTimeoutError.phase为read/write/handshake；HTTP会话总超时不限定WS寿命。
 
-复用Session的profile、头、CA、代理与代理CA；params、请求级覆盖/显式直连沿用HTTP规则。wss始终验证证书和主机名，ALPN适配HTTP/1.1；不承诺适配后的Upgrade头序与浏览器完全一致。使用websocket_v1和三个可选ABI符号，旧库的HTTP继续可用。通知默认共享一条会话连接，poll可显式选择，不阻塞主线程或增加网络线程。
+复用Session的profile、头、CA、代理与代理CA；params、请求级覆盖/显式直连沿用HTTP规则。wss始终验证证书和主机名，ALPN适配HTTP/1.1；不承诺适配后的Upgrade头序与浏览器完全一致。使用websocket_v1和三个可选ABI符号，当前 SDK 还要求 transport_context_v1；ABI 号相同不能代替能力检查。通知默认共享一条会话连接，poll可显式选择，不阻塞主线程或增加网络线程。
 
 默认与 HTTP 共享 SDK Cookie 罐；原生库不保存 Cookie。cookieMode:"manual" 可禁用本次握手的自动 Cookie 收发。显式Cookie头（包括空值）优先，默认仍接受握手Set-Cookie；Session的cookies:false禁用自动收发。域/路径/Secure/过期规则与HTTP一致。有效101及普通HTTP拒绝/重定向响应可写回；无效101或TLS失败不写回。Authorization/Origin由调用方设置。无压缩、H2/H3 CONNECT、握手重定向、自动心跳/重连或消息重放。ping只证明写入完成，可用info.websocket.pongs/last_pong_base64观察响应。协议细节与原生资源限制见根目录WEBSOCKET.md。
 
@@ -321,7 +323,7 @@ npm run test:quick先运行类型、清单及WS/原生用例；test:ws针对25�
 
 ## 原生就绪通知
 
-默认使用`notifications: 'auto'`：新库带session_notifications能力且符号完整时启用，旧ABI-v1库继续轮询。`required`缺少能力时在创建原生会话前报错；`poll`显式使用原调度器。
+默认使用`notifications: 'auto'`：新库带session_notifications能力且符号完整时启用，缺少通知能力时轮询，但库仍须满足 transport_context_v1 等 SDK 基础能力。`required`缺少能力时在创建原生会话前报错；`poll`显式使用原调度器。
 
 ```js
 const session = await Session.open({ notifications: 'required' });
@@ -344,12 +346,12 @@ try {
 网络由 Go goroutine 执行。新库默认通过每会话一条本机TCP连接接收就绪提示，Node事件循环随后重查非阻塞C接口，不定时查询空闲请求。
 通知是重查提示，不保证读写一定成功；通过代次快照防止漏唤醒，并独立取消双工的读写等待。
 立即调用会让出事件循环；不承诺固定吞吐量或延迟，原生控制调用及JSON/Buffer转换仍在主线程执行。
-显式poll或旧库回退使用共享约10ms定时器，保留每轮处理数量及时间上限。
+显式 poll 或配套库缺少通知能力时使用共享约 10ms 定时器，保留每轮处理数量及时间上限。
 
 句柄使用 bigint，无损解析和序列化 ABI JSON 数字；返回的 C 字符串逐次由 fastls_free 释放。
-外部动态库基础能力要求为 `stream_decode`、`phase_timeouts`、`stream_upload`、`write_timeout`；双工、代理、WebSocket 和请求 trailers 在调用时另检查对应能力。加载时检查 ABI 及所需能力，并使用系统级固定加载（Windows PIN / POSIX NODELETE），避免Node环境清理时卸载仍有Go后台线程的动态库。
+外部动态库基础能力要求为 `transport_context_v1`、`stream_decode`、`phase_timeouts`、`stream_upload`、`write_timeout`；双工、代理、WebSocket 和请求 trailers 在调用时另检查对应能力。加载时检查 ABI 及所需能力，并使用系统级固定加载（Windows PIN / POSIX NODELETE），避免Node环境清理时卸载仍有Go后台线程的动态库。
 原生限制仍适用：最多 64 会话、256 未关闭请求，每会话最多 16 种传输配置。
-代理支持HTTP/HTTPS CONNECT、socks5及socks5h，见下节；WebSocket见对应章节。
+代理支持 HTTP/HTTPS CONNECT、socks5 及 socks5h，见代理章节；WebSocket见对应章节。
 
 ## 与 Python 的语言差异
 

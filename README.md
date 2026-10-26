@@ -1,5 +1,7 @@
 # Fastls Python / Node.js SDK
 
+[English documentation](https://fasttls.github.io/en/guide/)
+
 > 本文对应 Python 0.1.4 与 Node 0.10.1；发行状态以 PyPI 和 npm registry 为准，新增接口见各 SDK 的迁移说明。
 
 [完整文档](https://fasttls.github.io/) · [Python 使用指南](python/README.md) · [Node 使用指南](node/README.md)

@@ -4,7 +4,7 @@ Python同步请求改用原生状态等待，asyncio会话使用共用的本机�
 
 ## Python使用
 
-原有请求代码可以继续使用，`notifications="auto"`为默认值：动态库提供新能力时启用，旧库继续使用原轮询方式。可以显式选择：
+原有请求代码可以继续使用，`notifications="auto"`为默认值：在配套动态库支持通知时启用，否则使用轮询。Python 0.1.4 始终要求 SDK 传输上下文能力；通知回退不意味着任意旧 ABI-v1 库都可使用。可以显式选择：
 
 ```python
 from fastls import Session, AsyncSession
@@ -22,7 +22,7 @@ async def receive(url):
                 await consume(chunk)
 ```
 
-- `auto`：按动态库能力选择；旧库仍可运行。
+- `auto`：在满足当前 SDK 必需能力的前提下，按通知能力选择原生等待或轮询。
 - `required`：缺少通知能力时明确报错，适用于验收和部署版本门禁。
 - `poll`：显式使用原有轮询，适用于排障或不允许本机连接的环境。
 
@@ -66,4 +66,4 @@ char *fastls_session_unwatch(uint64_t session);
 
 Go另检查就绪/超时/EOF/取消、队列释放、集合容量、合并与溢出、令牌握手和会话所有权，并纳入race。`examples/c/wait.c`由独立C进程通过新接口读取并校验64KiB二进制正文。源码/wheel各20项与C消费者加入六组原生Actions，原有全部回归及Linux300秒持续测试继续执行；证据为`build/stability-notifications-*.json`与`build/stability-c-wait-*.json`。
 
-这些检查是回归与资源上限验证，性能结论应以具体工作负载测量为准。WebSocket及发布分发仍属后续阶段。
+这些检查是回归与资源上限验证，性能结论应以具体工作负载测量为准。WebSocket 和平台分发已经实现，分别见 [WebSocket](WEBSOCKET.md) 与 [安装指南](INSTALL.md)。

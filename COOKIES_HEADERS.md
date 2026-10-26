@@ -27,15 +27,15 @@ Set-Cookie、Link等字段不会按逗号或旧的/,/分隔符拆分；每个解
 
 ## Cookie规则与操作
 
-- 自动接收每一项Set-Cookie，并按RFC 6265的域名、host-only、路径、Secure、Max-Age和Expires规则选择后续请求的Cookie。Go 1.26标准库按浏览器安全源语义将localhost和回环IP视为安全源，因此Secure Cookie可在这些主机的HTTP请求中发送；其他HTTP主机仍不会发送。使用内置Public Suffix List拒绝跨公共后缀的Cookie。
+- 自动接收每一项Set-Cookie，并按RFC 6265的域名、host-only、路径、Secure、Max-Age和Expires规则选择后续请求的Cookie。SDK 将 localhost 和回环 IP 视为可信本机源，Secure Cookie 可在这些主机的 HTTP 请求中发送；其它 HTTP 主机不会发送。Python 使用 publicsuffixlist，Node 使用 tough-cookie 的公共后缀规则，拒绝跨公共后缀的 Cookie。
 - 重定向响应在下一跳发送前更新存储；禁止跟随重定向时仍接收该响应的Cookie。跨主机重定向只会使用目标主机有权接收的存储内容。
-- 显式Cookie请求头（包括空字符串）控制整个请求及重定向链的手动Cookie，不再自动追加存储中的Cookie；响应仍更新存储。手动头在跨主机重定向中的转发遵守核心客户端的敏感头规则。
+- 显式Cookie请求头（包括空字符串）控制整个请求及重定向链的手动Cookie，不再自动追加存储中的Cookie；响应仍更新存储。手动头在跨来源重定向中按 SDK 敏感头规则剥离。
 - cookies.get_list(url)返回该URL可发送的{name,value}列表，保留不同路径下的同名Cookie；get_dict(url)及get(name,url=...)优先选择匹配路径更长的一项。这是发送视图，不是包含完整属性的存储导出。
 - cookies.set(name,value,url=...,path=...,domain=...,secure=...,http_only=...,max_age=...,expires=...)手动写入。省略path使用URL目录；省略domain为host-only。expires使用RFC3339字符串，例如2100-01-01T00:00:00Z。max_age正值覆盖expires，0或负值删除，省略则由expires或会话寿命决定。
 - cookies.delete必须给出与目标Cookie一致的URL、path和domain范围；clear删除整个Session的Cookie，但保留连接池。close_idle_connections释放空闲连接，不清空Cookie。
 - Session(cookies=False)或AsyncSession(cookies=False)禁用自动接收和发送，仍可使用显式Cookie头；手动set会报禁用错误。Cookie访问是短同步操作，AsyncSession可直接使用相同方法。
 
-手动写入校验名称、值、域名、路径和过期格式；name/value/domain/path文本总计最多4096字节，max_age正值最大2147483647秒。存储沿用HTTP客户端Cookie jar，不提供浏览器的SameSite上下文、分区Cookie、前缀策略或浏览器式配额淘汰；HttpOnly不限制调用方读取，当前也不提供完整requests兼容接口。
+手动写入校验名称、值、域名、路径和过期格式；name/value/domain/path文本总计最多4096字节，max_age正值最大2147483647秒。存储沿用HTTP客户端Cookie jar，不实现浏览器的 SameSite 请求上下文、分区 Cookie 或浏览器式配额淘汰，也不承诺两个语言 jar 的每项宽容解析和前缀校验完全一致；HttpOnly不限制调用方读取，当前也不提供完整requests兼容接口。
 
 ## 原生边界
 

@@ -38,7 +38,7 @@ with Session(profile="chrome/156/windows",
 
 FastlsTimeoutError继承FastlsError，phase区分各阶段超时（含后续增加的write）；解码失败使用同样继承FastlsError的FastlsDecodeError。取消和普通网络错误仍使用FastlsError。阶段取消只影响当前请求/HTTP2流，不改共享连接的读写deadline。
 
-分层预算属于请求级配置，不拆分连接池。HTTP2共享建连沿用已有的30秒内部安全上限；较短请求预算会先结束，较长connect设置不会扩大该内部上限。本阶段验证TCP上的HTTP1与HTTP2，不扩展到代理、HTTP3、流式上传或WebSocket。
+分层预算属于请求级配置，不拆分连接池。HTTP2共享建连沿用已有的30秒内部安全上限；较短请求预算会先结束，较长connect设置不会扩大该内部上限。本页基础解码/超时测试针对 TCP 上的 HTTP/1.1 与 HTTP/2。代理、流式上传和 WebSocket 已有独立实现与专项测试，见 [代理](PROXY.md)、[上传](STREAMING_UPLOAD.md) 和 [WebSocket](WEBSOCKET.md)；HTTP/3 不在 SDK 支持范围。
 
 ## C ABI及验证
 

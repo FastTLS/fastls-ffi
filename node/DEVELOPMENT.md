@@ -18,8 +18,8 @@ Windows 测试服务文件名使用 `build/ffi-fixture.exe`，原生构建需要
 
 ## 候选包与原生库加载
 
-构建本平台Go动态库后，运行 `npm run pack:native`，产物位于上级 `dist/`。
-例如Windows x64：`fastls-fastls-0.10.1-dev.0-win32-x64.tgz`；Linux包名另带`-glibc`。
+构建本平台Go动态库后，从仓库根目录运行 `npm run pack:native --prefix node`，产物位于上级 `dist/`。
+例如Windows x64：`fastls-fastls-0.10.1-win32-x64.tgz`；Linux包名另带`-glibc`。
 在目标项目执行 `npm install <候选包绝对路径> --ignore-scripts`，随后即可 `new Session()`，无需Go、Python、编译器或FASTLS_LIBRARY。
 安装时保留npm可选依赖，Koffi使用对应平台的预编译组件。`npm run test:package`在空工具搜索路径、清除FASTLS_LIBRARY且关闭安装脚本的临时项目中重复完整231项测试。靶场是仓库中已构建的独立测试服务，SDK和动态库均从安装目录加载。
 

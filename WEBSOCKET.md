@@ -1,4 +1,4 @@
-# WebSocket：C 与 Python 开发版接口
+# WebSocket：Python、Node.js 与 C 接口
 
 实现常规 RFC6455 `ws://` / `wss://` 客户端，Python 同步、异步与 C 共用原生消息句柄。不是 SSE 或 HTTP/2 双工的别名。
 

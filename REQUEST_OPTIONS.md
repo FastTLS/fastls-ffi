@@ -31,7 +31,7 @@ with Session(profile="chrome/156/windows") as session:
 - 可同时用 `data` 提供普通表单字段。文件体逐块读取，每次最多 64 KiB；不读取全部文件、不 seek、不计算文件长度、不创建临时文件。异步请求同样分块，但同步文件的 `read()` 在事件循环内执行，慢磁盘应由调用方预先处理。
 - 编码器生成随机 boundary，独占 `Content-Type`；会话或请求中显式设置该头会报错，避免边界不一致。字段名、文件名、类型不允许控制字符。不支持四元素自定义分部头、异步文件、文件体生成器或 multipart 与 duplex 组合。
 - 文件由调用方拥有，成功、失败、取消后均不自动关闭；请求从文件当前位置开始，后续重发需调用方显式重新打开/定位。编码器只使用一次，发生读取错误立即传播原异常并回收请求。
-- multipart 沿用已有流式上传的重定向契约：不会自动重放一次性正文。307/308 不重放；301/302/303 的正文丢弃和 GET 转换沿用核心规则。需要重新上传时由调用方检查响应并显式开启新请求。缓冲 JSON/表单沿用既有缓冲正文的重定向规则；超过内联阈值后视为流式正文。
+- multipart 沿用已有流式上传的重定向契约：不会自动重放一次性正文。307/308 不重放；301/302/303 的正文丢弃和 GET 转换由 SDK 执行，详见语言指南。需要重新上传时由调用方检查响应并显式开启新请求。缓冲 JSON/表单沿用既有缓冲正文的重定向规则；超过内联阈值后视为流式正文。
 - 同步手动 `duplex()` 只新增 `params`；正文继续使用 `send()`。异步 duplex 允许已有 `data`，也可用 JSON/表单，但禁用自动重定向；不支持 multipart。
 
 ## 响应
@@ -46,4 +46,4 @@ with Session(profile="chrome/156/windows") as session:
 
 ## Node.js
 
-Node 0.8提供对应的params/json/form/files、流式multipart、encoding和raiseForStatus()，统一使用Promise接口。保留原始body并通过form显式编码表单；文件由调用方拥有的read(maxBytes, signal)读取器提供，不自动close。详细类型、字符集与MIME差异见[node/README.md](node/README.md)，16项行为映射及验收范围见[node/PARITY.md](node/PARITY.md)。WebSocket单独推进。
+Node SDK 提供对应的params/json/form/files、流式multipart、encoding和raiseForStatus()，统一使用Promise接口。保留原始body并通过form显式编码表单；文件由调用方拥有的read(maxBytes, signal)读取器提供，不自动close。详细类型、字符集与MIME差异见[node/README.md](node/README.md)，16项行为映射及验收范围见[node/PARITY.md](node/PARITY.md)。WebSocket 已实现，见 [WEBSOCKET.md](WEBSOCKET.md)。

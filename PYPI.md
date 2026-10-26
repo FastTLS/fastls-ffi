@@ -49,6 +49,10 @@ Python 新发行名为 `fastls`，导入名仍为 `fastls`；GitHub 仓库和 C 
 发布后在全新 Windows x64 虚拟环境中从官方 PyPI 安装 `fastls==0.1.3`，确认下载来源为 files.pythonhosted.org，包摘要同时匹配 PyPI 与 GitHub，原生库位于虚拟环境且 ABI 为 1。使用 `chrome/156/windows` 通过独立本地 CA 靶场验证 HTTPS HTTP/1.1、HTTP/2、64 MiB 流式下载及正文摘要、WebSocket 回显和 asyncio 请求。该安装复验仅在 Windows 本机运行；其它平台的认证来自原正式 CI。
 
 
-## v0.1.4 发布内容
+## v0.1.4 发布记录
 
-本次新增模块级一次性请求和 IDE 类型提示，详见 [0.1.4 说明](RELEASE_NOTES_0.1.4.md)。沿用 ci.yml 的完整原生、安装包、跨语言和 PyPI 门禁；先验证 main，再推送新的 v0.1.4 标签，使用同次标签运行认证的五个平台 wheel 和一个 sdist 发布，不移动已有标签或复用旧版本文件。
+2026-10-27，`fastls==0.1.4` 已正式发布，包含五个平台 wheel 和一个 SDK-only sdist。六个文件的 SHA256 与 [GitHub Release](https://github.com/FastTLS/fastls-ffi/releases/tag/v0.1.4) 完全一致。[正式 CI](https://github.com/FastTLS/fastls-ffi/actions/runs/40366693415) 为 60 项通过、1 项按规则跳过；macOS ARM 执行资源不足导致未执行任务重排，同提交未修改代码或放宽检查。
+
+Windows x64 全新虚拟环境从官方 PyPI 安装后，已验证包内库与来源摘要、HTTPS/2、模块级 get、会话 Cookie、WebSocket 回显及 aiohttp 风格异步接口。其它平台认证来自正式 CI，不将本机复验扩展为所有系统版本均已实测。
+
+本次新增模块级一次性请求、SDK 管理的会话及 IDE 类型提示，详见 [0.1.4 说明](RELEASE_NOTES_0.1.4.md)。沿用 ci.yml 的完整原生、安装包、跨语言和 PyPI 门禁；先验证 main，再推送新的 v0.1.4 标签，使用同次标签运行认证的五个平台 wheel 和一个 sdist 发布，不移动已有标签或复用旧版本文件。

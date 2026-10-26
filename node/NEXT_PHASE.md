@@ -5,26 +5,24 @@
 ## 已完成的实现
 
 - HTTP/1.1、HTTP/2、流式上传下载、HTTP/2 双工、SSE、四种代理、Cookie、请求参数和 multipart。
-- WebSocket 消息、关闭、超时、代理、通知与共享 Cookie，以及旧库 Cookie 控制能力门禁。
+- WebSocket 消息、关闭、超时、代理、通知与共享 Cookie；Cookie、默认参数和重定向由 JavaScript SDK 管理，动态库仅持有传输资源。
+- 新增标准 fetch / Session.fetch、Request/Response/Web Stream 适配和全部常用 HTTP 方法，保留原高级接口。
 - 请求 trailers、最终 URL、实际协议和响应 EOF trailers 刷新，与 main 的当前 Python 契约对应。
-- 十五套 Python 的 209 项行为映射、43 项语言适配，加 16 项 Node 专有检查，共 225 项。源码、内置库候选和 npm 拆分包均运行同一完整套件。
+- 十六组 Python 套件的 211 个对应场景，加 2 项绑定和 18 项 Node 专有检查，共 231 项。源码、内置库候选和 npm 拆分包均运行同一完整套件。
 - 固定原生构建输入，功能检查与各资源长测独立调度；五个平台的 Node 24 和 Linux x64 的 Node 22 组合并行验收。
 - npm 主包 `@fastls/fastls` 与五个同版本原生包，通过可选依赖自动选择平台；版本、平台、摘要与 glibc 门禁在加载前验证。
 - `imitate` 经维护者确认采用 Apache-2.0，依赖提交固定为 `780f88aaef8474f09035855f906ecc90dd0f4102`，实际许可证随原生包收集。
 - `npm-publish.yml` 从同提交 main 成功 CI 收集六包组，支持仅准备、顺序发布和内容一致的中断恢复。
 
-实现基线 `0bdaa8d` 的[六组完整 CI](https://github.com/FastTLS/fastls-ffi/actions/runs/40315546417)已通过；五平台清单授权待审项为空。此结果只属于该提交，不能代替后续文档修订或 main 合并后的发布验收。既有 GitHub 预发布使用历史包名，与当前 npm 包组分别管理。
+## 0.10.1 验证与实际发布状态
 
-## 当前批次：文档核对与首次 npm 预发布
+核对日期：2026-10-27。源码提交 `676c1040117a1da7ad64dbe9f0e8691a1a0c564c` 的 [main 完整 CI](https://github.com/FastTLS/fastls-ffi/actions/runs/40362480020) 已通过。六包组由 [npm 准备/发布工作流](https://github.com/FastTLS/fastls-ffi/actions/runs/40366698803) 从该运行的认证产物汇总，授权待审列表为空。
 
-1. 核对四份文档与公开类型、实现、测试清单和工作流，统一当前行为、计数、路径、加载顺序及限制。
-2. 在本地检查 Markdown 链接、示例语法、类型和清单，并验证打包确实收录更新后的 README；文档检查不冒充新一轮功能或跨平台通过结果。
-3. 合并审阅后的改动到 main；等待该提交完整 CI 成功，固定最终源码及依赖。
-4. 执行 `npm-publish.yml` 的准备模式，验证五个平台和主包的实际内容、摘要、完整证据及授权清单，保留 `npm-release` artifact。
-5. 首次发布使用已登录账号或已配置的 Trusted Publisher，将开发版本发布到 `next`，原生包先于主包。若 npm 要求交互验证，由账号持有人完成，不在聊天或仓库保存密码、验证码和 Token。
-6. 从真实 npm registry 在新项目安装并验证 CJS/ESM、类型、默认原生库路径、一次真实请求及 Cookie；核对六包版本与 dist-tag，再记录实际结果。
+**0.10.1 尚未在 npm 发布。** Trusted Publisher 上传在第一个包前返回权限错误；本机恢复上传需要账号持有人完成 npm 浏览器验证。此前验证会话已超时，未发布任何 0.10.1 包。当前可安装版本仍为 `0.10.1-dev.0`，新增 API 不应按旧版本使用。
 
-完成条件为 registry 中六包齐备且实际安装验证通过。仅完成文档、合并或 CI，不写成 npm 已发布。首次发布后的 Trusted Publisher 配置由六个包的 npm Settings 管理；工作流字段见 NPM_RELEASE.md。
+恢复时使用同一工作流保留的原始六包归档，不重建、不修改 manifest。脚本先检查全部文件和已发布版本，按五个平台包、主包的顺序上传，只跳过内容完全一致的已发布包。账号密码、验证码和 Token 不写入聊天、文档或仓库。
+
+发布完成须核对六个精确版本、归档摘要及 `latest=0.10.1`，并在全新项目从官方 npm 安装，验证 ESM/CJS、类型、自带库、HTTPS、Session Cookie 和 fetch。实际成功后再更新 README、本站和版本记录，不把文档、CI 或 artifact 的存在写成 registry 已发布。
 
 ## 后续工作线
 
