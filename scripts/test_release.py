@@ -49,7 +49,7 @@ assert importlib.metadata.version('fastls') == sys.argv[2]
 loaded = pathlib.Path(Native(library=sys.argv[1]).lib._name).resolve()
 assert loaded == pathlib.Path(sys.argv[1]).resolve()
 """, library, candidate)
-        run(pip + ["uninstall", "-y", "fastls-ffi"], cwd=temporary, env=clean)
+        run(pip + ["uninstall", "-y", "fastls"], cwd=temporary, env=clean)
 
         old_dir = temporary / "old"
         old_dir.mkdir()
@@ -68,7 +68,7 @@ metadata = json.loads(loaded.with_name('build-info.json').read_text(encoding='ut
 assert hashlib.sha256(loaded.read_bytes()).hexdigest() == metadata['library_sha256']
 assert '_lib' in loaded.parts
 """, candidate)
-        run(pip + ["uninstall", "-y", "fastls-ffi"], cwd=temporary, env=clean)
+        run(pip + ["uninstall", "-y", "fastls"], cwd=temporary, env=clean)
         probe(python, temporary, clean, """
 import importlib.metadata, importlib.util, pathlib, sysconfig
 site = pathlib.Path(sysconfig.get_paths()['purelib'])
