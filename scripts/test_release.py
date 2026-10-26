@@ -45,7 +45,7 @@ def main():
         probe(python, temporary, clean, """
 import importlib.metadata, pathlib, sys
 from fastls._native import Native
-assert importlib.metadata.version('fastls-ffi') == sys.argv[2]
+assert importlib.metadata.version('fastls') == sys.argv[2]
 loaded = pathlib.Path(Native(library=sys.argv[1]).lib._name).resolve()
 assert loaded == pathlib.Path(sys.argv[1]).resolve()
 """, library, candidate)
@@ -57,12 +57,12 @@ assert loaded == pathlib.Path(sys.argv[1]).resolve()
         run(pip + ["wheel", "--no-deps", "-w", old_dir, ROOT / "python"], cwd=temporary, env=old_env)
         old_wheel = one_from(old_dir, "*.whl", "baseline wheel")
         run(pip + ["install", "--no-deps", old_wheel], cwd=temporary, env=clean)
-        probe(python, temporary, clean, "import importlib.metadata; assert importlib.metadata.version('fastls-ffi') == '0.0.0'")
+        probe(python, temporary, clean, "import importlib.metadata; assert importlib.metadata.version('fastls') == '0.0.0'")
         run(pip + ["install", "--no-deps", "--upgrade", "--force-reinstall", wheel], cwd=temporary, env=clean)
         probe(python, temporary, clean, """
 import hashlib, importlib.metadata, json, pathlib, sys
 from fastls._native import Native
-assert importlib.metadata.version('fastls-ffi') == sys.argv[1]
+assert importlib.metadata.version('fastls') == sys.argv[1]
 loaded = pathlib.Path(Native().lib._name).resolve()
 metadata = json.loads(loaded.with_name('build-info.json').read_text(encoding='utf-8'))
 assert hashlib.sha256(loaded.read_bytes()).hexdigest() == metadata['library_sha256']
@@ -73,9 +73,9 @@ assert '_lib' in loaded.parts
 import importlib.metadata, importlib.util, pathlib, sysconfig
 site = pathlib.Path(sysconfig.get_paths()['purelib'])
 assert not (site / 'fastls').exists()
-assert not list(site.glob('fastls_ffi-*.dist-info'))
+assert not list(site.glob('fastls-*.dist-info'))
 try:
-    importlib.metadata.version('fastls-ffi')
+    importlib.metadata.version('fastls')
 except importlib.metadata.PackageNotFoundError:
     pass
 else:

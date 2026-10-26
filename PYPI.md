@@ -1,0 +1,37 @@
+# PyPI 发布：fastls
+
+Python 新发行名为 `fastls`，导入名仍为 `fastls`；GitHub 仓库和 C ABI 不改名。历史 v0.1.2 使用 `fastls-ffi`，已有附件和版本标签不重写。
+
+## Trusted Publisher
+
+维护者在 PyPI 的 GitHub Publisher 表单填写：
+
+- Project Name：`fastls`
+- Owner：`FastTLS`
+- Repository：`fastls-ffi`
+- Workflow：`ci.yml`
+- Environment：`pypi`
+
+对应仓库文件为 `.github/workflows/ci.yml`，上传 job 声明 `environment: pypi` 和 `id-token: write`。GitHub 仓库可在 Settings → Environments 配置 `pypi` 的保护规则。无需提供密码或长期 API Token。
+
+用户已确认添加 Publisher；该操作不上传文件、不创建项目，也不保留包名。首次成功上传后才会创建项目；包名是否可用仍以 PyPI 服务端为准。[官方说明](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
+
+## 构建和上传条件
+
+1. 所有 push/PR 运行正常原生矩阵。发行元数据、安装升级卸载测试和 fixture 均使用新包名。
+2. Linux 使用固定 `auditwheel==6.8.2`、`patchelf==0.19.1.0`，审计并生成 `manylinux_2_39_x86_64`/`manylinux_2_39_aarch64`，之后才绑定 CI 输入并执行消费者测试。若修复改变原生库内容，拒绝沿用旧构建摘要。
+3. 完整门禁 `required` 通过后，`pypi-candidate` 选择 Go 1.26.10 的五个正式平台组合，拒绝缺失、修改、混合源码或错误包名/版本/平台的候选；运行 `twine check --strict`，保存 `pypi-validated` artifact。
+4. 普通分支/PR 只生成带 `.devN` 的已验证候选，`publish-pypi` 跳过。标签由 `workflow_dispatch` 手动运行也不会触发该上传 job。
+5. 只有 `push` 的 `v*` 标签，在候选验收和 GitHub Release 都成功后，才能使用 `pypi` Environment、官方 PyPA action 和 OIDC 上传同一组五个 wheel 与一个 SDK-only sdist，并生成 PyPI 发布证明。
+
+使用的 [PyPI 官方 Trusted Publishing](https://docs.pypi.org/trusted-publishers/using-a-publisher/) 不需要在仓库保存 Token。工作流里出现 `id-token: write` 本身不代表已获得发布权限，PyPI 仍会校验你配置的仓库、工作流和 Environment。
+
+## 首次发布与失败处理
+
+先把改动合入主线，并等待该候选的完整 Actions 通过，再选择一个新的正式版本标签。不要重写 v0.1.2。实际推送正式标签会同时触发 GitHub 与 PyPI 发布，必须由维护者决定版本和发布时间。
+
+若上传拒绝授权，核对 Publisher 的四个 GitHub 字段和 PyPI 项目名；若只有部分文件上传成功，先核对服务端已接受文件的摘要，再制定恢复方案，不移动标签或重新构建同名版本来覆盖。默认没有 `skip-existing`，避免隐藏不一致。
+
+当前文档和配置不等于已经在 PyPI 发布成功。首次上传完成后，还需要在支持的系统安装 `python -m pip install --only-binary=:all: fastls==实际版本`，创建 Session、列配置并运行真实请求，以索引返回的包验证分发链路。
+
+源码包仅含 SDK，不编译或下载原生库。为避免不受支持的平台静默装入 SDK-only 包，普通用户推荐 `--only-binary=:all:`。安装及从旧包迁移见 [INSTALL.md](INSTALL.md)。

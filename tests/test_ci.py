@@ -70,8 +70,8 @@ class PackageVersion(unittest.TestCase):
                 "target": "windows-amd64", "sources": sources,
                 "package_version": "0.1.0.dev123",
             }))
-            for name in ("fastls_ffi-0.1.0.dev123-py3-none-win_amd64.whl",
-                         "fastls_ffi-0.1.0.dev123.tar.gz", "native-audit.json"):
+            for name in ("fastls-0.1.0.dev123-py3-none-win_amd64.whl",
+                         "fastls-0.1.0.dev123.tar.gz", "native-audit.json"):
                 (dist / name).write_bytes(name.encode())
             (dist / "build-info.json").write_text(json.dumps({"package_version": "0.1.0.dev123"}))
             destination = development_snapshot.create_manifest(
@@ -81,8 +81,8 @@ class PackageVersion(unittest.TestCase):
             self.assertFalse(manifest["publishable"])
             self.assertEqual(manifest["sources"], sources)
             self.assertEqual(set(manifest["files"]), {
-                "fastls_ffi-0.1.0.dev123-py3-none-win_amd64.whl",
-                "fastls_ffi-0.1.0.dev123.tar.gz", "build-info.json", "native-audit.json",
+                "fastls-0.1.0.dev123-py3-none-win_amd64.whl",
+                "fastls-0.1.0.dev123.tar.gz", "build-info.json", "native-audit.json",
             })
 
     def test_formal_manifest_is_publishable_only_in_release_mode(self):
@@ -94,8 +94,8 @@ class PackageVersion(unittest.TestCase):
             (dist / "ci-inputs.json").write_text(json.dumps({
                 "target": "linux-amd64", "sources": sources, "package_version": "0.1.0",
             }))
-            for name in ("fastls_ffi-0.1.0-py3-none-manylinux_2_39_x86_64.whl",
-                         "fastls_ffi-0.1.0.tar.gz", "native-audit.json"):
+            for name in ("fastls-0.1.0-py3-none-manylinux_2_39_x86_64.whl",
+                         "fastls-0.1.0.tar.gz", "native-audit.json"):
                 (dist / name).write_bytes(name.encode())
             (dist / "build-info.json").write_text(json.dumps({"package_version": "0.1.0"}))
             destination = development_snapshot.create_manifest(root, {

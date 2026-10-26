@@ -1,14 +1,14 @@
 # Python 平台包与 GitHub 发布
 
-正式版本生成内置动态库的 wheel 与 SDK-only sdist，只发布到 GitHub Releases，不上传 PyPI 或其他索引。验证结果以标签对应的 GitHub Actions 为准。
+正式版本生成内置动态库的 wheel 与 SDK-only sdist，发布到 GitHub Releases；新增的 `fastls` Python 包在同一标签全部门禁及 GitHub Release 成功后通过 Trusted Publishing 上传 PyPI。首个 PyPI 版本是否已发布，以索引实际记录为准。验证结果以标签对应的 GitHub Actions 为准。
 
 普通 CI 使用唯一的 `0.1.0.dev<run-number>` 开发版本。只有通过平台 `release` 验收后，wheel、sdist、原生审计记录和 `development-snapshot.json` 才会作为 `development-snapshot-*` 产物保留14天，并标记 `development-only`、`publishable: false`。
 
-推送 `v*` 标签时，版本号由标签确定；同一矩阵生成 `release-manifest.json`，标记 `official`、`publishable: true`。汇总作业只选择 Go 1.26.10 的五个平台认证结果，生成 `SHA256SUMS` 和 Sigstore/GitHub 来源证明，并创建 GitHub Release。前瞻 Go 版本仍参与兼容性门禁，但不重复发布同平台 wheel。仓库中的 `python/VERSION` 保持本地开发默认值；标签构建不会上传 PyPI。
+推送 `v*` 标签时，版本号由标签确定；同一矩阵生成 `release-manifest.json`，标记 `official`、`publishable: true`。汇总作业只选择 Go 1.26.10 的五个平台认证结果，生成 `SHA256SUMS` 和 Sigstore/GitHub 来源证明，并创建 GitHub Release。前瞻 Go 版本仍参与兼容性门禁，但不重复发布同平台 wheel。仓库中的 `python/VERSION` 保持本地开发默认值。PyPI 汇总作业核对五平台的同源提交、包名、版本、平台标签和摘要，再运行严格元数据检查；只有正式标签的 push 可以进入 `pypi` Environment 上传。
 
 ## 安装与加载
 
-下载匹配平台的 wheel 后运行 `python -m pip install /path/to/fastls_ffi-....whl`。不需要 Go/C 编译器或源码目录，继续使用 `Session(profile="chrome/156/windows")`。
+下载匹配平台的 wheel 后运行 `python -m pip install /path/to/fastls-....whl`；历史 v0.1.2 文件仍以 `fastls_ffi-` 开头。不需要 Go/C 编译器或源码目录，继续使用 `Session(profile="chrome/156/windows")`。完整安装与旧包迁移步骤见 [INSTALL.md](INSTALL.md)。
 
 库加载顺序：显式 `library` → `FASTLS_LIBRARY` → 包内 `fastls/_lib/` → 源码开发目录的 `dist/`。显式选择失败直接报错，不静默切换。源码 SDK 安装没有包内库时须提供外置库，不在安装或导入时下载/编译 Go 代码。
 
@@ -17,7 +17,7 @@
 ## 正式平台范围
 
 - Windows amd64：`py3-none-win_amd64`，原生 Windows runner 验收。
-- Linux amd64/arm64：原生 Ubuntu 24.04 runner，使用普通 `linux_*` 标签。首个正式版仅承诺 Ubuntu 24.04兼容系统与glibc 2.39或更新版本；门禁拒绝需要更高GLIBC符号的产物。未认证manylinux或musllinux。
+- Linux amd64/arm64：历史 v0.1.2 使用普通 `linux_*` 标签；新候选在原生 Ubuntu 24.04 runner 使用固定 auditwheel 工具审计并生成 `manylinux_2_39_*` wheel，然后运行完整消费者验收。修复若改变已认证原生库摘要，构建直接失败；不把改名视为认证。仍要求 glibc 2.39+，门禁拒绝更高 GLIBC 符号需求。未认证 musllinux。
 - macOS amd64/arm64：保守使用构建及验收主机的系统大版本作为 wheel 最低版本，不沿用可能早于 Go 运行时要求的 Python 最低部署标签。附 `otool` 依赖和加载命令。
 - Python 最低版本仍为 3.10；当前六组矩阵没有穷举其后所有 Python 版本。
 
@@ -35,4 +35,4 @@ wheel 的 `py3-none` 表示通过 ctypes 调用 C ABI，没有 CPython 扩展 AB
 
 ## 发布门槛
 
-许可证正文与生产依赖的第三方许可证统一进入wheel和sdist；`release`阶段会根据实际Go生产依赖图拒绝过期材料，并验证归档内容、sdist安装、版本升级、卸载和Linux glibc 2.39边界。只有维护者推送正式标签才会创建 GitHub Release；工作流没有 PyPI 或其他索引凭据，开发快照即使完成全部认证也不会成为正式版本。
+许可证正文与生产依赖的第三方许可证统一进入wheel和sdist；`release`阶段会根据实际Go生产依赖图拒绝过期材料，并验证归档内容、sdist安装、版本升级、卸载和Linux glibc 2.39边界。只有维护者推送正式标签才会创建 GitHub Release 并进入 PyPI 发布。上传使用 GitHub OIDC 临时授权，不保存 PyPI 长期 Token；开发快照即使完成全部认证也不会成为正式版本。配置及失败恢复见 [PYPI.md](PYPI.md)。

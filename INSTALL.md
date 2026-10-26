@@ -2,7 +2,17 @@
 
 本指南以 GitHub Release [v0.1.2](https://github.com/FastTLS/fastls-ffi/releases/tag/v0.1.2) 为例。平台 wheel 已包含原生动态库，普通安装不需要 Go、C 编译器、克隆源码或单独下载 DLL/dylib/so 文件。
 
-安装包名是 `fastls-ffi`，Python 导入名是 `fastls`。当前正式发布渠道是 GitHub Releases，项目尚未启用 PyPI 发布；不要把 `pip install fastls-ffi` 当作获取本项目正式版本的安装方式。
+v0.1.2 的安装包名是 `fastls-ffi`，Python 导入名是 `fastls`。后续发行包改名为 `fastls`；现有 GitHub 附件不会改名。本文的 v0.1.2 URL 和版本查询命令仍针对历史包。
+
+PyPI 工作流已接入，但是否可安装以 [PyPI 项目页](https://pypi.org/project/fastls/) 的实际发布记录为准。首次成功上传新包后，支持的平台可以使用：
+
+```shell
+python -m pip install --only-binary=:all: fastls
+```
+
+`--only-binary=:all:` 防止没有匹配平台时误装缺少原生库的 SDK-only sdist。新包的版本查询使用 `python -c "from importlib.metadata import version; print(version('fastls'))"`。
+
+从旧包迁移时，先执行 `python -m pip uninstall fastls-ffi`，再安装 `fastls`。两者都提供 `fastls` 导入目录，不应在同一个环境并存。重新安装历史 v0.1.2 前，同样先卸载新包 `fastls`。
 
 ## 1. 环境与平台选择
 
@@ -140,6 +150,6 @@ SDK-only `.tar.gz` 不包含原生库，也不会在安装或导入时下载/编
 
 ## 8. PyPI 发布状态
 
-目前以上安装方式只使用 GitHub Release，尚未配置 PyPI 发布。维护者若增加 PyPI 渠道，需要配置账号及 Trusted Publisher，完善索引接受的平台 wheel、系统兼容性和安装验收，再启用发布工作流。该规划不代表已经发布，也不改变现有 GitHub 发布流程。
+v0.1.2 仍从 GitHub Release 安装；后续 `fastls` 包由 `ci.yml` 在正式版本标签通过全部门禁后使用 Trusted Publishing 上传。普通分支、PR 和开发快照只构建与验收，不上传 PyPI。新增 Linux 包会通过 auditwheel 生成 `manylinux_2_39` 标签，仍要求 glibc 2.39+，不因此获得旧系统或 Alpine 兼容性。配置与状态边界见 [PYPI.md](PYPI.md)。
 
 PyPI 官方说明：[通过 Trusted Publisher 创建项目](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)、[GitHub Actions 发布](https://docs.pypi.org/trusted-publishers/using-a-publisher/)。
