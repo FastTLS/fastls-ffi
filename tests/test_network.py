@@ -172,6 +172,28 @@ class NetworkFaults(FixtureCase):
                 self.assertEqual(response.url, url)
                 self.assertEqual(response.trailers["X-Response-Trailer"], "response-value")
 
+    def test_response_contract_preserves_wire_bytes_repeated_headers_and_trailer(self):
+        wire = (b"HTTP/1.1 200 OK\r\nX-Repeat: one\r\nX-Repeat: two\r\n"
+                b"Set-Cookie: a=1; Path=/\r\nSet-Cookie: b=2; Path=/\r\n"
+                b"Transfer-Encoding: chunked\r\nTrailer: X-Final\r\n\r\n"
+                b"4\r\n\x00\xff\x80\x01\r\n0\r\nX-Final: complete\r\n\r\n")
+        def check(response, url):
+            self.assertEqual(response.content, b"\x00\xff\x80\x01")
+            self.assertEqual(response.headers.get_list("X-Repeat"), ["one", "two"])
+            self.assertEqual(response.headers.get_list("Set-Cookie"), ["a=1; Path=/", "b=2; Path=/"])
+            self.assertEqual(response.trailers["X-Final"], "complete")
+            self.assertEqual(response.http_version, "HTTP/1.1")
+            self.assertEqual(response.url, url)
+        with WireServer(wire) as peer, self.session(decode_content=False) as session:
+            url = "http://" + peer.address
+            check(session.get(url), url)
+        async def run():
+            with WireServer(wire) as peer:
+                async with self.session(async_=True, decode_content=False) as session:
+                    url = "http://" + peer.address
+                    check(await session.get(url), url)
+        asyncio.run(run())
+
     def test_aborted_h1_connection_and_h2_stream_recover(self):
         for name in ("https1", "https2"):
             with self.subTest(protocol=name), self.session() as session:

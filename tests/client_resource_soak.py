@@ -147,13 +147,14 @@ def main():
     parser.add_argument('--fixture', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--rounds', type=int, default=50)
+    parser.add_argument('--fastls-source', choices=('installed', 'checkout'), default='installed')
     parser.add_argument('--client', action='append', choices=('fastls',))
     parser.add_argument('--protocol', action='append', choices=('h1', 'h2'))
     args = parser.parse_args()
     if not 1 <= args.rounds <= 100:
         parser.error('rounds must be 1..100')
     args.output.mkdir(parents=True, exist_ok=True)
-    inputs = fastls_input('installed')
+    inputs = fastls_input(args.fastls_source)
     packages = versions()
     env = dict(os.environ, PYTHONUTF8='1', PYTHONIOENCODING='utf-8')
     for key in list(env):
