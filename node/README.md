@@ -1,6 +1,6 @@
 # Fastls Node.js SDK
 
-> 发布状态（2026-10-27）：0.10.1 已完成认证，尚待 npm 账号验证后上传。当前可安装 0.10.1-dev.0；下文新增接口与 0.10.1 安装命令需正式发布后使用。
+> 发布状态（2026-10-27）：0.10.1 已正式发布至 npm，latest 指向该稳定版本。主包与五个平台原生包均已核对摘要。
 
 Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应正式版 **0.10.1**，发行文件与版本状态以 npm registry 为准。
 

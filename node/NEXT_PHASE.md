@@ -16,13 +16,15 @@
 
 ## 0.10.1 验证与实际发布状态
 
-核对日期：2026-10-27。源码提交 `676c1040117a1da7ad64dbe9f0e8691a1a0c564c` 的 [main 完整 CI](https://github.com/FastTLS/fastls-ffi/actions/runs/40362480020) 已通过。六包组由 [npm 准备/发布工作流](https://github.com/FastTLS/fastls-ffi/actions/runs/40366698803) 从该运行的认证产物汇总，授权待审列表为空。
+核对日期：2026-10-27。源码提交 `19c6c57bee4f5663757eda241081d469f62af456` 的 [main 完整 CI](https://github.com/FastTLS/fastls-ffi/actions/runs/40373864723) 已通过。六包组由 [npm 准备/发布工作流](https://github.com/FastTLS/fastls-ffi/actions/runs/40376125121) 从该运行的认证产物汇总，授权待审列表为空。
 
-**0.10.1 尚未在 npm 发布。** Trusted Publisher 上传在第一个包前返回权限错误；本机恢复上传需要账号持有人完成 npm 浏览器验证。此前验证会话已超时，未发布任何 0.10.1 包。当前可安装版本仍为 `0.10.1-dev.0`，新增 API 不应按旧版本使用。
+**0.10.1 已正式发布至 npm。** 主包与五个平台包的精确版本均为 0.10.1，latest 指向稳定版；registry 的 SHA-512 与认证六包组完全一致。历史开发版 0.10.1-dev.0 保留用于追溯。
 
-恢复时使用同一工作流保留的原始六包归档，不重建、不修改 manifest。脚本先检查全部文件和已发布版本，按五个平台包、主包的顺序上传，只跳过内容完全一致的已发布包。账号密码、验证码和 Token 不写入聊天、文档或仓库。
+首次 Trusted Publisher 上传曾返回权限错误；最终由维护者完成本机 npm 身份验证，上传同提交认证的原始归档。未重新打包、替换已发布版本或改变验证阈值；本次本机上传不声称具有 npm GitHub OIDC provenance。来源以成功 CI、候选清单及 registry 摘要共同核对。
 
-发布完成须核对六个精确版本、归档摘要及 `latest=0.10.1`，并在全新项目从官方 npm 安装，验证 ESM/CJS、类型、自带库、HTTPS、Session Cookie 和 fetch。实际成功后再更新 README、本站和版本记录，不把文档、CI 或 artifact 的存在写成 registry 已发布。
+Windows x64 全新项目从官方 npm 安装后，已验证默认原生包、库摘要、标准 Response 的 HTTPS/2 请求、Session.fetch Cookie 与 ESM/CJS 入口。其它平台的执行认证来自完整 CI，不把本机结果扩展为所有系统版本均已实测。
+
+后续维护应保留相同的发布门禁、五个平台包先于主包的顺序和内容一致的中断恢复。账号密码、验证码和 Token 不写入聊天、文档或仓库。修改源码或打包输入必须重新认证，不能替换既有版本文件。
 
 ## 后续工作线
 

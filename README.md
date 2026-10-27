@@ -2,7 +2,7 @@
 
 [English documentation](https://fasttls.github.io/en/guide/)
 
-> 本文对应 Python 0.1.4 与 Node 0.10.1；发行状态以 PyPI 和 npm registry 为准，新增接口见各 SDK 的迁移说明。
+> Python 0.1.4 与 Node 0.10.1 均已正式发布；新增接口见各 SDK 的迁移说明，发行文件与版本状态以 PyPI 和 npm registry 为准。
 
 [完整文档](https://fasttls.github.io/) · [Python 使用指南](python/README.md) · [Node 使用指南](node/README.md)
 

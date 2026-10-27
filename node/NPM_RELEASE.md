@@ -95,3 +95,8 @@ node --input-type=module -e "import {Session} from '@fastls/fastls'; const s=new
 GitHub 候选签发与 npm registry provenance 是独立结果。初次本机上传不声明 GitHub OIDC provenance；后续通过已配置的 Trusted Publisher 工作流发布时由 npm 生成来源证明。
 
 官方参考：[npm 登录](https://docs.npmjs.com/cli/v11/commands/npm-login/)、[公开 scoped 包](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/)、[Trusted Publisher](https://docs.npmjs.com/trusted-publishers/)。
+
+
+## 0.10.1 正式发布记录
+
+2026-10-27，六个 npm 包正式发布，latest 均为 0.10.1。来源提交 `19c6c57bee4f5663757eda241081d469f62af456`，完整 CI 运行 40373864723，准备运行 40376125121，授权待审为空。上传使用认证原始归档，registry SHA-512 全部匹配；全新 Windows x64 安装与真实本地 TLS/HTTP2、Cookie、ESM/CJS 调用复验通过。首次 OIDC 上传因权限配置失败，后经本机账号验证上传，本次不声明 npm OIDC provenance。
