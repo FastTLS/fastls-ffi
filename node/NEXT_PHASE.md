@@ -8,7 +8,7 @@
 - WebSocket 消息、关闭、超时、代理、通知与共享 Cookie；Cookie、默认参数和重定向由 JavaScript SDK 管理，动态库仅持有传输资源。
 - 新增标准 fetch / Session.fetch、Request/Response/Web Stream 适配和全部常用 HTTP 方法，保留原高级接口。
 - 请求 trailers、最终 URL、实际协议和响应 EOF trailers 刷新，与 main 的当前 Python 契约对应。
-- 十六组 Python 套件的 211 个对应场景，加 2 项绑定和 18 项 Node 专有检查，共 231 项。源码、内置库候选和 npm 拆分包均运行同一完整套件。
+- 十六组 Python 套件的 212 个对应场景，加 2 项绑定和 18 项 Node 专有检查，共 232 项。源码、内置库候选和 npm 拆分包均运行同一完整套件。
 - 固定原生构建输入，功能检查与各资源长测独立调度；五个平台的 Node 24 和 Linux x64 的 Node 22 组合并行验收。
 - npm 主包 `@fastls/fastls` 与五个同版本原生包，通过可选依赖自动选择平台；版本、平台、摘要与 glibc 门禁在加载前验证。
 - `imitate` 经维护者确认采用 Apache-2.0，依赖提交固定为 `780f88aaef8474f09035855f906ecc90dd0f4102`，实际许可证随原生包收集。
