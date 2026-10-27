@@ -50,6 +50,28 @@ print(resp.status_code, resp.text)
 
 各次调用之间不保留 Cookie 或复用连接。连续请求、登录态、流式下载、SSE 或 WebSocket 请使用 `Session`；异步可选 `ClientSession` 或已有 `AsyncSession`。普通响应受 32 MiB 缓存上限约束；`stream=True` 返回未缓存响应，必须通过 `with` 或 `close()` 关闭。也可继续使用 `Session.stream()`。
 
+## 设置浏览器请求头
+
+Python 0.1.4 / Node 0.10.1 所用的默认 `chrome/156/windows` 配置没有为 `Accept-Encoding`、`Accept-Language` 和 `Priority` 设置默认值。下面的示例显式补充它们；其它配置的默认值可能不同。
+
+```python
+import fastls
+
+response = fastls.get(
+    "https://tls.peet.ws/api/all",
+    profile="chrome/156/windows",
+    headers={
+        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+        "Priority": "u=0, i",
+    },
+)
+response.raise_for_status()
+print(response.json())
+```
+
+`Accept-Language` 表示语言偏好，请按应用需要调整；`Priority` 的值也与请求场景有关，示例不是所有浏览器请求的固定模板。请求头顺序配置只排列已有字段，不会为其中的字段自动生成值。支持自动解压 gzip/deflate/br/zstd，不等于会自动发送对应的 `Accept-Encoding`。显式传入的头值优先于配置默认值；复用会话时，也可通过 Session 的 `headers` 设置。
+
 ## 从 requests / aiohttp 迁移
 
 同步代码通常可把 `import requests` 改为 `import fastls as requests`；`get`、`Session`、`params/json/data/files`、`status_code/text/content/json()` 和 `raise_for_status()` 保持熟悉的写法。流式响应也可使用：

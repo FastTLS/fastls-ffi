@@ -46,6 +46,27 @@ try {
 
 源码构建、测试和发包见 [开发指南](DEVELOPMENT.md)。普通 npm 用户不需要这些步骤。
 
+## 设置浏览器请求头
+
+Python 0.1.4 / Node 0.10.1 所用的默认 `chrome/156/windows` 配置没有为 `Accept-Encoding`、`Accept-Language` 和 `Priority` 设置默认值。下面的示例显式补充它们；其它配置的默认值可能不同。
+
+```js
+import { fetch } from '@fastls/fastls';
+
+const response = await fetch('https://tls.peet.ws/api/all', {
+  profile: 'chrome/156/windows',
+  headers: {
+    'Accept-Encoding': 'gzip, deflate, br, zstd',
+    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+    'Priority': 'u=0, i',
+  },
+});
+if (!response.ok) throw new Error(`HTTP ${response.status}`);
+console.log(await response.json());
+```
+
+`Accept-Language` 表示语言偏好，请按应用需要调整；`Priority` 的值也与请求场景有关，示例不是所有浏览器请求的固定模板。请求头顺序配置只排列已有字段，不会为其中的字段自动生成值。支持自动解压 gzip/deflate/br/zstd，不等于会自动发送对应的 `Accept-Encoding`。显式传入的头值优先于配置默认值；复用会话时，也可通过 Session 的 `headers` 设置。
+
 ## 从 Node fetch 迁移
 
 新增 `fetch` 入口沿用 Node 原生 fetch 的主要调用习惯，并增加指纹、代理和证书配置：
