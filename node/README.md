@@ -1,8 +1,6 @@
 # Fastls Node.js SDK
 
-> 发布状态（2026-10-27）：0.10.1 已正式发布至 npm，latest 指向该稳定版本。主包与五个平台原生包均已核对摘要。
-
-Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应正式版 **0.10.1**，发行文件与版本状态以 npm registry 为准。
+Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应 **0.10.1**。
 
 支持 HTTP/1.1、HTTP/2、流式上传下载、双工、SSE、WebSocket、会话 Cookie 和 HTTP/HTTPS/SOCKS 代理。网络请求由 Go 执行，通过 Koffi 在当前 Node 进程中调用；使用者无需 Python 或 RPC 服务。
 
@@ -221,15 +219,9 @@ Session和请求的`proxy`接受URL字符串或null。请求省略或undefined�
 
 `proxyCaFile`只控制HTTPS代理信任，`caFile`只控制目标信任，两者互不代替。未设置代理CA使用系统根；提供文件则替换系统根。构造Session时读取默认代理CA一次，请求指定路径时重新读取；请求undefined继承默认，null恢复系统根。直连、HTTP和SOCKS忽略代理CA默认值及请求覆盖。代理地址及凭据、profile、代理CA和目标CA共同隔离连接池。目标证书仍需验证；目标请求禁止设置Proxy-Authorization和Proxy-Connection。认证只用于代理握手，错误消息不回显凭据或代理任意响应短语。握手计入connect和total预算，AbortSignal取消会关闭未建立的隧道；取消单条H2流继续复用健康的共享隧道。代理拒绝后不降级或自动重试。
 
-代理测试使用Node测试进程中的独立、仅访问loopback的CONNECT/RFC1928/RFC1929靶场；SDK本身不依赖Python或代理辅助进程。16 组 Python 行为映射由源码、内置库候选及 npm 拆分包统一验收；语言适配见PARITY.md。
-
-`npm run test:proxy:soak`默认以32路并发运行60秒，轮换正常请求、共享H2流取消、错误认证和停滞握手取消；四种scheme分别使用真实loopback代理。FASTLS_NODE_PROXY_SOAK_SECONDS可设为1..300。Linux当前Go/Node组合执行该独立测试，沿用现有RSS、Go堆、goroutine及句柄阈值，逐批记录写入build/node-proxy-recovery-*.json，不计入231项主套件。
-
-代理独立长测与SSE长测一样，显式使用`--max-semi-space-size=16`固定测试进程的V8半空间上限。本机Windows Node24默认策略在持续分配时将new_space保留空间从4MiB扩大至128MiB，而Go堆、原生请求和隧道已回收。该参数仅作用于独立测试进程，不修改SDK用户进程的运行配置，也不放宽RSS或句柄阈值。证据保存运行参数、V8空间快照，以及阈值判定之后的完整GC诊断；判定使用GC前的最终采样。
+代理测试和资源长测的运行方式见 [开发说明](https://github.com/FastTLS/fastls-ffi/blob/main/node/DEVELOPMENT.md#代理长测)。
 
 私有HTTPS代理示例：`new Session({ proxy: 'https://proxy.example:443', proxyCaFile: '/path/to/proxy-ca.pem', caFile: '/path/to/target-ca.pem' })`。两类CA分别验证代理与目标；请求可用`{ proxyCaFile: null }`恢复代理系统信任，或指定其它代理CA文件，均不会复用不相符的已有隧道。
-
-代理长测按靶场握手阶段同步取消，避免固定毫秒计时在慢runner上提前中止TLS而未触达待测CONNECT阶段。HTTPS靶场延迟50毫秒处理CONNECT，确保该时序在本地也能覆盖。H2可合并同一代理的在途建连；每批每种scheme至少触发一次真实握手取消，并逐批核对启动/回收计数，不依赖请求数等于物理建连数。资源阈值保持不变。
 
 ## HTTP/2 双工
 

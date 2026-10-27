@@ -58,3 +58,13 @@ python node/scripts/test-npm-release.py
 `node-release.yml` 单独签发 GitHub 内置库候选和 thin 包，生成 SHA256SUMS、Sigstore 来源证明及清单，不会发布 npm。既有 `node-v0.10.1-dev.0` GitHub 预发布使用历史包名 `@fasttls/fastls`；本次 npm 包名为 `@fastls/fastls`，两套归档不能互换。后续 GitHub 签发使用新版本号，不能覆盖既有 tag 的来源记录。
 
 每次构建收集原生依赖许可证，npm 发布要求五个平台的 `licenseReviewRequired` 均为空。`imitate` 已固定到补齐 Apache-2.0 的提交；是否满足要求以本次候选清单为准。发布状态以 npm registry 和已完成的工作流为准。
+
+## 代理长测
+
+代理测试使用Node测试进程中的独立、仅访问loopback的CONNECT/RFC1928/RFC1929靶场；SDK本身不依赖Python或代理辅助进程。16 组 Python 行为映射由源码、内置库候选及 npm 拆分包统一验收；语言适配见PARITY.md。
+
+`npm run test:proxy:soak`默认以32路并发运行60秒，轮换正常请求、共享H2流取消、错误认证和停滞握手取消；四种scheme分别使用真实loopback代理。FASTLS_NODE_PROXY_SOAK_SECONDS可设为1..300。Linux当前Go/Node组合执行该独立测试，沿用现有RSS、Go堆、goroutine及句柄阈值，逐批记录写入build/node-proxy-recovery-*.json，不计入231项主套件。
+
+代理独立长测与SSE长测一样，显式使用`--max-semi-space-size=16`固定测试进程的V8半空间上限。本机Windows Node24默认策略在持续分配时将new_space保留空间从4MiB扩大至128MiB，而Go堆、原生请求和隧道已回收。该参数仅作用于独立测试进程，不修改SDK用户进程的运行配置，也不放宽RSS或句柄阈值。证据保存运行参数、V8空间快照，以及阈值判定之后的完整GC诊断；判定使用GC前的最终采样。
+
+代理长测按靶场握手阶段同步取消，避免固定毫秒计时在慢runner上提前中止TLS而未触达待测CONNECT阶段。HTTPS靶场延迟50毫秒处理CONNECT，确保该时序在本地也能覆盖。H2可合并同一代理的在途建连；每批每种scheme至少触发一次真实握手取消，并逐批核对启动/回收计数，不依赖请求数等于物理建连数。资源阈值保持不变。
