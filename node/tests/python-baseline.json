@@ -3,7 +3,7 @@
   "files": {
     "test_python.py": "29af79924aa8c51b0fd5b0d95807249b38f5cd477dd9b258426a1739994aaa95",
     "test_stability.py": "0ad5d3277b48eed4edfe5e9b99e333ce9d70b12e1242f18ad1db0b40ee79a13d",
-    "test_network.py": "47b4a066788519634ca5fa007439ab2c90a9fb65aeba9b8c950bba439eb4324e",
+    "test_network.py": "d680623e969e6ac9bf1f05d36029b035a10ed0cf8f6945e03d15ebf3c11ae05b",
     "test_pooling.py": "cb067c75a805cce7ba6e46badf9c1cbe5d6489a1b8b871cbb051655196cadfc8",
     "test_cookies.py": "464475fa37e785469aaaf440fe0f85b566dadcdb81f9ecb87c618587a5c3eb64",
     "test_decode_timeouts.py": "f6ca6f951772f8af90bba39a0441811f97660f846ac2d932d51b7ac5b04650f8",
@@ -20,6 +20,7 @@
   },
   "additionalSuites": {
     "test_websocket_cookies.py": "Integrated Node Cookie contract from 7788ff8",
-    "test_sdk_sessions.py": "SDK owns cookies; native transport context rejects cookie commands; redirect limits clean up."
+    "test_sdk_sessions.py": "SDK owns cookies; native transport context rejects cookie commands; redirect limits clean up.",
+    "test_network.py": "G1 response byte/repeated-header/Set-Cookie/trailer contract mirrored with independent TCP bytes for buffered and streamed Node responses."
   }
 }

@@ -26,6 +26,27 @@ p('test_fragmented_valid_chunked_binary_with_trailers',async t=>{
   const peer=await wire(t,[...reply].map(byte=>Buffer.from([byte])));
   assert.deepEqual((await session(t).get('http://'+peer.address)).content,Buffer.concat([SLAB.subarray(0,4),Buffer.from('end')]));
 });
+p('test_response_contract_preserves_wire_bytes_repeated_headers_and_trailer',async t=>{
+  const payload=Buffer.from([0,255,128,1]);
+  const reply=Buffer.concat([
+    Buffer.from('HTTP/1.1 200 OK\r\nX-Repeat: one\r\nX-Repeat: two\r\nSet-Cookie: a=1; Path=/\r\nSet-Cookie: b=2; Path=/\r\nTransfer-Encoding: chunked\r\nTrailer: X-Final\r\n\r\n4\r\n'),
+    payload,Buffer.from('\r\n0\r\nX-Final: complete\r\n\r\n'),
+  ]);
+  for(const streaming of [false,true]){
+    const peer=await wire(t,reply),url='http://'+peer.address,s=session(t,{decodeContent:false});
+    let response,body;
+    if(streaming){
+      response=await s.stream('GET',url);
+      const chunks=[];for await(const chunk of response.body)chunks.push(chunk);
+      body=Buffer.concat(chunks);
+    }else{response=await s.get(url);body=response.content;}
+    assert.deepEqual(body,payload);
+    assert.deepEqual(response.headers.getAll('X-Repeat'),['one','two']);
+    assert.deepEqual(response.headers.getAll('Set-Cookie'),['a=1; Path=/','b=2; Path=/']);
+    assert.equal(response.trailers.get('X-Final'),'complete');
+    assert.equal(response.httpVersion,'HTTP/1.1');assert.equal(response.url,url);
+  }
+});
 p('test_aborted_h1_connection_and_h2_stream_recover',async t=>{
   for(const protocol of ['https1','https2']){const s=session(t);for(let i=0;i<8;i++){
     await assert.rejects(s.get(fixture[protocol]+'/abort'),sdk.FastlsError);await healthy(s,protocol);}}

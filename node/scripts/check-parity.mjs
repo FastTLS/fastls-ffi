@@ -6,7 +6,9 @@ const sources=['test_python.py','test_stability.py','test_network.py','test_pool
 const deferred=[];
 // Module-level one-shot calls are Python-specific, not Node parity scenarios.
 const pythonSpecific=['test_api.py'];
-const infrastructure=['test_ci.py','test_ci_artifact.py','test_pypi.py','test_benchmarks.py','test_c_wait.py','test_c_websocket.py'];
+// These test the benchmark controller and Windows measurement API, not SDK
+// request behavior. SDK suites still require explicit Node scenario mappings.
+const infrastructure=['test_ci.py','test_ci_artifact.py','test_pypi.py','test_benchmarks.py','test_regression.py','test_windows_cpu_probe.py','test_c_wait.py','test_c_websocket.py'];
 const unreviewed=readdirSync(resolve(root,'tests')).filter(file=>/^test_.*\.py$/.test(file)&&![...sources,...deferred,...infrastructure,...pythonSpecific].includes(file));
 if(unreviewed.length)throw Error(`Review new Python suites before claiming parity: ${unreviewed.join(', ')}`);
 const python=new Set();
