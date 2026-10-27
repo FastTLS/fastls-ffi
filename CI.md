@@ -30,11 +30,11 @@ Linux x64当前Go组合附加race测试。其它组合不声称完成race覆盖�
 
 ## 上线前必须绑定当前依赖
 
-F3 本地集成分支已生成不可变提交，`ci/dependencies.json` 固定以下候选；执行远端矩阵前须先推送这些提交，当前文档不把本地提交声称为已发布：
+S4 开发认证使用 `ci/dependencies.json` 中以下已推送完整 SHA。括号中的版本属于公开兼容基线，不能据此认为当前开发提交已发布为该版本。详见 [候选认证范围](CERTIFICATION.md)：
 
-- fastls：a57a7c51852b80976a07d7ce50ab758c22d44434（`v0.1.1`）。
-- ftransport：2e1d66a7983b4fe730d18c3b8b90831ae6e93db5（`v0.1.0`）。
-- imitate：1ef806aec3fca9607c083e375a72e84ae542d6bd（`v0.1.0`）。
+- fastls：cb551d82fe4a3bc51e848b36d22180fb9b0aa798（`v0.1.1`）。
+- ftransport：d5afcd1a2db48a40850363b76e8a19eb339c757c（`v0.1.0`）。
+- imitate：fd10ea4393408e904ae2866ecbfe3efaaaa6ad8e（`v0.1.0`）。
 
 Fastls依赖包含连接生命周期、隔离的私有CA根配置、可复用Session、多值头/CookieStore及流式解码/分层预算；Brotli固定v1.2.0以拒绝截断流。ftransport负责标准库请求/响应、HTTP/1.1头顺序、HTTP/2帧与流控、可取消的共用建连及独立空闲超时。动态库须重新构建；核心包测试执行顺序请求、重定向、关闭后重连、活动响应体及并发回归，封装侧重新执行全部同步/异步与流式测试。
 
@@ -45,7 +45,7 @@ Fastls依赖包含连接生命周期、隔离的私有CA根配置、可复用Ses
 2. 仓库Actions变量FASTLS_REF、FTRANSPORT_REF、IMITATE_REF。
 3. 提交到ci/dependencies.json的fastls_ref、ftransport_ref、imitate_ref。
 
-不接受浮动分支名。上游依赖使用 `v0.1.0` 正式标签，可在关闭 `go.work`、没有 `replace` 的干净模块中解析；本地 `go.work` 仍显式绑定标签对应的同一批提交。
+不接受浮动分支名。关闭 `go.work`、没有 `replace` 时继续独立验证公开模块版本；开发认证的 `go.work` 显式绑定上述候选 SHA。两套输入分别保留证据，不把公开标签和开发提交当成相同源码。
 本仓库push会启动工作流；工作流不是本地文件写好后就已在GitHub执行。
 
 ## 本地复现

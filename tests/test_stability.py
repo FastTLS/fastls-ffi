@@ -263,7 +263,11 @@ class Stability(FixtureCase):
 
     def test_soak_and_resource_recovery(self):
         seconds = int(os.environ.get("FASTLS_STABILITY_SECONDS", "30"))
-        self.assertTrue(1 <= seconds <= 300)
+        self.assertTrue(1 <= seconds <= 7200)
+        # Long observations keep their own recorded cadence so the in-process
+        # evidence list does not dominate the memory being measured. Existing
+        # 30/300-second gates keep their original workload and all thresholds.
+        batch_pause_seconds = 1.0 if seconds > 300 else 0.1
         async def batch(s, count=32):
             results = await asyncio.gather(*(s.get(self.fixture["https2"] + "/bytes?n=4096") for _ in range(count)))
             self.assertTrue(all(r.content == SLAB[:4096] for r in results))
@@ -284,7 +288,7 @@ class Stability(FixtureCase):
                     self.idle()
                     samples.append(dict(self.monitor.stats(), **resources()))
                     # Bound request churn so resource snapshots remain comparable.
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(batch_pause_seconds)
                 final = samples[-1]
                 self.assertLessEqual(final["goroutines"], baseline["goroutines"] + 16)
                 self.assertLessEqual(max(sample["heap_inuse_bytes"] for sample in samples), baseline["heap_inuse_bytes"] + 96 * MIB)
@@ -293,7 +297,7 @@ class Stability(FixtureCase):
                     self.assertLessEqual(final["rss_bytes"], baseline["rss_bytes"] + 96 * MIB)
                 if baseline["descriptors_or_handles"] is not None:
                     self.assertLessEqual(final["descriptors_or_handles"], baseline["descriptors_or_handles"] + 64)
-                self.metrics["cases"]["soak"] = {"seconds": time.perf_counter() - started, "completed_requests": requests, "concurrency": 32, "baseline": baseline, "samples": samples}
+                self.metrics["cases"]["soak"] = {"seconds": time.perf_counter() - started, "requested_seconds": seconds, "batch_pause_seconds": batch_pause_seconds, "completed_requests": requests, "concurrency": 32, "baseline": baseline, "samples": samples}
         asyncio.run(run())
 
 

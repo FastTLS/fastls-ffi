@@ -97,3 +97,6 @@ try {
 ## Development capability design
 
 [Address policy and complete profile.Spec decisions](CAPABILITY_DESIGN.md) describe separate future capabilities. Neither option is implemented or advertised by this documentation change.
+
+
+[S4 development certification and long-observation scope](CERTIFICATION.md).

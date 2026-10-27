@@ -42,7 +42,18 @@ def summary(message):
             output.write(message + "\n")
 
 
+def extended_soak_seconds(env):
+    value = env.get("FASTLS_EXTENDED_SOAK_SECONDS") or "300"
+    if not re.fullmatch(r"[0-9]+", value) or not 300 <= int(value) <= 7200:
+        raise ValueError("FASTLS_EXTENDED_SOAK_SECONDS must be an integer in 300..7200")
+    return int(value)
+
+
 def resolve():
+    try:
+        extended_soak_seconds(os.environ)
+    except ValueError as error:
+        summary(str(error)); return 1
     refs = json.loads((ROOT / "ci/dependencies.json").read_text(encoding="utf-8"))
     resolved = {}
     for name in REFS:
@@ -179,8 +190,8 @@ def run(stage="all"):
 
     runner = EvidenceRunner(evidence / stage, {"target": target, "sources": sources, "stage": stage})
 
-    def execute(name, args, cwd=ROOT, command_env=None):
-        return runner.execute(name, args, cwd, command_env or env)
+    def execute(name, args, cwd=ROOT, command_env=None, timeout=600):
+        return runner.execute(name, args, cwd, command_env or env, timeout=timeout)
 
     try:
         if stage in ("all", "source", "contracts", "soak"):
@@ -261,8 +272,10 @@ def run(stage="all"):
             execute("race-core", ["go", "test", "-race", "./..."], FASTLS_ROOT)
             execute("race-ftransport", ["go", "test", "-race", "./..."], FTRANSPORT_ROOT)
         if stage == "soak" or (stage == "all" and env.get("FASTLS_CI_RACE", "").lower() == "true"):
-            soak_env = dict(env, FASTLS_STABILITY_SECONDS="300", FASTLS_TEST_LABEL="extended")
-            execute("extended-soak", [sys.executable, "tests/test_stability.py", "Stability.test_soak_and_resource_recovery"], command_env=soak_env)
+            seconds = extended_soak_seconds(env)
+            soak_env = dict(env, FASTLS_STABILITY_SECONDS=str(seconds), FASTLS_TEST_LABEL="extended")
+            runner.results["requested_soak_seconds"] = seconds
+            execute("extended-soak", [sys.executable, "tests/test_stability.py", "Stability.test_soak_and_resource_recovery"], command_env=soak_env, timeout=seconds + 180)
         verify_inputs(target, sources)
         success = True
     except (RuntimeError, ValueError, OSError, KeyError) as error:

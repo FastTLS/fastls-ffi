@@ -18,6 +18,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DependencyGate(unittest.TestCase):
+    def test_soak_duration_rejects_invalid_or_shortened_certification(self):
+        self.assertEqual(ci.extended_soak_seconds({}), 300)
+        self.assertEqual(ci.extended_soak_seconds({"FASTLS_EXTENDED_SOAK_SECONDS": "3600"}), 3600)
+        self.assertEqual(ci.extended_soak_seconds({"FASTLS_EXTENDED_SOAK_SECONDS": "7200"}), 7200)
+        for value in ("0", "299", "7201", "3600.0", "3600\nother=1", "-300"):
+            with self.assertRaises(ValueError):
+                ci.extended_soak_seconds({"FASTLS_EXTENDED_SOAK_SECONDS": value})
+
     def test_preflight_can_be_loaded_without_scripts_on_import_path(self):
         with tempfile.TemporaryDirectory() as temporary:
             code = "import runpy; assert callable(runpy.run_path(" + repr(str(ROOT / "scripts/ci.py")) + ")[\"preflight\"])"

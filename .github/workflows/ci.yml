@@ -2,6 +2,7 @@ name: Native library and Python SDK
 permissions:
   contents: read
 env:
+  FASTLS_EXTENDED_SOAK_SECONDS: ${{ inputs.certification_soak_seconds || '300' }}
   FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.1.4.dev{0}', github.run_number)
     }}
   FASTLS_RELEASE_MODE: ${{ github.ref_type == 'tag' && 'true' || 'false' }}
@@ -245,7 +246,7 @@ jobs:
         - race
         - soak
     runs-on: ${{ matrix.config.runner }}
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.certification_soak_seconds != '' && inputs.certification_soak_seconds != '300' && 150 || 30 }}
     env:
       CGO_ENABLED: '1'
       FASTLS_CI_TARGET: ${{ matrix.config.target }}
@@ -865,6 +866,10 @@ jobs:
       imitate_ref:
         description: Reviewed FastTLS/imitate commit SHA (optional override)
         type: string
+      certification_soak_seconds:
+        description: Extended Python resource observation, integer 300..7200 seconds (3600 for S4)
+        type: string
+        default: '300'
       pypi_run_id:
         description: 'Resume only the PyPI upload from this certified tag-push run ID (blank: normal full CI)'
         type: string
