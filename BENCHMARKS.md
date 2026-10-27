@@ -27,6 +27,8 @@ python tests/client_conformance.py --fastls-source installed --fixture /absolute
 
 检查上传/解压摘要、Cookie 跳转链与会话隔离、重定向开关及 POST/303、截断报错与恢复、超时后的服务端取消、独立 CONNECT 代理、异步取消与兄弟流隔离、Fastls 原生句柄归零。同步 Requests 的 asyncio/H2 标记不适用；已观察的竞品行为差异与检查失败分别记录。例如异步提前关闭等待远端正文超过两秒会保留观察证据，不能记作取消通过；Fastls 出现该行为则视为项目回归。初次运行发现的靶场/适配器错误也应保留，不作为库行为差异。
 
+手动工作流 `Published Python client baseline` 在 Windows 2022 / Ubuntu 24.04 使用 Python 3.11、Go 1.26.10 构建独立靶场；客户端均来自固定 PyPI wheel，无需 cgo。smoke 覆盖全部现有场景，full 对上述八个大文件传输场景各运行五轮。源码基准工作流与此工作流分别保留；发布包测量失败会使作业失败并保存原始产物，不能把对照客户端失败改成跳过通过。工作流文件的存在不代表远端已经执行。
+
 在所选输出目录双击 `report.html` 查看，完整数据为 `results.json`。工作进程的输入、结果与错误日志也保留，不含测试CA私钥。用 `--case` 多次选择具体场景；名称可从 `benchmarks/common.py` 或已生成的JSON取得。
 
 - smoke：缩小到256KiB、少并发、1轮和0.15秒的小请求采样，用于验证脚本与契约，不能作为速度排名。
