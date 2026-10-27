@@ -2,8 +2,6 @@
 
 [English documentation](https://fasttls.github.io/en/guide/)
 
-> Python 0.1.4 与 Node 0.10.1 均已正式发布；新增接口见各 SDK 的迁移说明，发行文件与版本状态以 PyPI 和 npm registry 为准。
-
 [完整文档](https://fasttls.github.io/) · [Python 使用指南](python/README.md) · [Node 使用指南](node/README.md)
 
 在 Python 或 Node.js 进程内使用 Fastls 原生 HTTP 客户端，不需要运行 RPC 服务。平台包内置动态库，普通安装无需 Go 或 C 编译器。
@@ -78,7 +76,7 @@ try {
 ## 详细文档与问题反馈
 
 - [使用文档](https://fasttls.github.io/guide/)：安装、功能、参数与排错。
-- [版本与发布说明](https://github.com/FastTLS/fastls-ffi/releases)：正式版本、开发版本和产物边界。
+- [版本与发布说明](https://github.com/FastTLS/fastls-ffi/releases)：各版本的变更和下载文件。
 - [问题反馈](https://github.com/FastTLS/fastls-ffi/issues)：请提供版本、系统架构、脱敏后的最小示例与错误；不要提交凭据、Cookie、私钥或个人数据。
 
 ## 开源协议与第三方声明
