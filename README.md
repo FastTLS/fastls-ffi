@@ -93,3 +93,7 @@ try {
 ## 本地构建
 
 源码开发、编译器要求及 ABI 说明已整理到 [DEVELOPMENT.md](DEVELOPMENT.md) 和 [ABI.md](ABI.md)。普通 wheel/npm 用户无需构建。
+
+## Development capability design
+
+[Address policy and complete profile.Spec decisions](CAPABILITY_DESIGN.md) describe separate future capabilities. Neither option is implemented or advertised by this documentation change.
