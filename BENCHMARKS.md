@@ -11,6 +11,24 @@ python benchmarks/run.py --profile smoke --output build/benchmark-smoke
 python benchmarks/run.py --profile full --output build/benchmark-full
 ```
 
+已发布包基线使用独立环境安装 `fastls==0.1.4` 及锁定的基准依赖，再运行：
+
+```shell
+python benchmarks/run.py --fastls-source installed --fixture /absolute/path/to/ffi-fixture --profile smoke --output build/published-smoke
+```
+
+`installed` 模式加载该环境的 wheel 和包内原生库，验证包版本、build-info 与库摘要；不需要四个兄弟源码仓库，也不会加载当前工作区的 Python SDK。`--fixture` 明确指定预先构建的独立靶场程序；报告保存其 SHA256，靶场源码和构建来源另随测量清单保存。默认 `checkout` 仍测量当前源码 SDK 与 dist 库。报告分别记录这两个输入来源、已发布包原生源码、基准工具提交与实际模块加载路径，禁止将源码 H3 改进算入已发布 Python 0.1.4。
+
+额外的行为基线可用相同环境运行：
+
+```shell
+python tests/client_conformance.py --fastls-source installed --fixture /absolute/path/to/ffi-fixture --output build/published-conformance
+```
+
+检查上传/解压摘要、Cookie 跳转链与会话隔离、重定向开关及 POST/303、截断报错与恢复、超时后的服务端取消、独立 CONNECT 代理、异步取消与兄弟流隔离、Fastls 原生句柄归零。同步 Requests 的 asyncio/H2 标记不适用；已观察的竞品行为差异与检查失败分别记录。例如异步提前关闭等待远端正文超过两秒会保留观察证据，不能记作取消通过；Fastls 出现该行为则视为项目回归。初次运行发现的靶场/适配器错误也应保留，不作为库行为差异。
+
+手动工作流 `Published Python client baseline` 在 Windows 2022 / Ubuntu 24.04 使用 Python 3.11、Go 1.26.10 构建独立靶场；客户端均来自固定 PyPI wheel，无需 cgo。smoke 覆盖全部现有场景，full 对上述八个大文件传输场景各运行五轮。源码基准工作流与此工作流分别保留；发布包测量失败会使作业失败并保存原始产物，不能把对照客户端失败改成跳过通过。工作流文件的存在不代表远端已经执行。
+
 在所选输出目录双击 `report.html` 查看，完整数据为 `results.json`。工作进程的输入、结果与错误日志也保留，不含测试CA私钥。用 `--case` 多次选择具体场景；名称可从 `benchmarks/common.py` 或已生成的JSON取得。
 
 - smoke：缩小到256KiB、少并发、1轮和0.15秒的小请求采样，用于验证脚本与契约，不能作为速度排名。
@@ -46,5 +64,15 @@ python benchmarks/report.py path/to/results-a.json path/to/results-b.json --outp
 首次正式矩阵及独立复测中，Windows的32并发HTTP/1.1冷连接负载出现Fastls通知握手超时，Linux相同负载通过。修复让专用通知TCP连接在会话结束时以reset关闭，避免其积累TIME_WAIT；业务HTTP连接不受此设置影响。同时保留原生通知拨号/写入错误，握手超时不再只给空错误消息。增加32路独立会话反复创建/请求/关闭的回归，并使用相同冷连接负载在两个系统补测。旧失败轮必须保留，新旧提交分开标识；在补测完成前不宣称该问题已经解决。
 
 ## 工具正确性门禁
+
+### H2 SETTINGS 确认与靶场来源
+
+`scripts/build_benchmark_fixture.py` 使用 Go 的文件 overlay，仅为独立基准靶场将 ACK 布尔值改为计数器；不修改 GOROOT、SDK 或客户端窗口参数。工具固定 Go 1.26.10 和上游源码 SHA256，未知版本/源码明确拒绝，无默认回退。输出 `build/ffi-fixture-benchmark[.exe]` 及 `.build.json`，包含原始/覆盖源码摘要、构建命令和靶场摘要。`benchmarks/prepare.py` 保留原始验收靶场，另构建基准靶场并执行每连接八个连续 SETTINGS、20 轮逐帧 ACK 黑盒门禁。基准控制器和启动诊断默认使用新靶场，显式 `--fixture` 仍可复核原始靶场；报告记录构建来源。修正前后数据必须分组。
+
+```shell
+python scripts/build_benchmark_fixture.py
+python tests/probe_h2_settings_ack.py --fixture build/ffi-fixture-benchmark.exe --output build/settings-ack.json
+python tests/client_resource_soak.py --fixture build/ffi-fixture-benchmark.exe --rounds 50 --output build/client-soak
+```
 
 `tests/test_benchmarks.py`检查进程树采样、分位数边界、聚合空间、错误轮保留、环境隔离、协议适用范围与离线报告转义；Go另验证独立正文、gzip、上传摘要、统计及普通端点观测隔离。smoke通过真实库覆盖全部适用场景；这些检查不以某客户端必须更快为通过条件。

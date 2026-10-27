@@ -1,5 +1,6 @@
 """Checks that performance reports cannot hide failures or mix hosts."""
 import json
+import hashlib
 import math
 import os
 from pathlib import Path
@@ -7,15 +8,49 @@ import sys
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"benchmarks"))
 from common import Histogram, cases
 from report import summaries, render
-from run import snapshot
+from run import snapshot, fastls_input
+from worker import require_certificate_error
 import psutil
 
 
 class BenchmarkContract(unittest.TestCase):
+    def test_installed_native_is_verified_without_sibling_checkouts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            package=Path(directory)/"fastls"
+            native=package/"_lib";native.mkdir(parents=True)
+            filename="fastls.dll" if os.name=="nt" else "libfastls.dylib" if sys.platform=="darwin" else "libfastls.so"
+            library=native/filename;library.write_bytes(b"released native library")
+            info=dict(package_version="0.1.4",library_sha256=hashlib.sha256(library.read_bytes()).hexdigest(),sources={"fastls":"release-sha"})
+            (native/"build-info.json").write_text(json.dumps(info))
+            class Distribution:
+                version="0.1.4"
+                def locate_file(self,name):
+                    return Path(directory)/name
+            with patch("run.importlib.metadata.distribution",return_value=Distribution()), patch("run.revision",side_effect=AssertionError("must not use sibling source")):
+                result=fastls_input("installed")
+                self.assertEqual(result["python_path"],str(package.parent.resolve()))
+                self.assertEqual(result["sources"],{"fastls":"release-sha"})
+                library.write_bytes(b"modified library")
+                with self.assertRaisesRegex(RuntimeError,"SHA256"):
+                    fastls_input("installed")
+                library.write_bytes(b"released native library")
+                info["package_version"]="wrong-version"
+                (native/"build-info.json").write_text(json.dumps(info))
+                with self.assertRaisesRegex(RuntimeError,"version mismatch"):
+                    fastls_input("installed")
+
+    def test_wrong_ca_requires_a_certificate_failure(self):
+        require_certificate_error(Exception("x509: certificate signed by unknown authority"))
+        require_certificate_error(Exception("CERTIFICATE_VERIFY_FAILED"))
+        for error in (TimeoutError("request timed out"),ConnectionError("connection refused")):
+            with self.assertRaisesRegex(AssertionError,"different reason"):
+                require_certificate_error(error)
+
     def test_sampler_includes_actual_interpreter_behind_launcher(self):
         code="import json,os,psutil,sys; data=bytearray(b'x'*(16*1024*1024)); print(json.dumps({'pid':os.getpid(),'rss':psutil.Process().memory_info().rss}),flush=True);sys.stdin.readline()"
         process=subprocess.Popen([sys.executable,"-c",code],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)

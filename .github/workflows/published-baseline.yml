@@ -1,0 +1,72 @@
+name: Published Python client baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: smoke checks all cases; full measures the eight 64MiB transfer cases five times
+        type: choice
+        options: [smoke, full]
+        default: smoke
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: ${{ matrix.runner }} / published wheels / ${{ inputs.profile }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      GOWORK: 'off'
+      CGO_ENABLED: '0'
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
+      BENCH_PROFILE: ${{ inputs.profile }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Install fixed binary wheels and preserve their digests
+        shell: bash
+        run: |
+          mkdir -p build/published-baseline
+          python -m pip install --only-binary=:all: --report build/published-baseline/install-report.json -r benchmarks/requirements.lock fastls==0.1.4
+          python -m pip check
+      - name: Check the measurement tools and independent fixture
+        shell: bash
+        run: |
+          python tests/test_benchmarks.py
+          go test ./cmd/ffi-fixture -count=1
+          python scripts/build_benchmark_fixture.py --output build/ffi-fixture-benchmark.exe
+          python tests/probe_h2_settings_ack.py --fixture build/ffi-fixture-benchmark.exe --output build/published-baseline/settings-ack.json
+          go version -m build/ffi-fixture-benchmark.exe > build/published-baseline/fixture-build.txt
+          cp build/ffi-fixture-benchmark.build.json build/published-baseline/fixture-build.json
+      - name: Record client behavior and explicit differences
+        run: python tests/client_conformance.py --fastls-source installed --fixture build/ffi-fixture-benchmark.exe --output build/published-baseline/conformance
+      - name: Measure installed packages; never substitute the checkout SDK
+        shell: bash
+        run: |
+          if [ "$BENCH_PROFILE" = full ]; then
+            python benchmarks/run.py --fastls-source installed --fixture build/ffi-fixture-benchmark.exe --profile full --case download-h1-c1 --case download-h2-c1 --case upload-h1 --case upload-h2 --case gzip-h1 --case gzip-h2 --case slow-h1 --case slow-h2 --output build/published-baseline/measurements
+          else
+            python benchmarks/run.py --fastls-source installed --fixture build/ffi-fixture-benchmark.exe --profile smoke --output build/published-baseline/measurements
+          fi
+      - name: Preserve failed rounds as well as successful measurements
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: published-baseline-${{ matrix.runner }}-${{ inputs.profile }}
+          path: build/published-baseline/
+          retention-days: 14
