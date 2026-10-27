@@ -41,4 +41,4 @@ p('test_soak_and_resource_recovery',async t=>{
   evidence.measurements.soak={seconds:(performance.now()-started)/1000,requests,concurrency:32,baseline,samples};
   const last=samples.at(-1);assert.ok(last.goroutines<=baseline.goroutines+16);assert.ok(Math.max(...samples.map(s=>s.heap_inuse_bytes))<=baseline.heap_inuse_bytes+96*1024*1024);
   assert.ok(Math.max(...samples.map(s=>s.rss_bytes))<=baseline.rss_bytes+128*1024*1024);assert.ok(last.rss_bytes<=baseline.rss_bytes+96*1024*1024);assert.ok(last.descriptors_or_handles<=baseline.descriptors_or_handles+64);
-});
+},'Node retains its ordinary 30/300-second resource observations and unchanged limits. The optional longer Python certification workload is separate, with its own recorded duration and cadence; this mapping does not claim a one-hour Node run.');
