@@ -59,6 +59,33 @@ def versions():
     return result
 
 
+def fastls_input(source):
+    """Resolve an explicit SDK/native pair without importing its Go runtime."""
+    filename="fastls.dll" if os.name=="nt" else "libfastls.dylib" if sys.platform=="darwin" else "libfastls.so"
+    if source=="installed":
+        distribution=importlib.metadata.distribution("fastls")
+        package=Path(distribution.locate_file("fastls")).resolve()
+        library=package/"_lib"/filename
+        info=json.loads((library.parent/"build-info.json").read_text(encoding="utf-8"))
+        if info.get("package_version")!=distribution.version:
+            raise RuntimeError("installed SDK/native package version mismatch")
+        if info.get("library_sha256")!=hashlib.sha256(library.read_bytes()).hexdigest():
+            raise RuntimeError("installed native library does not match build-info SHA256")
+        return dict(source=source,python_path=str(package.parent),library=str(library),
+                    package_version=distribution.version,build_info=info,
+                    sources=info.get("sources",{}))
+    library=ROOT/"dist"/filename
+    return dict(source=source,python_path=str(ROOT/"python"),library=str(library),
+                build_info=json.loads((library.parent/"build-info.json").read_text(encoding="utf-8")),
+                sources={name:revision(path) for name,path in (("fastls-ffi",ROOT),("fastls",ROOT.parent/"fastls"),("ftransport",ROOT.parent/"ftransport"),("imitate",ROOT.parent/"imitate"))})
+
+
+def sdk_digests(inputs):
+    package=Path(inputs["python_path"])/"fastls"
+    return {str(path.relative_to(package)):hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(package.rglob("*.py"))}
+
+
 def execute(spec,fixture_process,output):
     token=spec["run_id"]
     specfile=output/(token+"-input.json")
@@ -66,10 +93,9 @@ def execute(spec,fixture_process,output):
     spec.update(result_file=str(resultfile))
     specfile.write_text(json.dumps(spec))
     env=os.environ.copy();env.update(PYTHONUTF8="1",PYTHONIOENCODING="utf-8")
-    library=ROOT/"dist"/("fastls.dll" if os.name=="nt" else "libfastls.dylib" if sys.platform=="darwin" else "libfastls.so")
-    env["FASTLS_LIBRARY"]=str(library)
     for key in list(env):
-        if key.lower() in ("http_proxy","https_proxy","all_proxy","no_proxy"): env.pop(key)
+        if key.lower() in ("http_proxy","https_proxy","all_proxy","no_proxy","pythonpath","fastls_library"): env.pop(key)
+    env["FASTLS_LIBRARY"]=spec["fastls_input"]["library"]
     started=time.perf_counter()
     process=subprocess.Popen([sys.executable,str(ROOT/"benchmarks/worker.py"),str(specfile)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding="utf-8",env=env)
     lines=queue.Queue(); errors=[]
@@ -135,6 +161,8 @@ def main():
     p.add_argument('--output', type=Path, default=ROOT / 'build' / 'benchmarks')
     p.add_argument('--case', action='append', help='exact case name; repeat to select several')
     p.add_argument('--rounds', type=int)
+    p.add_argument('--fastls-source', choices=('checkout', 'installed'), default='checkout', help='installed measures the released wheel, never the checkout SDK')
+    p.add_argument('--fixture', type=Path, help='explicit independently built loopback fixture')
     p.add_argument('--shards', type=int, default=1)
     p.add_argument('--shard-index', type=int, default=0)
     args = p.parse_args()
@@ -148,7 +176,8 @@ def main():
     deps = versions()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    fixture = ROOT / 'build' / ('ffi-fixture.exe' if os.name == 'nt' else 'ffi-fixture')
+    fixture = (args.fixture or ROOT / 'build' / ('ffi-fixture.exe' if os.name == 'nt' else 'ffi-fixture')).resolve()
+    inputs = fastls_input(args.fastls_source)
     log = (output / 'fixture.log').open('w', encoding='utf-8')
     allcases = cases(args.profile)
     if args.case:
@@ -160,8 +189,8 @@ def main():
     if not selected:
         p.error('empty shard')
     identifier = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + platform.system() + '-' + str(args.shard_index)
-    library = ROOT / 'dist' / ('fastls.dll' if os.name == 'nt' else 'libfastls.dylib' if sys.platform == 'darwin' else 'libfastls.so')
-    report = dict(schema_version=2, resource_scope='recursive client process tree', environment_id=identifier, profile=args.profile, rounds=rounds, shard=args.shard_index, shards=args.shards, created_at=datetime.now(timezone.utc).isoformat(), python=sys.version, platform=platform.platform(), selected_case_names=[case['name'] for case in selected], machine=platform.machine(), cpu=platform.processor(), logical_cpus=psutil.cpu_count(), memory_bytes=psutil.virtual_memory().total, python_ssl=ssl.OPENSSL_VERSION, packages=deps, library_sha256=hashlib.sha256(library.read_bytes()).hexdigest(), build_info=json.loads((ROOT / 'dist/build-info.json').read_text()), sources={name: revision(path) for name, path in (('fastls-ffi', ROOT), ('fastls', ROOT.parent / 'fastls'), ('ftransport', ROOT.parent / 'ftransport'), ('imitate', ROOT.parent / 'imitate'))}, benchmark_sources={path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in (ROOT / 'benchmarks').glob('*.py')}, not_applicable=[dict(client='requests', protocol='h2', reason='standard Requests has no H2 client'), dict(clients=['requests'], workload='parsed', reason='native Fastls SSE parser is an independent measurement')], runs=[])
+    library = Path(inputs['library'])
+    report = dict(schema_version=2, resource_scope='recursive client process tree', environment_id=identifier, profile=args.profile, rounds=rounds, shard=args.shard_index, shards=args.shards, created_at=datetime.now(timezone.utc).isoformat(), python=sys.version, platform=platform.platform(), selected_case_names=[case['name'] for case in selected], machine=platform.machine(), cpu=platform.processor(), logical_cpus=psutil.cpu_count(), memory_bytes=psutil.virtual_memory().total, python_ssl=ssl.OPENSSL_VERSION, packages=deps, library_sha256=hashlib.sha256(library.read_bytes()).hexdigest(), fastls_input=inputs, build_info=inputs['build_info'], sources=inputs['sources'], sdk_sources=sdk_digests(inputs), harness_source=revision(ROOT), fixture_sha256=hashlib.sha256(fixture.read_bytes()).hexdigest(), requirements_sha256=hashlib.sha256((ROOT / 'benchmarks/requirements.lock').read_bytes()).hexdigest(), benchmark_sources={path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in (ROOT / 'benchmarks').glob('*.py')}, not_applicable=[dict(client='requests', protocol='h2', reason='standard Requests has no H2 client'), dict(clients=['requests'], workload='parsed', reason='native Fastls SSE parser is an independent measurement')], runs=[])
     config = {'smoke': (0.15, 0.03, 150, 1048576), 'quick': (1, 0.2, 1000, 16 * 1048576), 'full': (30, 10, 5000, 16 * 1048576)}[args.profile]
     server = subprocess.Popen([str(fixture)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, text=True)
     try:
@@ -178,7 +207,7 @@ def main():
                 clients = list(case['clients'])
                 random.Random(2000 + round_number).shuffle(clients)
                 for client in clients:
-                    spec = dict(case=case, client=client, round=round_number + 1, fixture=fixture_info, run_id=uuid.uuid4().hex, seconds=config[0], warmup_seconds=config[1] if case['workload'] == 'small' else min(config[1], 0.05), hold_ms=config[2], slow_bytes_per_second=config[3])
+                    spec = dict(case=case, client=client, round=round_number + 1, fixture=fixture_info, run_id=uuid.uuid4().hex, fastls_input=inputs, seconds=config[0], warmup_seconds=config[1] if case['workload'] == 'small' else min(config[1], 0.05), hold_ms=config[2], slow_bytes_per_second=config[3])
                     try:
                         result = execute(spec, server, output)
                     except Exception as error:
@@ -198,7 +227,10 @@ def main():
         log.close()
     report['benchmark_sources_at_end'] = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in (ROOT / 'benchmarks').glob('*.py')}
     report['library_sha256_at_end'] = hashlib.sha256(library.read_bytes()).hexdigest()
-    report['source_changed_during_run'] = report['benchmark_sources_at_end'] != report['benchmark_sources'] or report['library_sha256_at_end'] != report['library_sha256']
+    report['sdk_sources_at_end'] = sdk_digests(inputs)
+    report['requirements_sha256_at_end'] = hashlib.sha256((ROOT / 'benchmarks/requirements.lock').read_bytes()).hexdigest()
+    report['fixture_sha256_at_end'] = hashlib.sha256(fixture.read_bytes()).hexdigest()
+    report['source_changed_during_run'] = any((report[after] != report[before] for before, after in (('benchmark_sources', 'benchmark_sources_at_end'), ('library_sha256', 'library_sha256_at_end'), ('sdk_sources', 'sdk_sources_at_end'), ('requirements_sha256', 'requirements_sha256_at_end'), ('fixture_sha256', 'fixture_sha256_at_end'))))
     report['success'] = all((run['valid'] for run in report['runs'])) and (not report['source_changed_during_run'])
     (output / 'results.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     render([report], output / 'report.html')

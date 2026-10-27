@@ -11,6 +11,22 @@ python benchmarks/run.py --profile smoke --output build/benchmark-smoke
 python benchmarks/run.py --profile full --output build/benchmark-full
 ```
 
+已发布包基线使用独立环境安装 `fastls==0.1.4` 及锁定的基准依赖，再运行：
+
+```shell
+python benchmarks/run.py --fastls-source installed --fixture /absolute/path/to/ffi-fixture --profile smoke --output build/published-smoke
+```
+
+`installed` 模式加载该环境的 wheel 和包内原生库，验证包版本、build-info 与库摘要；不需要四个兄弟源码仓库，也不会加载当前工作区的 Python SDK。`--fixture` 明确指定预先构建的独立靶场程序；报告保存其 SHA256，靶场源码和构建来源另随测量清单保存。默认 `checkout` 仍测量当前源码 SDK 与 dist 库。报告分别记录这两个输入来源、已发布包原生源码、基准工具提交与实际模块加载路径，禁止将源码 H3 改进算入已发布 Python 0.1.4。
+
+额外的行为基线可用相同环境运行：
+
+```shell
+python tests/client_conformance.py --fastls-source installed --fixture /absolute/path/to/ffi-fixture --output build/published-conformance
+```
+
+检查上传/解压摘要、Cookie 跳转链与会话隔离、重定向开关及 POST/303、截断报错与恢复、超时后的服务端取消、独立 CONNECT 代理、异步取消与兄弟流隔离、Fastls 原生句柄归零。同步 Requests 的 asyncio/H2 标记不适用；已观察的竞品行为差异与检查失败分别记录。例如异步提前关闭等待远端正文超过两秒会保留观察证据，不能记作取消通过；Fastls 出现该行为则视为项目回归。初次运行发现的靶场/适配器错误也应保留，不作为库行为差异。
+
 在所选输出目录双击 `report.html` 查看，完整数据为 `results.json`。工作进程的输入、结果与错误日志也保留，不含测试CA私钥。用 `--case` 多次选择具体场景；名称可从 `benchmarks/common.py` 或已生成的JSON取得。
 
 - smoke：缩小到256KiB、少并发、1轮和0.15秒的小请求采样，用于验证脚本与契约，不能作为速度排名。

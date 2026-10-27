@@ -16,7 +16,6 @@ import urllib.request
 from common import EVENT, SLAB, Histogram
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "python"))
 CLOCK = time.perf_counter
 
 
@@ -94,7 +93,11 @@ class Client:
             import requests
             self.module = requests
         else:
+            sdk = Path(spec.get('fastls_input', {}).get('python_path', ROOT / 'python')).resolve()
+            sys.path.insert(0, str(sdk))
             import fastls
+            if not Path(fastls.__file__).resolve().is_relative_to(sdk / 'fastls'):
+                raise RuntimeError('Fastls module came from outside the selected SDK')
             self.module = fastls
         self.import_seconds = CLOCK() - started
         self.profile = 'chrome/156/windows' if self.case['browser'] else 'library/fastls/2/any/portable-' + self.case['protocol']
@@ -283,6 +286,13 @@ class Client:
             return self.native_reference.stats()
 
 
+def require_certificate_error(error):
+    # A timeout/import failure must not count as rejecting an untrusted CA.
+    message=str(error).lower()
+    if not any(part in message for part in ("certificate", "unknown authority", "unable to get local issuer")):
+        raise AssertionError(f"wrong-CA probe failed for a different reason: {error}") from error
+
+
 def tls_probe(client):
     with client.session(wrong=True) as session:
         try:
@@ -290,8 +300,8 @@ def tls_probe(client):
                 raise AssertionError("wrong CA was accepted")
         except AssertionError:
             raise
-        except Exception:
-            pass
+        except Exception as error:
+            require_certificate_error(error)
     with client.session() as session:
         with client.stream(session,"preflight",True) as response:
             client.check(response)
@@ -388,7 +398,7 @@ def main():
     spec = json.loads(Path(sys.argv[1]).read_text())
     client = Client(spec)
     tls_probe(client)
-    emit('initialized', import_seconds=client.import_seconds, profile=client.profile if client.name == 'fastls' else None)
+    emit('initialized', import_seconds=client.import_seconds, module_path=client.module.__file__, profile=client.profile if client.name == 'fastls' else None)
     result, warm = asyncio.run(run_async(client, spec)) if client.case['mode'] == 'async' else run_sync(client, spec)
     stats = server_stats(spec)
     protocols = {c['protocol'] for c in stats['connections'].values()}
