@@ -65,4 +65,14 @@ python benchmarks/report.py path/to/results-a.json path/to/results-b.json --outp
 
 ## 工具正确性门禁
 
+### H2 SETTINGS 确认与靶场来源
+
+`scripts/build_benchmark_fixture.py` 使用 Go 的文件 overlay，仅为独立基准靶场将 ACK 布尔值改为计数器；不修改 GOROOT、SDK 或客户端窗口参数。工具固定 Go 1.26.10 和上游源码 SHA256，未知版本/源码明确拒绝，无默认回退。输出 `build/ffi-fixture-benchmark[.exe]` 及 `.build.json`，包含原始/覆盖源码摘要、构建命令和靶场摘要。`benchmarks/prepare.py` 保留原始验收靶场，另构建基准靶场并执行每连接八个连续 SETTINGS、20 轮逐帧 ACK 黑盒门禁。基准控制器和启动诊断默认使用新靶场，显式 `--fixture` 仍可复核原始靶场；报告记录构建来源。修正前后数据必须分组。
+
+```shell
+python scripts/build_benchmark_fixture.py
+python tests/probe_h2_settings_ack.py --fixture build/ffi-fixture-benchmark.exe --output build/settings-ack.json
+python tests/client_resource_soak.py --fixture build/ffi-fixture-benchmark.exe --rounds 50 --output build/client-soak
+```
+
 `tests/test_benchmarks.py`检查进程树采样、分位数边界、聚合空间、错误轮保留、环境隔离、协议适用范围与离线报告转义；Go另验证独立正文、gzip、上传摘要、统计及普通端点观测隔离。smoke通过真实库覆盖全部适用场景；这些检查不以某客户端必须更快为通过条件。

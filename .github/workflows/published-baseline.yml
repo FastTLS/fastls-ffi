@@ -49,17 +49,19 @@ jobs:
         run: |
           python tests/test_benchmarks.py
           go test ./cmd/ffi-fixture -count=1
-          go build -o build/ffi-fixture.exe ./cmd/ffi-fixture
-          go version -m build/ffi-fixture.exe > build/published-baseline/fixture-build.txt
+          python scripts/build_benchmark_fixture.py --output build/ffi-fixture-benchmark.exe
+          python tests/probe_h2_settings_ack.py --fixture build/ffi-fixture-benchmark.exe --output build/published-baseline/settings-ack.json
+          go version -m build/ffi-fixture-benchmark.exe > build/published-baseline/fixture-build.txt
+          cp build/ffi-fixture-benchmark.build.json build/published-baseline/fixture-build.json
       - name: Record client behavior and explicit differences
-        run: python tests/client_conformance.py --fastls-source installed --fixture build/ffi-fixture.exe --output build/published-baseline/conformance
+        run: python tests/client_conformance.py --fastls-source installed --fixture build/ffi-fixture-benchmark.exe --output build/published-baseline/conformance
       - name: Measure installed packages; never substitute the checkout SDK
         shell: bash
         run: |
           if [ "$BENCH_PROFILE" = full ]; then
-            python benchmarks/run.py --fastls-source installed --fixture build/ffi-fixture.exe --profile full --case download-h1-c1 --case download-h2-c1 --case upload-h1 --case upload-h2 --case gzip-h1 --case gzip-h2 --case slow-h1 --case slow-h2 --output build/published-baseline/measurements
+            python benchmarks/run.py --fastls-source installed --fixture build/ffi-fixture-benchmark.exe --profile full --case download-h1-c1 --case download-h2-c1 --case upload-h1 --case upload-h2 --case gzip-h1 --case gzip-h2 --case slow-h1 --case slow-h2 --output build/published-baseline/measurements
           else
-            python benchmarks/run.py --fastls-source installed --fixture build/ffi-fixture.exe --profile smoke --output build/published-baseline/measurements
+            python benchmarks/run.py --fastls-source installed --fixture build/ffi-fixture-benchmark.exe --profile smoke --output build/published-baseline/measurements
           fi
       - name: Preserve failed rounds as well as successful measurements
         if: always()

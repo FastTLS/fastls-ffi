@@ -36,6 +36,7 @@ type observation struct {
 	Cancelled bool   `json:"cancelled"`
 	Bytes     int64  `json:"bytes"`
 	Protocol  string `json:"protocol"`
+	ReadError string `json:"read_error,omitempty"`
 	release   chan struct{}
 	once      sync.Once
 }
@@ -71,7 +72,7 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.entries[id] = o
 	}
 	if r.URL.Path == "/state" {
-		snapshot := map[string]any{"started": o.Started, "done": o.Done, "cancelled": o.Cancelled, "bytes": o.Bytes, "protocol": o.Protocol}
+		snapshot := map[string]any{"started": o.Started, "done": o.Done, "cancelled": o.Cancelled, "bytes": o.Bytes, "protocol": o.Protocol, "read_error": o.ReadError}
 		f.mu.Unlock()
 		json.NewEncoder(w).Encode(snapshot)
 		return
@@ -263,6 +264,9 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			if err != nil {
+				f.mu.Lock()
+				o.ReadError = err.Error()
+				f.mu.Unlock()
 				return
 			}
 			if r.URL.Path == "/upload-slow" {
