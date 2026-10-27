@@ -343,7 +343,7 @@ def run_sync(client, spec):
                 else: client.perform(session,spec["run_id"]+"-warm",warm)
             ready.wait(); start.wait()
             once=False
-            while (not once if client.case["workload"]!="small" else CLOCK()<shared["deadline"]):
+            while (CLOCK()<shared["deadline"] if spec.get("continuous_transfers") or client.case["workload"]=="small" else not once):
                 once=True
                 if session is None:
                     with client.session() as fresh: client.perform(fresh,spec["run_id"],metrics)
@@ -387,7 +387,7 @@ async def run_async(client,spec):
         emit("measure_start",native=client.stats()); began=CLOCK(); deadline=began+spec["seconds"]
         async def work():
             once=False
-            while (not once if client.case["workload"]!="small" else CLOCK()<deadline):
+            while (CLOCK()<deadline if spec.get("continuous_transfers") or client.case["workload"]=="small" else not once):
                 once=True; await operation(spec["run_id"],metrics)
         await asyncio.gather(*(work() for _ in range(count)))
         elapsed=CLOCK()-began; emit("measure_stop")
