@@ -1,5 +1,7 @@
 # Fastls Python / Node.js SDK
 
+[G1 development integration and outstanding performance checks](G1_INTEGRATION_STATUS.md).
+
 [English documentation](https://fasttls.github.io/en/guide/)
 
 [完整文档](https://fasttls.github.io/) · [Python 使用指南](python/README.md) · [Node 使用指南](node/README.md)
