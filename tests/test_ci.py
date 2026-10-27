@@ -1,6 +1,7 @@
 """Exercise the dependency gate through its public CLI, including output safety."""
 import os
 import json
+import hashlib
 from pathlib import Path
 import subprocess
 import sys
@@ -12,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from ci_runtime import EvidenceRunner
 import ci
 import development_snapshot
+import release_materials
 from package_version import package_version, require_development_version
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,6 +59,25 @@ class DependencyGate(unittest.TestCase):
             process, output = self.resolve({"FASTLS_REF": value})
             self.assertNotEqual(process.returncode, 0)
             self.assertEqual(output, "")
+
+
+class ReviewedSourceLicenses(unittest.TestCase):
+    def test_actual_native_sources_and_license_bytes_must_match_review(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'ci').mkdir();(root/'dist').mkdir()
+            text='reviewed source notice\n';commit='a'*40
+            record={'sources':{'imitate':{'commit':commit,'files':{'NOTICE.md':{
+                'text':text,'normalized_sha256':hashlib.sha256(text.encode()).hexdigest()}}}}}
+            path=root/'ci/reviewed-source-licenses.json';path.write_text(json.dumps(record))
+            info=root/'dist/build-info.json';info.write_text(json.dumps({'local_dependencies':True,'sources':{'imitate':commit}}))
+            with patch.object(release_materials,'ROOT',root):
+                self.assertIn('reviewed source notice','\n'.join(release_materials.reviewed_source_notices()))
+                info.write_text(json.dumps({'local_dependencies':True,'sources':{'imitate':'b'*40}}))
+                with self.assertRaisesRegex(RuntimeError,'actual native input'):release_materials.reviewed_source_notices()
+                info.write_text(json.dumps({'local_dependencies':True,'sources':{'imitate':commit}}))
+                record['sources']['imitate']['files']['NOTICE.md']['text']='changed'
+                path.write_text(json.dumps(record))
+                with self.assertRaisesRegex(RuntimeError,'bytes changed'):release_materials.reviewed_source_notices()
 
 
 class PackageVersion(unittest.TestCase):

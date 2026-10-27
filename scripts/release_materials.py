@@ -1,5 +1,6 @@
 """Generate and verify release license and platform-boundary evidence."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -63,15 +64,34 @@ def module_licenses():
     return result
 
 
+def reviewed_source_notices():
+    captured = json.loads((ROOT / "ci/reviewed-source-licenses.json").read_text(encoding="utf-8"))
+    info_path = ROOT / "dist/build-info.json"
+    info = json.loads(info_path.read_text(encoding="utf-8")) if info_path.is_file() else {}
+    parts = ["", "Additional reviewed development-source license materials.",
+             "The native build-info identifies the actual artifact inputs; these records preserve the reviewed source bytes."]
+    for name, record in sorted(captured["sources"].items()):
+        if info.get("local_dependencies") and info.get("sources", {}).get(name) != record["commit"]:
+            raise RuntimeError(f"review source license materials for the actual native input: {name}")
+        parts.extend(["", "=" * 78, f"Reviewed source: {name}@{record['commit']}"])
+        for filename, value in sorted(record["files"].items()):
+            body = value["text"]
+            if hashlib.sha256(body.encode("utf-8")).hexdigest() != value["normalized_sha256"]:
+                raise RuntimeError(f"reviewed source license bytes changed: {name}/{filename}")
+            parts.extend([f"File: {filename}", "-" * 78, body.rstrip()])
+    return parts
+
+
 def render_notices():
     parts = [
         "Fastls FFI native-library third-party license materials",
-        "Generated from the exact Go production dependency graph. Do not edit by hand.",
+        "Published module dependency notices and separately identified reviewed development-source materials. Do not edit by hand.",
     ]
     for name, version, files in module_licenses():
         parts.extend(["", "=" * 78, f"Module: {name}", f"Version: {version}"])
         for path in files:
             parts.extend([f"File: {path.name}", "-" * 78, path.read_text(encoding="utf-8", errors="replace").rstrip()])
+    parts.extend(reviewed_source_notices())
     return "\n".join(parts) + "\n"
 
 

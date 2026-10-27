@@ -14,6 +14,14 @@ Node packages, licenses, native dependency audits, race and resource gates.
 Development snapshots remain non-publishing. The registry versions, ABI and
 SDK implementation are unchanged by this certification tooling update.
 
+The published-module notice generator is retained. The bundle additionally
+carries exact reviewed LICENSE/NOTICE bytes for the three development source
+commits in `ci/reviewed-source-licenses.json`, including imitate's updated
+NOTICE. The generator verifies those bytes and refuses a development native
+build whose source commits differ from the reviewed materials. Artifact
+metadata identifies the actual inputs; supplementary notices do not change a
+public module version or claim that the module tag contains newer source.
+
 Manual CI accepts `certification_soak_seconds` from 300 through 7200 seconds.
 Invalid or shortened durations fail in dependency resolution before native
 jobs start. The default extended observation remains 300 seconds; source and
