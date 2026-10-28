@@ -853,7 +853,8 @@ jobs:
         packages-dir: dist/
         attestations: true
 'on':
-  push: null
+  push:
+    branches-ignore: [codex/g1-s6-artifact-certification-20261028]
   pull_request: null
   workflow_dispatch:
     inputs:

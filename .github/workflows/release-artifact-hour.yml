@@ -1,0 +1,80 @@
+name: Certify frozen release artifact for one hour
+on:
+  push:
+    branches: [codex/g1-s6-artifact-certification-20261028]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  release-hour:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      GOWORK: 'off'
+      CGO_ENABLED: '1'
+      FASTLS_CI_TARGET: linux-amd64
+      FASTLS_PACKAGE_VERSION: 'v0.1.5'
+      FASTLS_RELEASE_MODE: 'true'
+      FASTLS_EXTENDED_SOAK_SECONDS: '3600'
+      FASTLS_STABILITY_SECONDS: '30'
+    defaults:
+      run:
+        working-directory: workspace/fastls-ffi
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 73acf064418d9d91b434ba0cdbf1a74398c2a069
+          fetch-depth: 0
+          path: workspace/fastls-ffi
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: FastTLS/fastls
+          ref: e04d468cccf5b7aff99bdf239b2f76f9418cc2af
+          path: workspace/fastls
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: FastTLS/ftransport
+          ref: d5afcd1a2db48a40850363b76e8a19eb339c757c
+          path: workspace/ftransport
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: FastTLS/imitate
+          ref: fd10ea4393408e904ae2866ecbfe3efaaaa6ad8e
+          path: workspace/imitate
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.26.10'
+          cache: true
+          cache-dependency-path: workspace/fastls-ffi/go.sum
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.11'
+      - name: Fetch the original tag producer artifact without rebuilding
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: inputs-linux-amd64-go1.26.10-py3.11
+          run-id: 40661337767
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: workspace/fastls-ffi
+      - name: Preserve exact tested native identity
+        run: |
+          test "$(git rev-parse HEAD)" = 73acf064418d9d91b434ba0cdbf1a74398c2a069
+          sha256sum dist/libfastls.so > build/tested-native.sha256
+          go version -m dist/libfastls.so > build/tested-native-buildinfo.txt
+      - name: Execute the unchanged complete 3600-second resource stage
+        run: python scripts/ci.py run --stage soak
+      - name: Preserve success and failure evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: release-artifact-hour-linux-amd64
+          path: |
+            workspace/fastls-ffi/build/ci-*/
+            workspace/fastls-ffi/build/stability-*.json
+            workspace/fastls-ffi/build/tested-native*
+          retention-days: 30
+          if-no-files-found: error
