@@ -100,6 +100,8 @@ class DependencyGate(unittest.TestCase):
     def resolve(self, overrides):
         env = os.environ.copy()
         env.pop("GITHUB_STEP_SUMMARY", None)
+        env.pop('FASTLS_DEPENDENCY_MODE',None)
+        env['FASTLS_RELEASE_MODE']='false'
         for key in ("FASTLS_REF", "FTRANSPORT_REF", "IMITATE_REF"):
             env[key] = ""
         env.update(overrides)
@@ -249,7 +251,7 @@ class ExecutionEvidence(unittest.TestCase):
             (root / "dist/ci-inputs.json").write_text(json.dumps(record))
             (root / 'ci').mkdir()
             (root / 'ci/dependencies.json').write_text(json.dumps({'build_mode':'local'}))
-            with patch.object(ci, "ROOT", root), patch.object(ci, "sdk_inputs", return_value=record["sdk"]) as sdk, patch.object(ci, "artifact_inputs", return_value=record["artifacts"]) as artifacts:
+            with patch.dict(os.environ,{'FASTLS_DEPENDENCY_MODE':'','FASTLS_RELEASE_MODE':'false','FASTLS_PACKAGE_VERSION':record['package_version']}), patch.object(ci, "ROOT", root), patch.object(ci, "sdk_inputs", return_value=record["sdk"]) as sdk, patch.object(ci, "artifact_inputs", return_value=record["artifacts"]) as artifacts:
                 ci.verify_inputs("windows-amd64", sources)
                 for target, revisions in (("linux-amd64", sources), ("windows-amd64", {"fastls-ffi": "b" * 40})):
                     with self.assertRaises(RuntimeError): ci.verify_inputs(target, revisions)
