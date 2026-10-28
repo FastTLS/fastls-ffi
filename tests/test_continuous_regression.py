@@ -10,6 +10,63 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'benchmarks'))
 from test_regression import CASE,POLICY,row
 from continuous_regression import ARMS,evaluate,window
 import worker
+from timed_regression import evaluate as timed_evaluate, timing_check
+
+
+def observed(r):
+    r=deepcopy(r)
+    r['run_id']=r['variant']+'-'+str(r['round'])
+    r['resources'].update(baseline={'at':100.5},finished={'at':131.0},
+        samples=[{'client':{'at':100.5+n}} for n in range(1,31)])
+    r['markers']=[dict(stage=stage,worker_at=at,controller_received_at=at+.1,
+        controller_handled_at=at+.2,controller_queue_delay_seconds=.1)
+        for stage,at in [('measure_start',100),('measure_stop',130.5)]]
+    r['diagnostics']=dict(controller_errors=[],cleanup=dict(terminated_pids=[],still_alive_pids=[],errors=[]),
+        snapshot_costs=[dict(role=role,seconds=.1) for role in
+            ('client_start','server_start','client_stop','server_stop','client_closed')])
+    return r
+
+
+class TimedGate(unittest.TestCase):
+    def setUp(self):
+        self.rows=[observed(dict(row(a,n),continuous_transfers=True,requested_seconds=30))
+            for n in range(1,6) for a in ARMS]
+        for r in self.rows:r['metrics']['elapsed_seconds']=30
+        self.plan=[{k:deepcopy(r[k]) for k in ('case','variant','round','run_id')} for r in self.rows]
+    def verdict(self):return timed_evaluate(self.rows,[CASE],POLICY,True,self.plan)
+    def test_complete_timed_plan_passes(self):
+        self.assertTrue(self.verdict()['success'])
+    def test_boundary_delay_is_ineligible_without_erasing_metric_verdict(self):
+        self.rows[0]['resources']['finished']['at']=135
+        result=self.verdict()
+        self.assertEqual(result['status'],'ineligible')
+        self.assertEqual(result['cases'][0]['candidate']['diagnostic_status'],'passed')
+    def test_missing_nan_duplicate_and_reversed_boundary_fail_closed(self):
+        for mutation in ('missing','nan','duplicate','reversed'):
+            self.setUp();r=self.rows[0]
+            if mutation=='missing':r.pop('diagnostics')
+            elif mutation=='nan':r['resources']['baseline']['at']=float('nan')
+            elif mutation=='duplicate':r['markers'].append(deepcopy(r['markers'][0]))
+            else:r['markers'][0]['controller_received_at']=99
+            self.assertFalse(timing_check(r)['eligible'],mutation)
+    def test_sample_stall_and_marker_backlog_fail(self):
+        self.rows[0]['resources']['samples']=self.rows[0]['resources']['samples'][5:]
+        self.assertFalse(timing_check(self.rows[0])['eligible'])
+        self.setUp();m=self.rows[0]['markers'][0]
+        m['controller_handled_at']=m['controller_received_at']+2.1;m['controller_queue_delay_seconds']=2.1
+        self.assertFalse(timing_check(self.rows[0])['eligible'])
+    def test_frozen_order_and_identity_cannot_be_replaced(self):
+        self.rows.reverse();self.assertEqual(self.verdict()['status'],'ineligible')
+        self.setUp();self.rows[0]['run_id']='replacement'
+        self.assertEqual(self.verdict()['status'],'ineligible')
+    def test_timing_does_not_relax_performance_or_aa_rules(self):
+        for r in self.rows:
+            if r['variant']=='candidate':r['resources']['cpu_seconds']*=1.26
+        self.assertEqual(self.verdict()['status'],'failed')
+        self.setUp()
+        for r in self.rows:
+            if r['variant']=='control-b':r['resources']['cpu_seconds']*=1.26
+        self.assertEqual(self.verdict()['status'],'ineligible')
 
 class ContinuousGate(unittest.TestCase):
     def setUp(self):
