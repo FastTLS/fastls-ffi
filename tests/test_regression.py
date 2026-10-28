@@ -6,6 +6,25 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmarks"))
 from regression import ARMS, aggregate, compare, evaluate, schedule
+from regression import candidate_input, sha
+from unittest.mock import patch
+import json,tempfile
+
+
+class FormalCandidate(unittest.TestCase):
+    def test_formal_artifact_requires_exact_graph_source_and_manifest_hashes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);(root/'dist').mkdir();library=root/'dist'/('fastls.dll' if sys.platform=='win32' else 'libfastls.dylib' if sys.platform=='darwin' else 'libfastls.so')
+            library.write_bytes(b'candidate fixture');(root/'go.sum').write_text('verified sums\n')
+            (root/'go.mod').write_text('\n'.join('github.com/FastTLS/'+name+' v0.1.1' for name in ('fastls','ftransport','imitate')))
+            graph=[dict(Path='github.com/FastTLS/'+name,Version='v0.1.1',Sum='h1:sum',GoModSum='h1:mod',Origin=dict(Hash='b'*40,Ref='refs/tags/v0.1.1')) for name in ('fastls','ftransport','imitate')]
+            info=dict(local_dependencies=False,library_sha256=sha(library),module_graph=graph,module_files={p:sha(root/p) for p in ('go.mod','go.sum')},
+                sources={'fastls-ffi':'a'*40,**{n:'b'*40 for n in ('fastls','ftransport','imitate')}})
+            (root/'dist/module-inputs.json').write_text(json.dumps(graph));(root/'dist/build-info.json').write_text(json.dumps(info))
+            with patch('regression.revision',return_value=dict(commit='a'*40,dirty_files=[])):
+                self.assertEqual(candidate_input(root)['sources'],info['sources'])
+                (root/'go.sum').write_text('changed sums')
+                with self.assertRaisesRegex(RuntimeError,'files changed'):candidate_input(root)
 
 POLICY = dict(eligibility=dict(minimum_rounds_per_variant=5, maximum_control_throughput_drift_from_recorded_baseline_fraction=.2),
               candidate_vs_fresh_fastls_control=dict(minimum_median_rps_ratio=.85, minimum_median_mib_per_second_ratio=.85,

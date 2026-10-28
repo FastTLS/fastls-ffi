@@ -20,7 +20,7 @@ def main():
     results = []
     for name, command, cwd in checks:
         env = os.environ.copy()
-        if (ROOT / "go.work").is_file():
+        if env.get('GOWORK') != 'off' and (ROOT / "go.work").is_file():
             env["GOWORK"] = str(ROOT / "go.work")
         result = subprocess.run(command, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", timeout=180)
         (evidence / (name + ".log")).write_text(result.stdout, encoding="utf-8")

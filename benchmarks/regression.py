@@ -10,6 +10,7 @@ from pathlib import Path
 import platform
 import queue
 import random
+import re
 from statistics import median
 import subprocess
 import sys
@@ -175,9 +176,33 @@ def candidate_input(root):
     info = load(root / "dist/build-info.json")
     filename = "fastls.dll" if os.name == "nt" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
     library = root / "dist" / filename
-    if info["library_sha256"] != sha(library) or not info["local_dependencies"]:
+    if info["library_sha256"] != sha(library):
         raise RuntimeError("invalid candidate native artifact")
-    for name, commit in info["sources"].items():
+    sources = info['sources']
+    if info.get('local_dependencies') is False:
+        graph = info.get('module_graph')
+        if not graph or graph != load(root / 'dist/module-inputs.json'):
+            raise RuntimeError('missing or inconsistent formal module inputs')
+        if info.get('module_files') != {p:sha(root/p) for p in ('go.mod','go.sum')}:
+            raise RuntimeError('formal module files changed since build')
+        expected = {}
+        for name in ('fastls','ftransport','imitate'):
+            path = 'github.com/FastTLS/' + name
+            rows = [m for m in graph if m['Path']==path]
+            if len(rows)!=1:raise RuntimeError('formal source missing or duplicated: '+name)
+            module=rows[0];origin=module.get('Origin',{});version=module.get('Version')
+            if module.get('Replace') or not all(module.get(k) for k in ('Sum','GoModSum')) or origin.get('Ref')!='refs/tags/'+str(version):
+                raise RuntimeError('invalid formal module provenance: '+name)
+            if not re.fullmatch(r'[0-9a-f]{40}',origin.get('Hash','')) or not re.search(re.escape(path)+r'\s+'+re.escape(version)+r'(?:\s|$)',(root/'go.mod').read_text()):
+                raise RuntimeError('formal selected version/source mismatch: '+name)
+            expected[name]=origin['Hash']
+        if {k:v for k,v in sources.items() if k!='fastls-ffi'}!=expected:
+            raise RuntimeError('formal source commits differ from module origins')
+        states={'fastls-ffi':sources['fastls-ffi']}
+    elif info.get('local_dependencies') is True:
+        states=sources
+    else:raise RuntimeError('candidate dependency mode missing')
+    for name, commit in states.items():
         state = revision(root if name == "fastls-ffi" else root.parent / name)
         if state != dict(commit=commit, dirty_files=[]):
             raise RuntimeError(f"candidate source differs from build metadata: {name}")

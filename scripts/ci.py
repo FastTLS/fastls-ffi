@@ -49,9 +49,20 @@ def extended_soak_seconds(env):
     return int(value)
 
 
+def dependency_mode(env):
+    lock = json.loads((ROOT / 'ci/dependencies.json').read_text(encoding='utf-8'))
+    mode = env.get('FASTLS_DEPENDENCY_MODE') or lock.get('build_mode', 'local')
+    if mode not in ('local', 'formal'):
+        raise ValueError('FASTLS_DEPENDENCY_MODE must be local or formal')
+    if env.get('FASTLS_RELEASE_MODE', '').lower() == 'true' and mode != 'formal':
+        raise ValueError('release builds require formal dependencies')
+    return mode
+
+
 def resolve():
     try:
         extended_soak_seconds(os.environ)
+        mode = dependency_mode(os.environ)
     except ValueError as error:
         summary(str(error)); return 1
     refs = json.loads((ROOT / "ci/dependencies.json").read_text(encoding="utf-8"))
@@ -60,6 +71,9 @@ def resolve():
         ref = os.environ.get(name.upper()) or refs.get(name)
         if not isinstance(ref, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", ref):
             summary(f"Dependency not ready: {name}. Push the reviewed upstream implementation, then set its full commit SHA in ci/dependencies.json, a repository variable, or workflow_dispatch. No old-version fallback is allowed. See CI.md.")
+            return 1
+        if mode == 'formal' and ref.lower() != refs.get(name):
+            summary('Formal graph override differs from the committed version lock: ' + name)
             return 1
         resolved[name] = ref.lower()
     if os.environ.get("GITHUB_OUTPUT"):
@@ -131,7 +145,8 @@ def sdk_inputs():
 
 def artifact_inputs():
     paths = [ROOT / "dist" / library_name(), ROOT / "dist" / "fastls.h", ROOT / "dist" / "build-info.json",
-             ROOT / "dist" / "native-audit.json", ROOT / "go.work",
+             ROOT / "dist" / "native-audit.json",
+             ROOT / "dist" / "module-inputs.json" if dependency_mode(os.environ) == 'formal' else ROOT / "go.work",
              ROOT / "build" / ("ffi-fixture.exe" if os.name == "nt" else "ffi-fixture")]
     wheels = list((ROOT / "dist").glob("*.whl"))
     if len(wheels) != 1:
@@ -143,6 +158,10 @@ def artifact_inputs():
 
 
 def save_inputs(target, sources):
+    if dependency_mode(os.environ) == 'formal':
+        info = json.loads((ROOT / 'dist/build-info.json').read_text(encoding='utf-8'))
+        if info.get('local_dependencies') or not info.get('module_graph') or info.get('sources') != sources:
+            raise RuntimeError('formal native provenance differs from reviewed checkouts')
     (ROOT / "dist" / "ci-inputs.json").write_text(json.dumps(dict(target=target, sources=sources,
         package_version=package_version(),
         sdk=sdk_inputs(), artifacts=artifact_inputs()), indent=2) + "\n", encoding="utf-8")
@@ -154,6 +173,10 @@ def verify_inputs(target, sources):
         raise RuntimeError("native artifacts belong to a different target or SDK commit")
     if record.get("package_version") != package_version():
         raise RuntimeError("package version changed after build")
+    if dependency_mode(os.environ) == 'formal':
+        info = json.loads((ROOT / 'dist/build-info.json').read_text(encoding='utf-8'))
+        if info.get('local_dependencies') or not info.get('module_graph') or info.get('sources') != record['sources']:
+            raise RuntimeError('formal native provenance differs from captured inputs')
     if record["sdk"] != sdk_inputs() or record["artifacts"] != artifact_inputs():
         raise RuntimeError("SDK or native artifacts changed after build")
     for name, revision in sources.items():
@@ -202,8 +225,9 @@ def run(stage="all"):
                 wheel.unlink()
             for sdist in (ROOT / "dist").glob("*.tar.gz"):
                 sdist.unlink()
-            execute("build", [sys.executable, "scripts/build.py", "--local"])
-            env["GOWORK"] = str(ROOT / "go.work")
+            mode = dependency_mode(env)
+            execute("build", [sys.executable, "scripts/build.py"] + (['--local'] if mode == 'local' else []))
+            env["GOWORK"] = 'off' if mode == 'formal' else str(ROOT / "go.work")
             execute("release-materials", [sys.executable, "scripts/release_materials.py", "materials"], command_env=env)
             execute("fixture-build", ["go", "build", "-o", "build/ffi-fixture.exe" if os.name == "nt" else "build/ffi-fixture", "./cmd/ffi-fixture"])
             execute("native-audit", [sys.executable, "scripts/native_audit.py", str(ROOT / "dist" / library_name())])
@@ -219,7 +243,7 @@ def run(stage="all"):
             verify_inputs(target, sources)
             if os.name != "nt":
                 (ROOT / "build" / "ffi-fixture").chmod(0o755)
-        env["GOWORK"] = str(ROOT / "go.work")
+        env["GOWORK"] = 'off' if dependency_mode(env) == 'formal' else str(ROOT / "go.work")
         if stage in ("all", "contracts"):
             execute("dependency-gate-tests", [sys.executable, "tests/test_ci.py"])
             execute("core-bridge-python", [sys.executable, "scripts/check.py"])

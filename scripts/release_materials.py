@@ -71,13 +71,17 @@ def reviewed_source_notices():
     parts = ["", "Additional reviewed development-source license materials.",
              "The native build-info identifies the actual artifact inputs; these records preserve the reviewed source bytes."]
     for name, record in sorted(captured["sources"].items()):
-        if info.get("local_dependencies") and info.get("sources", {}).get(name) != record["commit"]:
+        if (info.get("local_dependencies") or info.get("module_graph") is not None) and info.get("sources", {}).get(name) != record["commit"]:
             raise RuntimeError(f"review source license materials for the actual native input: {name}")
         parts.extend(["", "=" * 78, f"Reviewed source: {name}@{record['commit']}"])
         for filename, value in sorted(record["files"].items()):
             body = value["text"]
             if hashlib.sha256(body.encode("utf-8")).hexdigest() != value["normalized_sha256"]:
                 raise RuntimeError(f"reviewed source license bytes changed: {name}/{filename}")
+            if info.get('module_graph') is not None:
+                actual = next((m for m in info['module_graph'] if m['Path'] == 'github.com/FastTLS/' + name), {})
+                if actual.get('license_files', {}).get(filename) != value['normalized_sha256']:
+                    raise RuntimeError(f"formal module license differs from reviewed bytes: {name}/{filename}")
             parts.extend([f"File: {filename}", "-" * 78, body.rstrip()])
     return parts
 

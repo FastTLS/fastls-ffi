@@ -3,7 +3,7 @@ permissions:
   contents: read
 env:
   FASTLS_EXTENDED_SOAK_SECONDS: ${{ inputs.certification_soak_seconds || '300' }}
-  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.1.4.dev{0}', github.run_number)
+  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.1.5.dev{0}', github.run_number)
     }}
   FASTLS_RELEASE_MODE: ${{ github.ref_type == 'tag' && 'true' || 'false' }}
 concurrency:
@@ -39,9 +39,9 @@ jobs:
     - name: Require reviewed dependency commits
       id: refs
       env:
-        FASTLS_REF: ${{ inputs.fastls_ref || vars.FASTLS_REF }}
-        FTRANSPORT_REF: ${{ inputs.ftransport_ref || vars.FTRANSPORT_REF }}
-        IMITATE_REF: ${{ inputs.imitate_ref || vars.IMITATE_REF }}
+        FASTLS_REF: ${{ inputs.fastls_ref }}
+        FTRANSPORT_REF: ${{ inputs.ftransport_ref }}
+        IMITATE_REF: ${{ inputs.imitate_ref }}
       run: python scripts/ci.py resolve
     - name: Test package publication boundaries
       run: python tests/test_pypi.py

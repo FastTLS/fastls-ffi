@@ -17,6 +17,18 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 
+def module_revision(module, build):
+    if not module.get('Main') and not build.get('local_dependencies'):
+        record = next((m for m in build.get('module_graph', []) if m['Path'] == module['Path']), {})
+        if record.get('Version') != module.get('Version') or record.get('Sum') != module.get('Sum'):
+            raise ValueError('formal module differs from native build: ' + module['Path'])
+        revision = record.get('Origin', {}).get('Hash')
+        if not re.fullmatch(r'[0-9a-f]{40}', revision or ''):
+            raise ValueError('formal module has no source revision: ' + module['Path'])
+        return revision
+    return subprocess.check_output(['git', '-C', module['Dir'], 'rev-parse', 'HEAD'], text=True).strip()
+
+
 def run(*args):
     return subprocess.check_output(args, cwd=ROOT, text=True, encoding="utf-8", env={**os.environ, "CGO_ENABLED": "1"})
 
@@ -83,6 +95,11 @@ def main():
     destination, platform, arch, library = sys.argv[1:]
     destination, library = Path(destination), Path(library).resolve()
     build = json.loads((ROOT/"dist/build-info.json").read_text(encoding="utf-8"))
+    if not build.get('local_dependencies'):
+        os.environ['GOWORK'] = 'off'
+        from module_inputs import capture
+        if capture(ROOT, dict(os.environ, CGO_ENABLED='1')) != build.get('module_graph'):
+            raise ValueError('formal native modules changed since compilation')
     digest = hashlib.sha256(library.read_bytes()).hexdigest()
     if build["library_sha256"] != digest or build["abi"] != 1:
         raise ValueError("library does not match native build provenance")
@@ -107,7 +124,7 @@ def main():
             files = sorted(p for p in directory.parent.iterdir() if p.is_file() and re.match(r"^(LICENSE|COPYING|NOTICE|PATENTS)(?:[.-].*)?$", p.name, re.I))
         record = {"module": name, "version": module.get("Version"), "sum": module.get("Sum"), "notices": [p.name for p in files]}
         if module["Path"].startswith("github.com/FastTLS/"):
-            record["revision"] = subprocess.check_output(["git", "-C", str(directory), "rev-parse", "HEAD"], text=True).strip()
+            record["revision"] = module_revision(module, build)
         provenance.append(record)
         notices.append(f"\n===== {name} {record['version'] or record.get('revision', '')} =====\n")
         if not any(p.name.upper().startswith(("LICENSE", "COPYING")) for p in files):

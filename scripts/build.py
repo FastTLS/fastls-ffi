@@ -42,6 +42,8 @@ def main():
     parser.add_argument("--local", action="store_true", help="use unpublished sibling modules through an ignored go.work")
     parser.add_argument("--cc", help="C compiler command; otherwise use CC or gcc")
     args = parser.parse_args()
+    if args.local and os.environ.get('FASTLS_RELEASE_MODE', '').lower() == 'true':
+        parser.error('release builds require formal dependencies; --local is development-only')
     env = os.environ.copy()
     env["CGO_ENABLED"] = "1"
     if args.cc:
@@ -70,6 +72,8 @@ def main():
         env["GOWORK"] = str(work)
     else:
         env["GOWORK"] = "off"
+    from module_inputs import capture, source_commits
+    formal = capture(ROOT, env) if not args.local else None
     name = "fastls.dll" if sys.platform == "win32" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
     out = ROOT / "dist"
     out.mkdir(exist_ok=True)
@@ -77,6 +81,8 @@ def main():
     subprocess.run(["go", "build", "-buildmode=c-shared", "-o", str(out / name), "./cmd/fastls-shared"], cwd=ROOT, env=env, check=True)
     if source_digest(env) != before:
         raise SystemExit("source changed during compilation; rebuild before using this artifact")
+    if formal is not None and capture(ROOT, env) != formal:
+        raise SystemExit("formal module inputs changed during compilation")
     # cgo emits libfastls.h on Unix and fastls.h on Windows. Keep the public
     # include name stable so the same C consumer builds on every platform.
     generated_header = (out / name).with_suffix(".h")
@@ -91,10 +97,16 @@ def main():
         "workspace_source": before,
         "sources": {name: subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=path, text=True).strip()
                     for name, path in (("fastls-ffi", ROOT), ("fastls", fastls),
-                                       ("ftransport", ftransport), ("imitate", imitate))} if args.local else {},
+                                       ("ftransport", ftransport), ("imitate", imitate))} if args.local else {
+            "fastls-ffi": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+            **source_commits(formal)},
+        "module_graph": formal,
+        "module_files": {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in ('go.mod', 'go.sum')} if formal is not None else None,
         "library_sha256": hashlib.sha256((out / name).read_bytes()).hexdigest(),
         "note": "Native build metadata. Consult the release manifest for publication and certification status.",
     }, indent=2) + "\n", encoding="utf-8")
+    if formal is not None:
+        (out / 'module-inputs.json').write_text(json.dumps(formal, indent=2) + '\n', encoding='utf-8')
     print(out / name)
 
 
