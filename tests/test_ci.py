@@ -29,7 +29,7 @@ class FormalModuleInputs(unittest.TestCase):
             (directory/'LICENSE').write_text('actual license\n')
             selected=dict(Path=path,Version='v0.1.1',Sum='h1:actual',GoModSum='h1:mod')
             self.selected.append(selected)
-            self.downloaded[(path,'v0.1.1')]=dict(selected,Dir=str(directory),Origin=dict(VCS='git',URL='https://github.com/FastTLS/'+name,
+            self.downloaded[(path,'v0.1.1')]=dict(selected,Dir=str(directory),VersionTag=dict(ref='refs/tags/v0.1.1',commit='a'*40),Origin=dict(VCS='git',URL='https://github.com/FastTLS/'+name,
                 Hash='a'*40,Ref='refs/tags/v0.1.1'))
             self.reviewed[name+'_ref']='a'*40
     def validate(self):return module_inputs.validate(self.selected,self.downloaded,self.reviewed)
@@ -49,15 +49,21 @@ class FormalModuleInputs(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'reviewed source'):self.validate()
     def test_mutable_origins_missing_modules_and_missing_license_are_rejected(self):
         source=self.downloaded[('github.com/FastTLS/fastls','v0.1.1')]
-        source['Origin']['Ref']='refs/heads/main'
+        source['VersionTag']['ref']='refs/heads/main'
         with self.assertRaisesRegex(RuntimeError,'origin/tag'):self.validate()
-        source['Origin']['Ref']='refs/tags/v0.1.1';self.selected.pop()
+        source['VersionTag']['ref']='refs/tags/v0.1.1';self.selected.pop()
         with self.assertRaisesRegex(RuntimeError,'required formal'):self.validate()
         self.setUp();source=self.downloaded[('github.com/FastTLS/fastls','v0.1.1')]
         (Path(source['Dir'])/'LICENSE').unlink()
         with self.assertRaisesRegex(RuntimeError,'no license'):self.validate()
     def test_formal_build_never_uses_an_active_workspace(self):
         with self.assertRaisesRegex(RuntimeError,'GOWORK=off'):module_inputs.capture(Path('.'),{'GOWORK':'go.work'})
+    def test_cached_branch_origin_requires_an_independently_verified_version_tag(self):
+        source=self.downloaded[('github.com/FastTLS/fastls','v0.1.1')]
+        source['Origin']['Ref']='refs/heads/reviewed-original-query'
+        self.assertTrue(self.validate())
+        source.pop('VersionTag')
+        with self.assertRaisesRegex(RuntimeError,'origin/tag'):self.validate()
     def test_node_revision_uses_formal_module_origin_without_git_in_module_cache(self):
         import runpy
         resolve=runpy.run_path(str(ROOT/'node/scripts/native-metadata.py'))['module_revision']

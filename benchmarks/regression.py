@@ -191,7 +191,7 @@ def candidate_input(root):
             rows = [m for m in graph if m['Path']==path]
             if len(rows)!=1:raise RuntimeError('formal source missing or duplicated: '+name)
             module=rows[0];origin=module.get('Origin',{});version=module.get('Version')
-            if module.get('Replace') or not all(module.get(k) for k in ('Sum','GoModSum')) or origin.get('Ref')!='refs/tags/'+str(version):
+            if module.get('Replace') or not all(module.get(k) for k in ('Sum','GoModSum')) or module.get('VersionTag')!=dict(ref='refs/tags/'+str(version),commit=origin.get('Hash')):
                 raise RuntimeError('invalid formal module provenance: '+name)
             if not re.fullmatch(r'[0-9a-f]{40}',origin.get('Hash','')) or not re.search(re.escape(path)+r'\s+'+re.escape(version)+r'(?:\s|$)',(root/'go.mod').read_text()):
                 raise RuntimeError('formal selected version/source mismatch: '+name)

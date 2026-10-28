@@ -32,11 +32,12 @@ def validate(selected, downloaded, reviewed):
             raise RuntimeError('module selection/checksum mismatch: ' + path)
         record = {k: source[k] for k in ('Path', 'Version', 'Sum', 'GoModSum')}
         if source.get('Origin'): record['Origin'] = source['Origin']
+        if source.get('VersionTag'): record['VersionTag'] = source['VersionTag']
         if path in OWN:
             origin = source.get('Origin', {}); name = OWN[path]
             if origin.get('VCS') != 'git' or origin.get('Hash') != reviewed.get(name + '_ref') or not re.fullmatch(r'[0-9a-f]{40}', origin.get('Hash', '')):
                 raise RuntimeError('formal module differs from reviewed source: ' + path)
-            if origin.get('URL', '').removesuffix('.git') != 'https://github.com/FastTLS/' + name or origin.get('Ref') != 'refs/tags/' + version:
+            if origin.get('URL', '').removesuffix('.git') != 'https://github.com/FastTLS/' + name or source.get('VersionTag') != dict(ref='refs/tags/' + version,commit=origin['Hash']):
                 raise RuntimeError('formal module origin/tag mismatch: ' + path)
             directory = Path(source['Dir'])
             record['license_files'] = {p.name: hashlib.sha256(p.read_text(encoding='utf-8').replace('\r\n', '\n').encode()).hexdigest()
@@ -53,6 +54,20 @@ def capture(root, env):
     def run(*args):return subprocess.check_output(args, cwd=root, env=env, text=True, encoding='utf-8')
     if run('git', 'status', '--porcelain').strip(): raise RuntimeError('commit formal native sources before building')
     downloaded = list(json_stream(run('go', 'mod', 'download', '-json', 'all')))
+    # Bulk download can omit Origin. Individual cached metadata may retain a
+    # branch used for the original commit lookup, so preserve it and separately
+    # verify the actual immutable version tag rather than relabeling Origin.Ref.
+    for index, module in enumerate(downloaded):
+        if module['Path'].startswith('github.com/FastTLS/'):
+            source = json.loads(run('go','mod','download','-json',module['Path']+'@'+module['Version']))
+            origin=source.get('Origin',{})
+            if not origin.get('URL') or not origin.get('Hash'):
+                raise RuntimeError('formal module source origin missing: '+module['Path'])
+            ref='refs/tags/'+(origin['Subdir']+'/' if origin.get('Subdir') else '')+module['Version']
+            refs=dict(line.split()[::-1] for line in run('git','ls-remote','--tags',origin['URL'],ref,ref+'^{}').splitlines())
+            commit=refs.get(ref+'^{}',refs.get(ref))
+            if commit!=origin['Hash']:raise RuntimeError('formal version tag/source mismatch: '+module['Path'])
+            source['VersionTag']=dict(ref=ref,commit=commit);downloaded[index]=source
     run('go', 'mod', 'verify')
     selected = list(json_stream(run('go', 'list', '-m', '-json', 'all')))
     reviewed = json.loads((root / 'ci/dependencies.json').read_text(encoding='utf-8'))

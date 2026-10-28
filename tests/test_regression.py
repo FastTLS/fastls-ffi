@@ -17,7 +17,7 @@ class FormalCandidate(unittest.TestCase):
             root=Path(temporary);(root/'dist').mkdir();library=root/'dist'/('fastls.dll' if sys.platform=='win32' else 'libfastls.dylib' if sys.platform=='darwin' else 'libfastls.so')
             library.write_bytes(b'candidate fixture');(root/'go.sum').write_text('verified sums\n')
             (root/'go.mod').write_text('\n'.join('github.com/FastTLS/'+name+' v0.1.1' for name in ('fastls','ftransport','imitate')))
-            graph=[dict(Path='github.com/FastTLS/'+name,Version='v0.1.1',Sum='h1:sum',GoModSum='h1:mod',Origin=dict(Hash='b'*40,Ref='refs/tags/v0.1.1')) for name in ('fastls','ftransport','imitate')]
+            graph=[dict(Path='github.com/FastTLS/'+name,Version='v0.1.1',Sum='h1:sum',GoModSum='h1:mod',VersionTag=dict(ref='refs/tags/v0.1.1',commit='b'*40),Origin=dict(Hash='b'*40,Ref='refs/tags/v0.1.1')) for name in ('fastls','ftransport','imitate')]
             info=dict(local_dependencies=False,library_sha256=sha(library),module_graph=graph,module_files={p:sha(root/p) for p in ('go.mod','go.sum')},
                 sources={'fastls-ffi':'a'*40,**{n:'b'*40 for n in ('fastls','ftransport','imitate')}})
             (root/'dist/module-inputs.json').write_text(json.dumps(graph));(root/'dist/build-info.json').write_text(json.dumps(info))
