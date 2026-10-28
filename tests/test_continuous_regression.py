@@ -188,4 +188,27 @@ class ExtendedTimedGate(unittest.TestCase):
         self.assertFalse(self.verdict()['success'])
 
 
+class SyncPhaseBudget(unittest.TestCase):
+    def test_requested_window_beyond120_finishes_before_outer_guard(self):
+        # Exercise the actual two-thread barrier path at100x clock speed.
+        # The old120-second barrier then expires at1.20 real seconds, before
+        # a128-second logical measurement; a deadline-aware barrier completes.
+        class SyncClient(FakeClient):
+            def session(self):return self
+            def close(self):pass
+            def prime(self,*args):pass
+            def perform(self,session,run,target):time.sleep(.001);target.success+=1;target.bytes+=1
+        import threading
+        real_barrier=threading.Barrier
+        def scaled_barrier(parties,timeout):
+            return real_barrier(parties,timeout=timeout/100 if timeout>=120 else timeout)
+        origin=time.perf_counter()
+        def accelerated_clock():return (time.perf_counter()-origin)*100
+        with patch.object(worker,'CLOCK',side_effect=accelerated_clock),patch.object(worker.threading,'Barrier',side_effect=scaled_barrier),patch.object(worker,'emit') as emit:
+            result,_=worker.run_sync(SyncClient(),dict(warmup_seconds=0,seconds=128,run_id='extended-sync',continuous_transfers=True))
+        self.assertGreaterEqual(result['elapsed_seconds'],128)
+        self.assertGreater(result['success'],0)
+        self.assertTrue(any(c.args[0]=='measure_stop' for c in emit.call_args_list))
+
+
 if __name__=='__main__':unittest.main(verbosity=2)

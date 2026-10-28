@@ -3,7 +3,7 @@ from timed_regression import (TIMING_POLICY, timing_check, evaluate as evaluate_
     main as main_v3, window as original_window)
 
 SLOW_SECONDS = 128
-PROTOCOL = 'g1-continuous-cpu-v4-timed-128'
+PROTOCOL = 'g1-continuous-cpu-v4.1-timed-128'
 
 def window(case):
     return SLOW_SECONDS if case['workload']=='slow' else original_window(case)

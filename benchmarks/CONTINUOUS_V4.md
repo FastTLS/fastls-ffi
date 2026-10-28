@@ -1,4 +1,4 @@
-# Independent extended-window CPU certification v4
+# Independent extended-window CPU certification v4.1
 
 This is a new complete experiment. It does not edit, replace or combine any
 earlier v3 run. S6's first v3 cohort had two delayed observations and unstable
@@ -43,3 +43,13 @@ The release record must identify the longer-window calibration and its hashes,
 the committed v4 harness and the separately frozen production source/native.
 This gate covers only the declared Windows AMD64 CPython 3.11 H1/H2 environment;
 it does not certify H3, browser impersonation or other platforms' performance.
+
+The initial v4 trial was aborted and remains ineligible: its unchanged
+synchronous worker used a fixed 120-second completion barrier, incompatible
+with a 128-second requested measurement. No completed or partial round from
+that trial is reused. V4.1 sets the internal completion guard to the larger
+of 120 seconds and requested seconds + 90. The existing controller wall budget
+is unchanged. An accelerated real-thread regression exposes the old failure;
+actual 128-second H1 preflights precede the new complete 150. The async workload
+and SDK client functions are unchanged, so the independent H2 calibration's
+workload is retained. This is an instrument repair, not an SDK runtime change.

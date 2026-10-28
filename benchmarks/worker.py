@@ -329,7 +329,10 @@ def server_stats(spec):
 def run_sync(client, spec):
     emit('phase',ack=False,phase='setup_and_warmup')
     count=client.case["concurrency"]; metrics=Metrics(); warm=Metrics()
-    ready=threading.Barrier(count+1,timeout=60); done=threading.Barrier(count+1,timeout=120)
+    # Match the requested measurement and its existing 90-second allowance.
+    # The controller still owns the unchanged overall wall-time guard.
+    ready=threading.Barrier(count+1,timeout=60)
+    done=threading.Barrier(count+1,timeout=max(120,spec["seconds"]+90))
     cleanup=threading.Event(); start=threading.Event(); shared={}
     warm_started=CLOCK()
     def worker():
