@@ -92,6 +92,12 @@ jobs:
           python-version: '3.11'
       - name: Install locked benchmark-only dependencies
         run: python -m pip install -r benchmarks/requirements.lock
+      - name: Validate durable failures and worker tree cleanup
+        env:
+          FASTLS_OBSERVATION_TEST_OUTPUT: ${{ github.workspace }}/workspace/fastls-ffi/build/benchmark-results/fault-injection
+        run: python -m unittest discover -s tests -p test_observation.py -v
+      - name: Validate retained regression and continuous-workload gates
+        run: python -m unittest discover -s tests -p "test_*regression.py" -v
       - name: Build library, independent fixture and contract checks
         run: python benchmarks/prepare.py
       - name: Run isolated clients with protocol, TLS and hash checks

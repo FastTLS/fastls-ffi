@@ -87,72 +87,8 @@ def sdk_digests(inputs):
 
 
 def execute(spec,fixture_process,output):
-    token=spec["run_id"]
-    specfile=output/(token+"-input.json")
-    resultfile=output/(token+"-worker.json")
-    spec.update(result_file=str(resultfile))
-    specfile.write_text(json.dumps(spec))
-    env=os.environ.copy();env.update(PYTHONUTF8="1",PYTHONIOENCODING="utf-8")
-    for key in list(env):
-        if key.lower() in ("http_proxy","https_proxy","all_proxy","no_proxy","pythonpath","fastls_library"): env.pop(key)
-    env["FASTLS_LIBRARY"]=spec["fastls_input"]["library"]
-    started=time.perf_counter()
-    process=subprocess.Popen([sys.executable,str(ROOT/"benchmarks/worker.py"),str(specfile)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding="utf-8",env=env)
-    lines=queue.Queue(); errors=[]
-    def reader():
-        for line in process.stdout: lines.put(line)
-    def stderr():
-        for line in process.stderr: errors.append(line)
-    threads=[threading.Thread(target=reader,daemon=True),threading.Thread(target=stderr,daemon=True)]
-    for thread in threads: thread.start()
-    child=psutil.Process(process.pid);server=psutil.Process(fixture_process.pid)
-    markers=[];samples=[];base=finish=recovery=None;serverbase=serverfinish=None;measuring=False;startup=None
-    # Warmup only the timed small-request load for the full warmup budget.
-    limit=started+spec["warmup_seconds"]+spec["seconds"]+90
-    try:
-        while process.poll() is None or not lines.empty():
-            if time.perf_counter()>limit: process.kill(); raise TimeoutError("benchmark worker exceeded wall budget")
-            try:
-                event=json.loads(lines.get(timeout=.05));markers.append(event)
-                if event["stage"]=="initialized": startup=time.perf_counter()-started
-                if event["stage"]=="measure_start":
-                    base=snapshot(child);serverbase=snapshot(server);measuring=True
-                elif event["stage"]=="measure_stop":
-                    finish=snapshot(child);serverfinish=snapshot(server);measuring=False
-                elif event["stage"]=="closed": recovery=snapshot(child)
-                elif event["stage"]=="progress":
-                    if measuring:
-                        opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-                        url=spec["fixture"]["http"]+"/bench/stats?run="+spec["run_id"]
-                        with opener.open(url,timeout=5) as response: event["server"]=json.load(response)
-                if event["stage"]!="progress":
-                    process.stdin.write("\n");process.stdin.flush()
-            except queue.Empty:
-                pass
-            if measuring:
-                try: samples.append(dict(client=snapshot(child),server=snapshot(server)))
-                except psutil.NoSuchProcess: pass
-        process.wait(timeout=5)
-    finally:
-        if process.poll() is None: process.kill();process.wait(timeout=5)
-        for thread in threads: thread.join(3)
-        process.stdin.close();process.stdout.close();process.stderr.close()
-    logs="".join(errors)
-    (output/(token+"-stderr.log")).write_text(logs,encoding="utf-8")
-    result=json.loads(resultfile.read_text()) if resultfile.exists() else {}
-    valid=process.returncode==0 and bool(result.get("success")) and not result.get("failed")
-    resources={}
-    if base and finish:
-        allsamples=[base,finish]+[s["client"] for s in samples]
-        seconds=finish["at"]-base["at"]
-        resources=dict(cpu_seconds=max(0,finish["cpu_seconds"]-base["cpu_seconds"]),
-                       cpu_cores=max(0,finish["cpu_seconds"]-base["cpu_seconds"])/max(seconds,1e-9),
-                       sample_interval_seconds=.05,peak_rss_bytes=max(s["rss_bytes"] for s in allsamples),
-                       peak_threads=max(s["threads"] for s in allsamples),peak_descriptors=max(s["descriptors"] for s in allsamples),
-                       baseline=base,finished=finish,after_close=recovery,samples=samples,server_baseline=serverbase,server_finished=serverfinish)
-    return dict(case=spec["case"],client=spec["client"],round=spec["round"],valid=valid,exit_code=process.returncode,
-                metrics=result,resources=resources,startup_including_probe_seconds=startup,markers=markers,
-                error=logs[-5000:] if not valid else None)
+    from observation import execute as observe
+    return observe(spec,fixture_process,output,worker_script=ROOT/"benchmarks/worker.py",snapshot=snapshot)
 
 
 def main():

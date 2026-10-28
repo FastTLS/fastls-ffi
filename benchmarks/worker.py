@@ -1,5 +1,6 @@
 """One library, case and round per process. stdout carries lifecycle markers."""
 import asyncio
+import faulthandler
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, asynccontextmanager, AsyncExitStack
@@ -20,7 +21,7 @@ CLOCK = time.perf_counter
 
 
 def emit(stage, ack=True, **values):
-    print(json.dumps(dict(stage=stage, **values)), flush=True)
+    print(json.dumps(dict(stage=stage,ack_required=ack,worker_at=CLOCK(),pid=os.getpid(),**values)), flush=True)
     # Keep the process alive until the external sampler has captured this exact
     # boundary, including after cleanup. No per-request sampler thread is added.
     if ack and not sys.stdin.readline():
@@ -326,6 +327,7 @@ def server_stats(spec):
 
 
 def run_sync(client, spec):
+    emit('phase',ack=False,phase='setup_and_warmup')
     count=client.case["concurrency"]; metrics=Metrics(); warm=Metrics()
     ready=threading.Barrier(count+1,timeout=60); done=threading.Barrier(count+1,timeout=120)
     cleanup=threading.Event(); start=threading.Event(); shared={}
@@ -359,12 +361,14 @@ def run_sync(client, spec):
         try:
             done.wait(); elapsed=CLOCK()-began; emit("measure_stop")
         finally:
+            emit('phase',ack=False,phase='session_close')
             cleanup.set()
         for job in jobs: job.result()
     return metrics.result(elapsed),warm.result(max(warm_elapsed,1e-6))
 
 
 async def run_async(client,spec):
+    emit('phase',ack=False,phase='session_setup')
     metrics=Metrics(); warm=Metrics(); count=client.case["concurrency"]
     async with AsyncExitStack() as stack:
         setup=CLOCK()
@@ -379,6 +383,7 @@ async def run_async(client,spec):
             if client.case["cold"]:
                 async with client.session(async_=True) as fresh: await client.aperform(fresh,run,target)
             else: await client.aperform(session,run,target)
+        emit('phase',ack=False,phase='warmup')
         warm_started=CLOCK(); deadline=warm_started+spec["warmup_seconds"]
         async def prewarm():
             while CLOCK()<deadline: await operation(spec["run_id"]+"-warm",warm)
@@ -391,15 +396,25 @@ async def run_async(client,spec):
                 once=True; await operation(spec["run_id"],metrics)
         await asyncio.gather(*(work() for _ in range(count)))
         elapsed=CLOCK()-began; emit("measure_stop")
+        emit('phase',ack=False,phase='session_close')
     return metrics.result(elapsed),warm.result(max(warm_elapsed,1e-6))
 
 
 def main():
     spec = json.loads(Path(sys.argv[1]).read_text())
+    if spec.get('diagnostic_stack_seconds') is not None:
+        seconds = spec['diagnostic_stack_seconds']
+        if not isinstance(seconds, (int, float)) or not 0 < seconds <= 86400:
+            raise ValueError('invalid diagnostic stack deadline')
+        faulthandler.enable()
+        faulthandler.dump_traceback_later(seconds)
+    emit('phase', ack=False, phase='import_client')
     client = Client(spec)
+    emit('phase', ack=False, phase='tls_probe')
     tls_probe(client)
     emit('initialized', import_seconds=client.import_seconds, module_path=client.module.__file__, profile=client.profile if client.name == 'fastls' else None)
     result, warm = asyncio.run(run_async(client, spec)) if client.case['mode'] == 'async' else run_sync(client, spec)
+    emit('phase', ack=False, phase='server_validation')
     stats = server_stats(spec)
     protocols = {c['protocol'] for c in stats['connections'].values()}
     contract_errors = []
@@ -413,6 +428,7 @@ def main():
     if stats['requests'] != result['success'] + result['failed']:
         if stats['requests'] > result['success'] + result['failed']:
             contract_errors.append('unaccounted server requests/retries')
+    emit('phase', ack=False, phase='native_recovery')
     time.sleep(0.15)
     native = client.stats()
     if native is not None and any((native[k] for k in ('open_requests', 'workers', 'notifiers', 'open_sessions'))):
@@ -421,11 +437,14 @@ def main():
     result.update(server=stats, warmup=warm, native_final=native, tls_wrong_ca_rejected=True, contract_errors=contract_errors, import_seconds=client.import_seconds, session_setup_including_tls_probe_seconds=client.session_setup_seconds, configuration=dict(profile=client.profile if client.name == 'fastls' else None, match=client.match))
     if client.name == 'fastls':
         result['configuration']['notification_mode'] = 'poll' if client.case['poll'] else 'native'
-    Path(spec['result_file']).write_text(json.dumps(result, indent=2) + '\n')
+    emit('phase', ack=False, phase='write_result')
+    Path(spec['result_file']).write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
+    emit('phase', ack=False, phase='worker_exit')
     if not result['success'] or result['failed'] or warm['failed'] or contract_errors:
         return 1
     return 0
 
 
 if __name__=="__main__":
-    raise SystemExit(main())
+    try:raise SystemExit(main())
+    finally:faulthandler.cancel_dump_traceback_later()
