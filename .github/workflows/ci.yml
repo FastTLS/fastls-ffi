@@ -308,14 +308,12 @@ jobs:
           python: '3.11'
         stage: ${{ fromJSON(needs.dependencies.outputs.extended_matrix) }}
     runs-on: ${{ matrix.config.runner }}
-    timeout-minutes: ${{ ((inputs.certification_soak_seconds != '' && inputs.certification_soak_seconds != '300')
-      || needs.dependencies.outputs.soak_seconds == '3600') && 150 || 30 }}
+    timeout-minutes: ${{ fromJSON(needs.dependencies.outputs.soak_seconds) > 300 && 150 || 30 }}
     env:
       CGO_ENABLED: '1'
       FASTLS_CI_TARGET: ${{ matrix.config.target }}
       FASTLS_STABILITY_SECONDS: '30'
-      FASTLS_EXTENDED_SOAK_SECONDS: ${{ inputs.certification_soak_seconds || needs.dependencies.outputs.soak_seconds
-        }}
+      FASTLS_EXTENDED_SOAK_SECONDS: ${{ needs.dependencies.outputs.soak_seconds }}
     defaults:
       run:
         working-directory: workspace/fastls-ffi

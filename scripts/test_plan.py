@@ -94,8 +94,14 @@ def context(env):
         if release:
             version(release)  # Invalid release tags must fail, never silently downgrade.
         files, uncertain = [], True
-    return choose(files, requested=env.get('TEST_TIER') or 'auto', release=release, previous=previous,
+    plan = choose(files, requested=env.get('TEST_TIER') or 'auto', release=release, previous=previous,
                   uncertain=uncertain, override=any(env.get(n) for n in ('FASTLS_REF', 'FTRANSPORT_REF', 'IMITATE_REF', 'CERTIFICATION_SOAK_SECONDS')))
+    duration = env.get('CERTIFICATION_SOAK_SECONDS')
+    if duration:
+        if not re.fullmatch(r'[0-9]+', duration) or not 300 <= int(duration) <= 7200:
+            raise ValueError('Resource observation must be an integer in 300..7200 seconds')
+        plan['soak_seconds'] = max(plan['soak_seconds'], int(duration))
+    return plan
 
 
 def required_results(plan, results):

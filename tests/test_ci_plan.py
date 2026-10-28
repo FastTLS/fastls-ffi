@@ -104,6 +104,16 @@ class Selection(unittest.TestCase):
             self.assertEqual(len(plan['matrix']), 5)
             self.assertTrue(plan['candidates'])
 
+    def test_duration_override_cannot_shorten_major_observation(self):
+        with patch.object(test_plan, 'git', return_value='README.md'):
+            plan = test_plan.context({'TEST_TIER': 'major', 'CERTIFICATION_SOAK_SECONDS': '300'})
+            self.assertEqual(plan['soak_seconds'], 3600)
+            plan = test_plan.context({'CERTIFICATION_SOAK_SECONDS': '7200'})
+            self.assertEqual(plan['soak_seconds'], 7200)
+            for value in ('299', '7201', '300\nother=1', '-300'):
+                with self.assertRaises(ValueError):
+                    test_plan.context({'CERTIFICATION_SOAK_SECONDS': value})
+
 
 class Gate(unittest.TestCase):
     def results(self, plan):
