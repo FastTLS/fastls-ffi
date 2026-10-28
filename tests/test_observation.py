@@ -55,10 +55,12 @@ class DurableObservation(unittest.TestCase):
         self.root=Path(destination)/self._testMethodName if destination else Path(self.temp.name)
         if destination:self.root.mkdir(parents=True,exist_ok=False)
         self.worker=self.root/'worker.py';self.worker.write_text(STUB,encoding='utf-8')
-        self.fixture=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'])
+        self.fixture=subprocess.Popen([sys.executable,'-c','import sys;sys.stdin.buffer.read()'],stdin=subprocess.PIPE)
 
     def tearDown(self):
-        self.fixture.kill();self.fixture.wait(timeout=5)
+        # Closing stdin also releases the actual interpreter behind a Windows
+        # venv launcher; killing only the launcher would leave an idle child.
+        self.fixture.stdin.close();self.fixture.wait(timeout=5)
         if self.temp:self.temp.cleanup()
 
     def execute(self,mode):

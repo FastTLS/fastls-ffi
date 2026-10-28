@@ -98,6 +98,8 @@ jobs:
         run: python -m unittest discover -s tests -p test_observation.py -v
       - name: Validate retained regression and continuous-workload gates
         run: python -m unittest discover -s tests -p "test_*regression.py" -v
+      - name: Validate benchmark report and sampler contracts
+        run: python -m unittest discover -s tests -p test_benchmarks.py -v
       - name: Build library, independent fixture and contract checks
         run: python benchmarks/prepare.py
       - name: Run isolated clients with protocol, TLS and hash checks
