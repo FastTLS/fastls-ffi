@@ -1,0 +1,135 @@
+"""Select CI coverage from the release level and the actual changed files."""
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+TIERS = ('docs', 'patch', 'minor', 'major')
+
+
+def git(*args):
+    return subprocess.check_output(['git', *args], cwd=ROOT, text=True).strip()
+
+
+def version(text):
+    match = re.fullmatch(r'v?(\d+)\.(\d+)\.(\d+)', text)
+    if not match:
+        raise ValueError('Expected an exact X.Y.Z release version')
+    return tuple(map(int, match.groups()))
+
+
+def release_tier(current, previous):
+    current, previous = version(current), version(previous)
+    if current <= previous:
+        raise ValueError('Release version must advance')
+    return 'major' if current[0] != previous[0] else 'minor' if current[1] != previous[1] else 'patch'
+
+
+def choose(files, *, requested='auto', release=None, previous=None, uncertain=False, override=False):
+    if requested not in ('auto', *TIERS[1:]):
+        raise ValueError('Unknown test tier')
+    docs = bool(files) and all(p.endswith('.md') or p.startswith('docs/') for p in files)
+    tier = 'docs' if docs else 'patch'
+    reasons = ['documentation only' if docs else 'ordinary change']
+    resource = any(p.endswith('.go') or p in ('go.mod', 'go.sum', 'ci/dependencies.json') or
+                   any(word in p.lower() for word in ('pool', 'duplex', 'timeout', 'proxy', 'decode', 'websocket')) for p in files)
+    packaging = any(p.startswith(('scripts/build', 'scripts/package', 'scripts/repair', 'scripts/native', 'scripts/module', 'scripts/release', 'scripts/prepare_pypi')) or
+                    p in ('pyproject.toml', 'setup.py', 'setup.cfg', 'MANIFEST.in', 'LICENSE') or p.startswith('ci/') for p in files)
+    unknown = any(not (p.endswith(('.md', '.go')) or p.startswith(('docs/', 'python/', 'node/', 'tests/', 'scripts/', 'benchmarks/', '.github/', 'ci/')) or
+                      p in ('go.mod', 'go.sum', 'pyproject.toml', 'setup.py', 'setup.cfg', 'MANIFEST.in', 'LICENSE', '.gitignore')) for p in files)
+    if resource or packaging or uncertain or override or unknown:
+        tier = 'minor'
+        reasons.append('native/resource/packaging risk or unavailable change baseline')
+    if release:
+        level = release_tier(release, previous) if previous else 'major'
+        tier = TIERS[max(TIERS.index(tier), TIERS.index(level))]
+        reasons.append('release version floor: ' + level)
+    if requested != 'auto':
+        tier = TIERS[max(TIERS.index(tier), TIERS.index(requested))]
+        reasons.append('manual floor: ' + requested)
+    from ci import TARGETS
+    targets = TARGETS if tier == 'major' else TARGETS[:5] if tier == 'minor' or release else TARGETS[:2]
+    node = tier != 'docs' and (tier in ('minor', 'major') or bool(release) or any(p.startswith('node/') or p.endswith('.go') for p in files))
+    candidates = node and (tier in ('minor', 'major') or bool(release))
+    extended = ['race', 'soak'] if tier in ('minor', 'major') else ['race'] if release else []
+    node_targets = [dict(t, node='22' if t['go'] == '1.27.3' else '24', race=t['target'] == 'linux-amd64' and t['go'] == '1.26.10') for t in targets]
+    return dict(tier=tier, reasons=reasons, files=files, native=tier != 'docs', node=node,
+                matrix=targets, node_matrix=node_targets, extended=extended,
+                node_soak=tier in ('minor', 'major'), candidates=candidates,
+                pypi=bool(release) or tier in ('minor', 'major'),
+                soak_seconds=3600 if tier == 'major' else 300,
+                full_performance=False)
+
+
+def context(env):
+    event = json.loads(Path(env['GITHUB_EVENT_PATH']).read_text()) if env.get('GITHUB_EVENT_PATH') else {}
+    release = env.get('GITHUB_REF_NAME') if env.get('GITHUB_REF_TYPE') == 'tag' else None
+    previous = None
+    uncertain = False
+    try:
+        if release:
+            current = version(release)
+            tags = [t for t in git('tag', '--merged', 'HEAD').splitlines() if re.fullmatch(r'v\d+\.\d+\.\d+', t) and version(t) < current]
+            previous = max(tags, key=version) if tags else None
+            base = previous
+        elif event.get('pull_request'):
+            base = git('merge-base', event['pull_request']['base']['sha'], 'HEAD')
+        elif re.fullmatch(r'[0-9a-f]{40}', event.get('before', '')) and event['before'] != '0' * 40:
+            base = event['before']
+        else:
+            base = git('merge-base', 'HEAD', 'refs/remotes/origin/main')
+            if base == git('rev-parse', 'HEAD'):
+                base = git('rev-parse', 'HEAD^')
+        files = git('diff', '--name-only', '--no-renames', base, 'HEAD').splitlines() if base else []
+        uncertain = not bool(files)
+        if not release and 'node/package.json' in files:
+            before_version = json.loads(git('show', base + ':node/package.json'))['version']
+            after_version = json.loads((ROOT / 'node/package.json').read_text())['version']
+            if before_version != after_version:
+                release, previous = after_version, before_version
+    except (subprocess.CalledProcessError, ValueError):
+        if release:
+            version(release)  # Invalid release tags must fail, never silently downgrade.
+        files, uncertain = [], True
+    return choose(files, requested=env.get('TEST_TIER') or 'auto', release=release, previous=previous,
+                  uncertain=uncertain, override=any(env.get(n) for n in ('FASTLS_REF', 'FTRANSPORT_REF', 'IMITATE_REF', 'CERTIFICATION_SOAK_SECONDS')))
+
+
+def required_results(plan, results):
+    expected = {'dependencies': True, 'native': plan['native'], 'tests': plan['native'],
+                'extended': bool(plan['extended']), 'node': plan['node'],
+                'node-soak': plan['node_soak'], 'node-candidates': plan['candidates']}
+    errors = []
+    for name, enabled in expected.items():
+        actual = results.get(name, {}).get('result')
+        wanted = 'success' if enabled else 'skipped'
+        if actual != wanted:
+            errors.append(f'{name}: expected {wanted}, got {actual}')
+    return errors
+
+
+def main():
+    if sys.argv[1:] == ['--check-results']:
+        errors = required_results(json.loads(os.environ['TEST_PLAN']), json.loads(os.environ['TEST_RESULTS']))
+        if errors:
+            raise SystemExit('\n'.join(errors))
+        print('All checks required by the selected plan passed; optional checks were explicitly skipped.')
+        return
+    plan = context(os.environ)
+    output = {**plan, 'plan': plan, 'extended_enabled': bool(plan['extended']), 'extended_matrix': plan['extended'] or ['race']}
+    if os.environ.get('GITHUB_OUTPUT'):
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as stream:
+            for key, value in output.items():
+                stream.write(key + '=' + (value if isinstance(value, str) else json.dumps(value, separators=(',', ':'))) + '\n')
+    summary = json.dumps(plan, indent=2)
+    print(summary)
+    if os.environ.get('GITHUB_STEP_SUMMARY'):
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as stream:
+            stream.write('Selected test scope\n```json\n' + summary + '\n```\n')
+
+
+if __name__ == '__main__':
+    main()

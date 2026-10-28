@@ -18,24 +18,50 @@ jobs:
       fastls_ref: ${{ steps.refs.outputs.fastls_ref }}
       ftransport_ref: ${{ steps.refs.outputs.ftransport_ref }}
       imitate_ref: ${{ steps.refs.outputs.imitate_ref }}
-      matrix: ${{ steps.refs.outputs.matrix }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      node_matrix: ${{ steps.plan.outputs.node_matrix }}
+      native: ${{ steps.plan.outputs.native }}
+      node: ${{ steps.plan.outputs.node }}
+      node_soak: ${{ steps.plan.outputs.node_soak }}
+      candidates: ${{ steps.plan.outputs.candidates }}
+      pypi: ${{ steps.plan.outputs.pypi }}
+      extended_matrix: ${{ steps.plan.outputs.extended_matrix }}
+      plan: ${{ steps.plan.outputs.plan }}
+      soak_seconds: ${{ steps.plan.outputs.soak_seconds }}
+      extended_enabled: ${{ steps.plan.outputs.extended_enabled }}
     steps:
     - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       with:
         persist-credentials: false
+        fetch-depth: 0
     - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
       with:
         python-version: '3.11'
+    - name: Select test scope before provisioning toolchains
+      id: plan
+      env:
+        TEST_TIER: ${{ inputs.test_tier }}
+        FASTLS_REF: ${{ inputs.fastls_ref }}
+        FTRANSPORT_REF: ${{ inputs.ftransport_ref }}
+        IMITATE_REF: ${{ inputs.imitate_ref }}
+        CERTIFICATION_SOAK_SECONDS: ${{ inputs.certification_soak_seconds }}
+      run: python scripts/test_plan.py
+    - name: Test scope selection and failure handling
+      run: python -m unittest discover -s tests -p test_ci_plan.py -v
+    - name: Check patch whitespace
+      run: git diff --check HEAD^ HEAD
     - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
       with:
         go-version: 1.26.10
         cache: true
         cache-dependency-path: go.sum
+      if: steps.plan.outputs.native == 'true'
     - name: Verify standalone remote module graph
       env:
         GOWORK: 'off'
       run: "go mod download\ngo mod verify\ngo list -m all\nif go mod graph | grep -F 'github.com/FastTLS/fhttp';\
         \ then\n  echo 'legacy fhttp dependency remains in the module graph' >&2\n  exit 1\nfi\n"
+      if: steps.plan.outputs.native == 'true'
     - name: Require reviewed dependency commits
       id: refs
       env:
@@ -43,13 +69,17 @@ jobs:
         FTRANSPORT_REF: ${{ inputs.ftransport_ref }}
         IMITATE_REF: ${{ inputs.imitate_ref }}
       run: python scripts/ci.py resolve
+      if: steps.plan.outputs.native == 'true'
     - name: Test package publication boundaries
       run: python tests/test_pypi.py
+      if: steps.plan.outputs.native == 'true'
     - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
       with:
         node-version: '22'
+      if: steps.plan.outputs.native == 'true'
     - name: Check Python 3.10 API types
       run: npm exec --yes --package=pyright@1.1.414 -- pyright --project tests/pyrightconfig.json
+      if: steps.plan.outputs.native == 'true'
     if: github.event_name != 'workflow_dispatch' || inputs.pypi_run_id == ''
   native:
     needs: dependencies
@@ -127,23 +157,18 @@ jobs:
         name: build-evidence-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
         path: workspace/fastls-ffi/build/ci-*/
         retention-days: 14
+    if: needs.dependencies.outputs.native == 'true'
   tests:
     needs:
     - dependencies
     - native
-    name: ${{ matrix.stage }} / ${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python
-      }}
+    name: Python checks / ${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
     strategy:
       fail-fast: false
       matrix:
         config: ${{ fromJSON(needs.dependencies.outputs.matrix) }}
-        stage:
-        - contracts
-        - source
-        - wheel
-        - release
     runs-on: ${{ matrix.config.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       CGO_ENABLED: '1'
       FASTLS_CI_TARGET: ${{ matrix.config.target }}
@@ -174,8 +199,7 @@ jobs:
         ref: ${{ needs.dependencies.outputs.imitate_ref }}
         path: workspace/imitate
         persist-credentials: false
-    - if: matrix.stage == 'contracts' || matrix.stage == 'release' || matrix.stage == 'race'
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+    - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
       with:
         go-version: ${{ matrix.config.go }}
         cache: true
@@ -192,10 +216,10 @@ jobs:
       with:
         name: inputs-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
         path: workspace/fastls-ffi
-    - name: Verify inputs and execute selected stage
-      run: python scripts/ci.py run --stage ${{ matrix.stage }}
+    - name: Verify inputs and execute all Python stages once
+      run: python -c "import subprocess,sys; [subprocess.run([sys.executable,'scripts/ci.py','run','--stage',stage],check=True)
+        for stage in ('contracts','source','wheel','release')]"
     - name: Retain certified candidate
-      if: matrix.stage == 'release'
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
       with:
         name: ${{ github.ref_type == 'tag' && 'release-candidate' || format('development-snapshot-{0}', github.run_number)
@@ -215,13 +239,53 @@ jobs:
           '
         if-no-files-found: error
         retention-days: 14
-    - name: Retain incremental evidence
+    - name: Retain contracts evidence
       if: always()
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
       with:
-        name: evidence-${{ matrix.stage }}-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python
+        name: evidence-contracts-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python
           }}
-        path: 'workspace/fastls-ffi/build/ci-*/
+        path: 'workspace/fastls-ffi/build/ci-*/contracts/
+
+          workspace/fastls-ffi/build/stability-*.json
+
+          workspace/fastls-ffi/build/checks-*/
+
+          '
+        retention-days: 14
+    - name: Retain source evidence
+      if: always()
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: evidence-source-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+        path: 'workspace/fastls-ffi/build/ci-*/source/
+
+          workspace/fastls-ffi/build/stability-*.json
+
+          workspace/fastls-ffi/build/checks-*/
+
+          '
+        retention-days: 14
+    - name: Retain wheel evidence
+      if: always()
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: evidence-wheel-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+        path: 'workspace/fastls-ffi/build/ci-*/wheel/
+
+          workspace/fastls-ffi/build/stability-*.json
+
+          workspace/fastls-ffi/build/checks-*/
+
+          '
+        retention-days: 14
+    - name: Retain release evidence
+      if: always()
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: evidence-release-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python
+          }}
+        path: 'workspace/fastls-ffi/build/ci-*/release/
 
           workspace/fastls-ffi/build/stability-*.json
 
@@ -242,15 +306,16 @@ jobs:
           target: linux-amd64
           go: 1.26.10
           python: '3.11'
-        stage:
-        - race
-        - soak
+        stage: ${{ fromJSON(needs.dependencies.outputs.extended_matrix) }}
     runs-on: ${{ matrix.config.runner }}
-    timeout-minutes: ${{ inputs.certification_soak_seconds != '' && inputs.certification_soak_seconds != '300' && 150 || 30 }}
+    timeout-minutes: ${{ ((inputs.certification_soak_seconds != '' && inputs.certification_soak_seconds != '300')
+      || needs.dependencies.outputs.soak_seconds == '3600') && 150 || 30 }}
     env:
       CGO_ENABLED: '1'
       FASTLS_CI_TARGET: ${{ matrix.config.target }}
       FASTLS_STABILITY_SECONDS: '30'
+      FASTLS_EXTENDED_SOAK_SECONDS: ${{ inputs.certification_soak_seconds || needs.dependencies.outputs.soak_seconds
+        }}
     defaults:
       run:
         working-directory: workspace/fastls-ffi
@@ -311,6 +376,7 @@ jobs:
 
           '
         retention-days: 14
+    if: needs.dependencies.outputs.extended_enabled == 'true'
   required:
     name: All native tests
     if: always() && (github.event_name != 'workflow_dispatch' || inputs.pypi_run_id == '')
@@ -325,30 +391,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-    - name: Reject failed, cancelled or skipped stages
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        persist-credentials: false
+    - name: Require exactly the checks selected by the plan
       env:
-        DEPENDENCIES_RESULT: ${{ needs.dependencies.result }}
-        NATIVE_RESULT: ${{ needs.native.result }}
-        TESTS_RESULT: ${{ needs.tests.result }}
-        EXTENDED_RESULT: ${{ needs.extended.result }}
-        NODE_RESULT: ${{ needs.node.result }}
-        NODE_SOAK_RESULT: ${{ needs.node-soak.result }}
-        NODE_CANDIDATES_RESULT: ${{ needs.node-candidates.result }}
-      run: 'test "$DEPENDENCIES_RESULT" = success
-
-        test "$NATIVE_RESULT" = success
-
-        test "$TESTS_RESULT" = success
-
-        test "$EXTENDED_RESULT" = success
-
-        test "$NODE_RESULT" = success
-
-        test "$NODE_SOAK_RESULT" = success
-
-        test "$NODE_CANDIDATES_RESULT" = success
-
-        '
+        TEST_PLAN: ${{ needs.dependencies.outputs.plan }}
+        TEST_RESULTS: ${{ toJSON(needs) }}
+      run: python scripts/test_plan.py --check-results
   publish-github-release:
     name: Publish GitHub release
     if: github.ref_type == 'tag'
@@ -400,44 +450,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [source, package]
-        config:
-        - runner: windows-2022
-          target: windows-amd64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: false
-        - runner: ubuntu-24.04
-          target: linux-amd64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: true
-        - runner: ubuntu-24.04-arm
-          target: linux-arm64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: false
-        - runner: macos-15-intel
-          target: darwin-amd64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: false
-        - runner: macos-15
-          target: darwin-arm64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: false
-        - runner: ubuntu-24.04
-          target: linux-amd64
-          go: 1.27.3
-          python: '3.10'
-          node: '22'
-          race: false
+        config: ${{ fromJSON(needs.dependencies.outputs.node_matrix) }}
     runs-on: ${{ matrix.config.runner }}
     env:
       CGO_ENABLED: '1'
@@ -450,12 +463,11 @@ jobs:
     defaults:
       run:
         working-directory: workspace/fastls-ffi
-    timeout-minutes: 30
+    timeout-minutes: 40
     needs:
     - dependencies
     - native
-    name: Node / ${{ matrix.mode }} / ${{ matrix.config.target }} / Go ${{ matrix.config.go }} / Python ${{ matrix.config.python }} / Node ${{ matrix.config.node
-      }}
+    name: Node checks / ${{ matrix.config.target }} / Go ${{ matrix.config.go }} / Node ${{ matrix.config.node }}
     steps:
     - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       with:
@@ -504,34 +516,31 @@ jobs:
     - name: Install locked Node dependencies
       run: npm ci --prefix node
     - name: Full Node source suite
-      if: matrix.mode == 'source'
       run: npm test --prefix node
     - name: Source cookie compatibility in a fresh process
-      if: matrix.mode == 'source'
       run: node node/scripts/test-cookie-compat.mjs
-    - name: Full installed native package suite
-      if: matrix.mode == 'package'
-      run: npm run test:package --prefix node
-    - name: Verify npm platform dependency installation
-      if: matrix.mode == 'package'
-      run: npm run test:npm --prefix node
-    - name: Verify npm release rejection paths
-      if: matrix.mode == 'package' && matrix.config.target == 'linux-amd64' && matrix.config.node == '24'
-      run: python node/scripts/test-npm-release.py
     - name: Save source test evidence
-      if: always() && matrix.mode == 'source'
+      if: always()
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
       with:
-        name: node-source-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}-node${{ matrix.config.node }}
+        name: node-source-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}-node${{
+          matrix.config.node }}
         path: workspace/fastls-ffi/build/*.json
         if-no-files-found: error
         retention-days: 14
+    - name: Full installed native package suite
+      run: npm run test:package --prefix node
+    - name: Verify npm platform dependency installation
+      run: npm run test:npm --prefix node
+    - name: Verify npm release rejection paths
+      if: matrix.config.target == 'linux-amd64' && matrix.config.node == '24'
+      run: python node/scripts/test-npm-release.py
     - name: Save binaries and evidence
-      if: always() && matrix.mode == 'package'
+      if: always()
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
       with:
-        name: node-functional-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}-node${{ matrix.config.node
-          }}
+        name: node-functional-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}-node${{
+          matrix.config.node }}
         path: 'workspace/fastls-ffi/dist/
 
           workspace/fastls-ffi/build/
@@ -541,6 +550,7 @@ jobs:
           '
         if-no-files-found: warn
         retention-days: 14
+    if: needs.dependencies.outputs.node == 'true'
   node-soak:
     strategy:
       fail-fast: false
@@ -679,8 +689,10 @@ jobs:
         path: workspace/fastls-ffi/build/*.json
         if-no-files-found: error
         retention-days: 14
+    if: needs.dependencies.outputs.node_soak == 'true'
   node-candidates:
     needs:
+    - dependencies
     - node
     - node-soak
     name: Candidate / ${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
@@ -689,43 +701,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-        - runner: windows-2022
-          target: windows-amd64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: false
-        - runner: ubuntu-24.04
-          target: linux-amd64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: true
-        - runner: ubuntu-24.04-arm
-          target: linux-arm64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: false
-        - runner: macos-15-intel
-          target: darwin-amd64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: false
-        - runner: macos-15
-          target: darwin-arm64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: false
-        - runner: ubuntu-24.04
-          target: linux-amd64
-          go: 1.27.3
-          python: '3.10'
-          node: '22'
-          race: false
+        include: ${{ fromJSON(needs.dependencies.outputs.node_matrix) }}
     steps:
     - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
@@ -737,7 +713,7 @@ jobs:
       with:
         name: node-source-${{ matrix.target }}-go${{ matrix.go }}-py${{ matrix.python }}-node${{ matrix.node }}
         path: candidate/build
-    - if: matrix.race
+    - if: matrix.race && needs.dependencies.outputs.node_soak == 'true'
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
         pattern: node-soak-*
@@ -749,9 +725,13 @@ jobs:
         path: candidate/
         if-no-files-found: error
         retention-days: 14
+    if: always() && needs.dependencies.outputs.candidates == 'true' && needs.node.result == 'success' && (needs.node-soak.result
+      == 'success' || (needs.dependencies.outputs.node_soak == 'false' && needs.node-soak.result == 'skipped'))
   pypi-candidate:
     name: Validate PyPI package set
-    needs: required
+    needs:
+    - dependencies
+    - required
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -787,6 +767,7 @@ jobs:
         path: pypi-dist/
         if-no-files-found: error
         retention-days: 14
+    if: needs.dependencies.outputs.pypi == 'true'
   publish-pypi:
     name: Publish fastls to PyPI
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -867,12 +848,21 @@ jobs:
         description: Reviewed FastTLS/imitate commit SHA (optional override)
         type: string
       certification_soak_seconds:
-        description: Extended Python resource observation, integer 300..7200 seconds (3600 for S4)
+        description: Optional explicit Python resource observation, 300..7200 seconds; tier default otherwise
         type: string
-        default: '300'
+        default: ''
       pypi_run_id:
         description: 'Resume only the PyPI upload from this certified tag-push run ID (blank: normal full CI)'
         type: string
       pypi_version:
         description: Existing official X.Y.Z version to upload without rebuilding (used with pypi_run_id)
         type: string
+      test_tier:
+        description: Minimum test scope; risk and release requirements may raise it
+        type: choice
+        options:
+        - auto
+        - patch
+        - minor
+        - major
+        default: auto

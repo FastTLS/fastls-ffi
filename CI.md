@@ -2,6 +2,8 @@
 
 # GitHub Actions 持续测试
 
+当前执行范围按 [分级测试规则](TESTING_POLICY.md) 选择。文档、补丁、小版本和大版本不再默认使用同一全量矩阵；同平台的 Python 阶段和 Node 模式合并任务，保留原阶段证据。下方完整矩阵作为能力覆盖说明，是否运行以每次生成的计划为准。完整性能对照改为手动触发。
+
 `.github/workflows/ci.yml` 在每次push、PR更新以及手动workflow_dispatch时执行。普通运行只读且不发布；只有 `v*` 标签在全部必需作业成功后获得 GitHub contents/attestation 权限并创建 GitHub Release，不上传外部软件包索引。
 使用各系统原生runner构建并运行，而不是把交叉编译成功当成运行测试成功。
 依赖入口先在关闭 `go.work` 的环境下载并校验 `go.sum`，列出远端模块图并拒绝遗留 `fhttp`；随后才检出固定提交执行本地源码矩阵。

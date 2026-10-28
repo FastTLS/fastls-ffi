@@ -1,15 +1,13 @@
 name: Python client benchmarks
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
     inputs:
       profile:
         description: smoke validates correctness; quick diagnoses; full measures five rounds
         type: choice
         options: [smoke, quick, full]
-        default: full
+        default: quick
       cases:
         description: Optional exact case names separated by commas; empty runs all cases
         type: string
