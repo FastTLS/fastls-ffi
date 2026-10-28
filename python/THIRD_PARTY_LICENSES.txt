@@ -1636,7 +1636,7 @@ Additional reviewed development-source license materials.
 The native build-info identifies the actual artifact inputs; these records preserve the reviewed source bytes.
 
 ==============================================================================
-Reviewed source: fastls@cb551d82fe4a3bc51e848b36d22180fb9b0aa798
+Reviewed source: fastls@e04d468cccf5b7aff99bdf239b2f76f9418cc2af
 File: LICENSE
 ------------------------------------------------------------------------------
 
