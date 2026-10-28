@@ -16,7 +16,7 @@ MINIMUM_POOLED_CPU_SECONDS=1.0
 def window(case):
     return 30 if case['workload']=='small' else 64 if case['workload']=='slow' else 16
 
-def evaluate(rows,selected,policy,integrity):
+def evaluate(rows,selected,policy,integrity,*,window_for=window):
     outcomes=[]
     for case in selected:
         groups={a:[r for r in rows if r['variant']==a and r['case']['name']==case['name']] for a in ARMS}
@@ -29,9 +29,9 @@ def evaluate(rows,selected,policy,integrity):
                 why=invalid_reason(r)
                 if why:reasons.append(arm+': '+why)
                 elapsed=r.get('metrics',{}).get('elapsed_seconds')
-                if elapsed is None or not math.isfinite(elapsed) or elapsed<window(case):
+                if elapsed is None or not math.isfinite(elapsed) or elapsed<window_for(case):
                     reasons.append(arm+': shortened measurement window')
-                if not r.get('continuous_transfers') or r.get('requested_seconds')!=window(case):
+                if not r.get('continuous_transfers') or r.get('requested_seconds')!=window_for(case):
                     reasons.append(arm+': incorrect measurement protocol')
             cpu=[r.get('resources',{}).get('cpu_seconds') for r in group]
             if any(x is None or not math.isfinite(x) or x<0 for x in cpu) or sum(x or 0 for x in cpu)<MINIMUM_POOLED_CPU_SECONDS:

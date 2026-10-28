@@ -132,4 +132,60 @@ class ContinuousWorker(unittest.TestCase):
             counts.append(result['success'])
         self.assertEqual(counts[0],1);self.assertGreater(counts[1],1)
 
+class ExtendedTimedGate(unittest.TestCase):
+    """Longer observation keeps the original metrics and strict qualification."""
+    def setup_rows(self,seconds):
+        import timed_regression_v4 as v4
+        self.case=dict(CASE,name='slow-h1',workload='slow')
+        self.rows=[]
+        for n in range(1,6):
+            for arm in ARMS:
+                r=observed(dict(row(arm,n),case=self.case,continuous_transfers=True,requested_seconds=seconds))
+                r['metrics']['elapsed_seconds']=seconds
+                r['resources']['finished']['at']=101+seconds
+                r['resources']['samples']=[{'client':{'at':100.5+i}} for i in range(1,seconds+1)]
+                stop=r['markers'][1]
+                stop.update(worker_at=100.5+seconds,controller_received_at=100.6+seconds,
+                    controller_handled_at=100.7+seconds)
+                self.rows.append(r)
+        self.plan=[{k:deepcopy(r[k]) for k in ('case','variant','round','run_id')} for r in self.rows]
+        self.v4=v4
+
+    def verdict(self):return self.v4.evaluate(self.rows,[self.case],POLICY,True,self.plan)
+
+    def test_complete_extended_plan_passes(self):
+        import timed_regression_v4 as v4
+        self.setup_rows(v4.SLOW_SECONDS)
+        self.assertTrue(self.verdict()['success'])
+        self.assertEqual(self.verdict()['protocol'],v4.PROTOCOL)
+
+    def test_original64_is_still_valid_v3_but_rejected_by_v4(self):
+        self.setup_rows(64)
+        self.assertTrue(timed_evaluate(self.rows,[self.case],POLICY,True,self.plan)['success'])
+        self.assertFalse(self.verdict()['success'])
+        self.assertTrue(any('shortened' in s for s in self.verdict()['cases'][0]['eligibility_failures']))
+
+    def test_original_cpu_aa_and_candidate_limits_still_apply(self):
+        import timed_regression_v4 as v4
+        for arm,status in [('candidate','failed'),('control-b','ineligible')]:
+            self.setup_rows(v4.SLOW_SECONDS)
+            for r in self.rows:
+                if r['variant']==arm:r['resources']['cpu_seconds']*=1.3
+            self.assertEqual(self.verdict()['status'],status)
+
+    def test_original_two_second_timing_ceiling_is_not_scaled_up(self):
+        import timed_regression_v4 as v4
+        self.setup_rows(v4.SLOW_SECONDS)
+        self.rows[0]['resources']['finished']['at']+=3
+        self.assertEqual(self.verdict()['status'],'ineligible')
+        self.assertEqual(self.verdict()['timing_policy']['maximum_window_excess_seconds'],2)
+
+    def test_other_windows_and_missing_round_guards_are_unchanged(self):
+        import timed_regression_v4 as v4
+        self.assertEqual(v4.window(CASE),30)
+        self.assertEqual(v4.window(dict(CASE,workload='upload')),16)
+        self.setup_rows(v4.SLOW_SECONDS);self.rows.pop()
+        self.assertFalse(self.verdict()['success'])
+
+
 if __name__=='__main__':unittest.main(verbosity=2)

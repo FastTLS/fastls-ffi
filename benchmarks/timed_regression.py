@@ -94,8 +94,8 @@ def timing_check(row):
     return dict(eligible=not failures, failures=failures, values=values)
 
 
-def evaluate(rows, selected, policy, integrity, plan):
-    result = evaluate_v2(rows, selected, policy, integrity)
+def evaluate(rows, selected, policy, integrity, plan, *, window_for=window, protocol=PROTOCOL):
+    result = evaluate_v2(rows, selected, policy, integrity, window_for=window_for)
     expected = Counter((t['case']['name'], t['variant'], t['round'], t['run_id']) for t in plan)
     actual = Counter((r['case']['name'], r['variant'], r['round'], r['run_id']) for r in rows)
     sequence_ok = [(r['case'], r['variant'], r['round'], r['run_id']) for r in rows] == [(t['case'], t['variant'], t['round'], t['run_id']) for t in plan]
@@ -112,14 +112,14 @@ def evaluate(rows, selected, policy, integrity, plan):
             candidate = case['candidate']
             candidate.setdefault('diagnostic_status', candidate['status'])
             candidate['status'] = 'ineligible'
-    result.update(protocol=PROTOCOL, timing_policy=TIMING_POLICY, plan_matches=plan_ok, timing=timed)
+    result.update(protocol=protocol, timing_policy=TIMING_POLICY, plan_matches=plan_ok, timing=timed)
     result['status'] = 'ineligible' if any(not c['eligible'] for c in result['cases']) else 'passed' if all(c['candidate']['status'] == 'passed' for c in result['cases']) else 'failed'
     result['success'] = result['status'] == 'passed'
     return result
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__)
+def main(*, window_for=window, evaluate_plan=evaluate, protocol=PROTOCOL, observation_basis=None, description=None):
+    p = argparse.ArgumentParser(description=description or __doc__)
     for name in ('candidate-root', 'baseline-dir', 'fixture', 'output'):
         p.add_argument('--' + name, type=Path, required=True)
     args = p.parse_args(); out = args.output.resolve(); out.mkdir(parents=True, exist_ok=False)
@@ -132,11 +132,11 @@ def main():
     fixture = args.fixture.resolve(); before = fingerprints(inputs, fixture, policyfile, historyfiles)
     assert not before['harness']['dirty_files'], 'commit source before freezing plan'
     plan = [dict(task, run_id=uuid.uuid4().hex) for task in schedule(selected, 5)]
-    record = dict(protocol=PROTOCOL, created_at=datetime.now(timezone.utc).isoformat(),
+    record = dict(protocol=protocol, created_at=datetime.now(timezone.utc).isoformat(),
         design='150 predetermined interleaved fresh-process runs; no retry, replacement or early stopping',
         scope='Windows AMD64 CPython 3.11; portable H1/H2 only',
-        windows={c['name']: window(c) for c in selected}, timing_policy=TIMING_POLICY,
-        timing_basis='R1 independent control observations; qualification frozen before the first v3 worker',
+        windows={c['name']: window_for(c) for c in selected}, timing_policy=TIMING_POLICY,
+        timing_basis=observation_basis or 'R1 independent control observations; qualification frozen before the first v3 worker',
         continuous_transfers=True, rounds=5, minimum_pooled_cpu_seconds=MINIMUM_POOLED_CPU_SECONDS,
         cpu_rule='unchanged external process-tree CPU seconds summed over all five rounds / verified successful bytes',
         baseline_rule='new bidirectional A/A calibration; old single-transfer absolute baselines not interchangeable',
@@ -151,7 +151,7 @@ def main():
             lines = queue.Queue(); reader = threading.Thread(target=lambda: lines.put(server.stdout.readline()), daemon=True); reader.start()
             fixture_info = json.loads(lines.get(timeout=20)); reader.join(2)
             for index, task in enumerate(plan):
-                case = task['case']; seconds = window(case)
+                case = task['case']; seconds = window_for(case)
                 spec = dict(case=case, client='fastls', round=task['round'], fixture=fixture_info, run_id=task['run_id'],
                     fastls_input=inputs[task['variant']], seconds=seconds, continuous_transfers=True,
                     warmup_seconds=10 if case['workload'] == 'small' else .05, hold_ms=5000, slow_bytes_per_second=16*1048576)
@@ -170,15 +170,15 @@ def main():
     after = fingerprints(inputs, fixture, policyfile, historyfiles)
     record['fingerprints_after'] = after
     record['integrity'] = before == after and candidate_input(args.candidate_root) == inputs['candidate'] and record['plan_sha256'] == sha(out / 'plan.json')
-    record['evaluation'] = evaluate(record['runs'], selected, policy, record['integrity'], plan)
+    record['evaluation'] = evaluate_plan(record['runs'], selected, policy, record['integrity'], plan)
     save(out / 'results.json', record); save(out / 'evaluation.json', record['evaluation'])
     save(out / 'progress.json', dict(completed=len(plan), total=len(plan), running=False, verdict=record['evaluation']['status']))
-    save(out / 'controls-baseline.json', dict(protocol=PROTOCOL,
+    save(out / 'controls-baseline.json', dict(protocol=protocol,
         calibration_valid=record['integrity'] and record['evaluation']['plan_matches'] and all(c['timing_eligible'] and all(a['status']=='passed' for a in c['aa']) for c in record['evaluation']['cases']),
         cases=[dict(case=c['case'], control_a=c['summaries']['control-a'], control_b=c['summaries']['control-b'], aa=c['aa'], timing_eligible=c['timing_eligible']) for c in record['evaluation']['cases']],
         results_sha256=sha(out / 'results.json')))
-    render([dict(environment_id=a, profile=PROTOCOL, rounds=5, fastls_input=inputs[a], source_changed_during_run=not record['integrity'], runs=[r for r in record['runs'] if r['variant']==a]) for a in ARMS], out / 'report.html')
-    print(json.dumps(dict(protocol=PROTOCOL, status=record['evaluation']['status'], runs=len(plan))), flush=True)
+    render([dict(environment_id=a, profile=protocol, rounds=5, fastls_input=inputs[a], source_changed_during_run=not record['integrity'], runs=[r for r in record['runs'] if r['variant']==a]) for a in ARMS], out / 'report.html')
+    print(json.dumps(dict(protocol=protocol, status=record['evaluation']['status'], runs=len(plan))), flush=True)
     return 0 if record['evaluation']['success'] else 1
 
 
