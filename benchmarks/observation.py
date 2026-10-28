@@ -63,7 +63,12 @@ def execute(spec, fixture_process, output, *, worker_script, snapshot):
         if child is None:return
         remember(child)
         try:
-            for member in child.children(recursive=True):remember(member)
+            if os.name == 'nt':
+                from windows_snapshot import process_tree
+                descendants = (member for member, _ in process_tree(child))
+            else:
+                descendants = child.children(recursive=True)
+            for member in descendants:remember(member)
         except psutil.NoSuchProcess:pass
 
     def stop_tree():

@@ -40,3 +40,17 @@ These are bounded diagnostics, not a third certification or replacement v2
 rounds. They do not test a candidate performance ranking. Any observed upload
 A/A p95 ratio is reported against the original 1.20 criterion without changing
 the retained failed gate. Further certification requires a new complete plan.
+
+Windows resource observation uses one documented Tool Help process snapshot per
+tree sample for ancestry and thread counts. Every live descendant is included;
+creation times exclude orphans whose original parent PID has been reused. CPU,
+RSS and handles retain the same psutil counters and units. No process listing
+is cached between samples. Enumeration and permission failures invalidate the
+observation rather than producing zero resource values. Cleanup uses the same
+tree discovery and retains its PID/creation-time checks before termination.
+
+This avoids repeated whole-system queries from `children()` and `num_threads()`.
+The Windows venv launcher, actual interpreter and nested children remain in
+scope. Linux observation is unchanged. Timing guards, performance rules, worker
+code and test windows remain unchanged. A sampler revision requires a separate
+complete certification; it cannot replace failed rounds in an existing cohort.

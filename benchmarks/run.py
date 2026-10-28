@@ -26,6 +26,9 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 def snapshot(process):
+    if os.name == "nt":
+        from windows_snapshot import snapshot as windows_snapshot
+        return windows_snapshot(process)
     # Windows venv python.exe can be a launcher for the actual interpreter.
     # Count the whole client process tree, including native runtimes and helpers.
     members=[]
