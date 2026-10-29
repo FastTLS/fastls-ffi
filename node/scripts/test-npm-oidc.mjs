@@ -31,6 +31,17 @@ test('six trust exchanges bind the expected identity and never expose tokens', a
   assert.ok(calls.slice(1).every(c => c.options.method === 'POST' && c.url.startsWith('https://registry.npmjs.org/-/npm/v1/oidc/')));
   assert.ok(!JSON.stringify(report).includes('private-'));
 });
+test('registry exchange succeeds when optional example metadata is absent', async () => {
+  const { request, calls } = stub();
+  const minimal = async (url, options) => {
+    const response = await request(url, options);
+    if (calls.length > 1) response.json = async () => ({ token: 'private-exchanged-token' });
+    return response;
+  };
+  const report = await checkTrust(env, minimal);
+  assert.equal(report.packages.length, 6);
+  assert.ok(report.packages.every(p => p.authorized && p.expires === null));
+});
 test('wrong repository, environment, workflow, commit and audience fail before exchange', async () => {
   for (const changes of [{ repository: 'other/repo' }, { environment: 'other' },
       { workflow_ref: 'other.yml' }, { sha: 'b'.repeat(40) }, { aud: 'other' },

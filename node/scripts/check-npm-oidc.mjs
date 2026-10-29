@@ -39,11 +39,13 @@ export async function checkTrust(env = process.env, request = fetch) {
     // Never log response bodies: successful bodies contain short-lived tokens.
     if (response.status !== 201) throw new TrustError(`OIDC trust rejected for ${name} (${response.status}); no package was uploaded`);
     const exchanged = await response.json();
-    if (exchanged.token_type !== 'oidc' || typeof exchanged.token !== 'string' || !exchanged.token ||
-        !(Date.parse(exchanged.expires) > Date.now())) {
+    // Match npm CLI's exchange contract: success plus a nonempty token. The
+    // registry does not consistently include the optional example metadata.
+    if (typeof exchanged.token !== 'string' || !exchanged.token) {
       throw new TrustError(`Invalid OIDC exchange response for ${name}`);
     }
-    packages.push({ name, authorized: true, expires: exchanged.expires });
+    const expires = typeof exchanged.expires === 'string' && Number.isFinite(Date.parse(exchanged.expires)) ? exchanged.expires : null;
+    packages.push({ name, authorized: true, expires });
   }
   return { schema: 1, revision: env.GITHUB_SHA, workflow: claims.workflow_ref,
     environment: claims.environment, subject: claims.sub, packages,
