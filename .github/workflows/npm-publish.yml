@@ -50,9 +50,32 @@ jobs:
           name: npm-release
           path: npm-release/
           if-no-files-found: error
+  verify-trust:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    environment: npm
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - name: Verify all six live OIDC trust relationships before uploading
+        run: node node/scripts/check-npm-oidc.mjs
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: npm-trust-verification
+          path: npm-trust-verification.json
+          if-no-files-found: error
   publish:
     if: inputs.publish
-    needs: prepare
+    needs: [prepare, verify-trust]
     runs-on: ubuntu-24.04
     environment: npm
     timeout-minutes: 10

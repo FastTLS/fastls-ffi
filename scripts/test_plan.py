@@ -105,6 +105,18 @@ def context(env):
         if not re.fullmatch(r'[0-9]+', duration) or not 300 <= int(duration) <= 7200:
             raise ValueError('Resource observation must be an integer in 300..7200 seconds')
         plan['soak_seconds'] = max(plan['soak_seconds'], int(duration))
+    if (env.get('GITHUB_ACTIONS') == 'true' and env.get('GITHUB_REF_TYPE') == 'tag'
+            and plan['tier'] == 'minor' and not any(env.get(n) for n in
+                ('FASTLS_REF', 'FTRANSPORT_REF', 'IMITATE_REF', 'CERTIFICATION_SOAK_SECONDS'))):
+        from release_reuse import find
+        try:
+            reused = find(env)
+        except (OSError, ValueError, KeyError) as error:
+            print('Resource evidence unavailable; retaining full checks: ' + type(error).__name__, file=sys.stderr)
+            reused = None
+        if reused:
+            plan.update(extended=[], node_soak=False, resource_reuse=reused)
+            plan['reasons'].append('same-commit main race/resource evidence verified; fresh tag identity and installs remain required')
     return plan
 
 

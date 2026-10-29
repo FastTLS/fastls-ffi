@@ -1,9 +1,10 @@
 name: Native library and Python SDK
 permissions:
   contents: read
+  actions: read
 env:
   FASTLS_EXTENDED_SOAK_SECONDS: ${{ inputs.certification_soak_seconds || '300' }}
-  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.1.5.dev{0}', github.run_number)
+  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.2.0.dev{0}', github.run_number)
     }}
   FASTLS_RELEASE_MODE: ${{ github.ref_type == 'tag' && 'true' || 'false' }}
 concurrency:
@@ -40,6 +41,7 @@ jobs:
     - name: Select test scope before provisioning toolchains
       id: plan
       env:
+        GH_TOKEN: ${{ github.token }}
         TEST_TIER: ${{ inputs.test_tier }}
         FASTLS_REF: ${{ inputs.fastls_ref }}
         FTRANSPORT_REF: ${{ inputs.ftransport_ref }}
@@ -47,7 +49,9 @@ jobs:
         CERTIFICATION_SOAK_SECONDS: ${{ inputs.certification_soak_seconds }}
       run: python scripts/test_plan.py
     - name: Test scope selection and failure handling
-      run: python -m unittest discover -s tests -p test_ci_plan.py -v
+      run: |
+        python -m unittest discover -s tests -p test_ci_plan.py -v
+        python -m unittest discover -s tests -p test_release_reuse.py -v
     - name: Check patch whitespace
       run: git diff --check HEAD^ HEAD
     - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
@@ -79,6 +83,9 @@ jobs:
       if: steps.plan.outputs.native == 'true'
     - name: Check Python 3.10 API types
       run: npm exec --yes --package=pyright@1.1.414 -- pyright --project tests/pyrightconfig.json
+      if: steps.plan.outputs.native == 'true'
+    - name: Check trusted publishing rejection paths without credentials
+      run: node --test node/scripts/test-npm-oidc.mjs
       if: steps.plan.outputs.native == 'true'
     if: github.event_name != 'workflow_dispatch' || inputs.pypi_run_id == ''
   native:
