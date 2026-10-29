@@ -25,6 +25,7 @@ PRODUCTION_JOBS = {'dependencies', 'native', 'tests', 'extended', 'required', 'n
 
 def workflow_inputs_unchanged(before, after):
     def split(text):
+        if not text.endswith('\n'): text += '\n'
         prefix, rest = text.split('\njobs:\n', 1)
         jobs, events = rest.split("\n'on':\n", 1)
         chunks = re.split(r'(?m)^  ([a-z][a-z0-9-]*):\n', jobs)

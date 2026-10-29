@@ -20,6 +20,7 @@ class PublicationWorkflowChecks(unittest.TestCase):
 
     def test_explicit_publication_recovery_preserves_native_inputs(self):
         self.assertTrue(workflow_inputs_unchanged(self.before, self.after))
+        self.assertTrue(workflow_inputs_unchanged(self.before.rstrip(), self.after.rstrip()))
         self.assertTrue(workflow_inputs_unchanged(self.before, self.before))
 
     def test_environment_native_jobs_or_existing_event_changes_are_rejected(self):
