@@ -8,7 +8,8 @@ const env = { GITHUB_ACTIONS: 'true', GITHUB_REPOSITORY: 'FastTLS/fastls-ffi',
   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'private-request-token' };
 const claims = { iss: 'https://token.actions.githubusercontent.com', aud: 'npm:registry.npmjs.org',
   repository: env.GITHUB_REPOSITORY, ref: env.GITHUB_REF, sha: env.GITHUB_SHA, environment: 'npm',
-  sub: 'repo:FastTLS/fastls-ffi:environment:npm',
+  repository_id: '1430610790', repository_owner_id: '250931946',
+  sub: 'repo:FastTLS@250931946/fastls-ffi@1430610790:environment:npm',
   workflow_ref: 'FastTLS/fastls-ffi/.github/workflows/npm-publish.yml@refs/heads/main' };
 function stub(changes = {}, failAt = 0) {
   const calls = [];
@@ -33,7 +34,8 @@ test('six trust exchanges bind the expected identity and never expose tokens', a
 test('wrong repository, environment, workflow, commit and audience fail before exchange', async () => {
   for (const changes of [{ repository: 'other/repo' }, { environment: 'other' },
       { workflow_ref: 'other.yml' }, { sha: 'b'.repeat(40) }, { aud: 'other' },
-      { sub: 'repo:FastTLS/fastls-ffi:ref:refs/heads/main' }]) {
+      { sub: 'repo:FastTLS/fastls-ffi:ref:refs/heads/main' },
+      { sub: 'repo:FastTLS/fastls-ffi:environment:npm' }, { repository_id: 'other' }, { repository_owner_id: 'other' }]) {
     const { request, calls } = stub(changes);
     await assert.rejects(checkTrust(env, request), /identity/);
     assert.equal(calls.length, 1);

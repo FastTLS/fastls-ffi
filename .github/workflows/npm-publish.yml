@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: Successful same-commit main CI run ID
+        description: Successful certified main CI run; newer source may change verified publishing tools only
         type: string
         required: true
       publish:
@@ -23,10 +23,22 @@ jobs:
       contents: read
       actions: read
     timeout-minutes: 10
+    outputs:
+      source: ${{ steps.source.outputs.source }}
+      version: ${{ steps.source.outputs.version }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - name: Verify publication identity, promotion and archive rejection paths
+        run: |
+          node --test node/scripts/test-npm-oidc.mjs
+          python node/scripts/test-npm-promotion.py
+          python node/scripts/test-npm-release.py
       - name: Read certified CI run
         env:
           GH_TOKEN: ${{ github.token }}
@@ -45,6 +57,9 @@ jobs:
           args=()
           if [[ "$PUBLISH" == true ]]; then args+=(--publishable); fi
           python node/scripts/assemble-npm.py certified-run.json candidates npm-release "${args[@]}"
+      - name: Record immutable producer and version
+        id: source
+        run: python -c "import json,os; p=json.load(open('npm-release/npm-release-manifest.json')); f=open(os.environ['GITHUB_OUTPUT'],'a'); f.write('source='+p['revision']+'\nversion='+p['version']+'\n')"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: npm-release
@@ -80,12 +95,15 @@ jobs:
     environment: npm
     timeout-minutes: 10
     permissions:
-      contents: read
+      contents: write
       id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '24'
@@ -96,3 +114,23 @@ jobs:
           path: npm-release
       - name: Publish native packages first and main package last
         run: npm run publish:npm --prefix node
+      - name: Bind exact archives and producer metadata
+        run: |
+          cd npm-release
+          sha256sum *.tgz npm-release-manifest.json RELEASE_NOTES.md > SHA256SUMS
+      - name: Sign original archive promotion provenance
+        id: promotion
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-checksums: npm-release/SHA256SUMS
+          predicate-type: https://fasttls.github.io/attestations/npm-promotion/v1
+          predicate-path: npm-release/npm-release-manifest.json
+      - name: Publish the original npm archives and promotion proof on GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SOURCE_REVISION: ${{ needs.prepare.outputs.source }}
+          BUNDLE_PATH: ${{ steps.promotion.outputs.bundle-path }}
+        run: |
+          cp "$BUNDLE_PATH" npm-release/provenance.sigstore.json
+          gh release create "node-v${VERSION}" npm-release/* --target "$SOURCE_REVISION" --title "@fastls/fastls ${VERSION}" --notes-file npm-release/RELEASE_NOTES.md

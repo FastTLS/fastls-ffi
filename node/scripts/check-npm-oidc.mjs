@@ -2,29 +2,34 @@ import { writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { platforms } from './npm-platforms.mjs';
 
+class TrustError extends Error {}
+
 // Exercise the real package-scoped trust policy before the first package upload.
 // https://api-docs.npmjs.com/ documents the OIDC exchange endpoint.
 export async function checkTrust(env = process.env, request = fetch) {
   if (env.GITHUB_ACTIONS !== 'true' || env.GITHUB_REPOSITORY !== 'FastTLS/fastls-ffi' ||
       env.GITHUB_REF !== 'refs/heads/main' || !env.ACTIONS_ID_TOKEN_REQUEST_TOKEN) {
-    throw Error('Trusted publishing requires the main GitHub Actions workflow');
+    throw new TrustError('Trusted publishing requires the main GitHub Actions workflow');
   }
   const url = new URL(env.ACTIONS_ID_TOKEN_REQUEST_URL);
   if (url.protocol !== 'https:' || !url.hostname.endsWith('.actions.githubusercontent.com')) {
-    throw Error('Unexpected GitHub identity endpoint');
+    throw new TrustError('Unexpected GitHub identity endpoint');
   }
   url.searchParams.set('audience', 'npm:registry.npmjs.org');
   const identity = await request(url, { redirect: 'error', signal: AbortSignal.timeout(30000),
     headers: { Authorization: `Bearer ${env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}`, Accept: 'application/json' } });
-  if (!identity.ok) throw Error(`GitHub identity request failed (${identity.status})`);
+  if (!identity.ok) throw new TrustError(`GitHub identity request failed (${identity.status})`);
   const { value } = await identity.json();
-  if (typeof value !== 'string') throw Error('Missing GitHub identity token');
+  if (typeof value !== 'string') throw new TrustError('Missing GitHub identity token');
   const claims = JSON.parse(Buffer.from(value.split('.')[1], 'base64url').toString('utf8'));
-  if (claims.iss !== 'https://token.actions.githubusercontent.com' || claims.aud !== 'npm:registry.npmjs.org' ||
-      claims.repository !== env.GITHUB_REPOSITORY || claims.ref !== env.GITHUB_REF || claims.sha !== env.GITHUB_SHA ||
-      claims.environment !== 'npm' || claims.sub !== 'repo:FastTLS/fastls-ffi:environment:npm' ||
-      claims.workflow_ref !== 'FastTLS/fastls-ffi/.github/workflows/npm-publish.yml@refs/heads/main') {
-    throw Error('Unexpected trusted publisher identity');
+  const expected = { iss: 'https://token.actions.githubusercontent.com', aud: 'npm:registry.npmjs.org',
+    repository: env.GITHUB_REPOSITORY, ref: env.GITHUB_REF, sha: env.GITHUB_SHA, environment: 'npm',
+    repository_id: '1430610790', repository_owner_id: '250931946',
+    sub: 'repo:FastTLS@250931946/fastls-ffi@1430610790:environment:npm',
+    workflow_ref: 'FastTLS/fastls-ffi/.github/workflows/npm-publish.yml@refs/heads/main' };
+  const mismatches = Object.keys(expected).filter(key => claims[key] !== expected[key]);
+  if (mismatches.length) {
+    throw new TrustError('Unexpected trusted publisher identity: ' + mismatches.join(', '));
   }
   const packages = [];
   for (const name of [...platforms.map(p => p.name), '@fastls/fastls']) {
@@ -32,11 +37,11 @@ export async function checkTrust(env = process.env, request = fetch) {
       { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30000),
         headers: { Authorization: `Bearer ${value}`, Accept: 'application/json' } });
     // Never log response bodies: successful bodies contain short-lived tokens.
-    if (response.status !== 201) throw Error(`OIDC trust rejected for ${name} (${response.status}); no package was uploaded`);
+    if (response.status !== 201) throw new TrustError(`OIDC trust rejected for ${name} (${response.status}); no package was uploaded`);
     const exchanged = await response.json();
     if (exchanged.token_type !== 'oidc' || typeof exchanged.token !== 'string' || !exchanged.token ||
         !(Date.parse(exchanged.expires) > Date.now())) {
-      throw Error(`Invalid OIDC exchange response for ${name}`);
+      throw new TrustError(`Invalid OIDC exchange response for ${name}`);
     }
     packages.push({ name, authorized: true, expires: exchanged.expires });
   }
@@ -52,7 +57,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log('OIDC trust verified for all six packages at the expected workflow/environment.');
   } catch (error) {
     // Network exception causes may carry request details; print only our message.
-    console.error(error.message);
+    console.error(error instanceof TrustError ? error.message : `OIDC verification failed (${error.name})`);
     process.exitCode = 1;
   }
 }

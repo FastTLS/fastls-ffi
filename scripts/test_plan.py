@@ -8,6 +8,12 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 TIERS = ('docs', 'patch', 'minor', 'major')
+PUBLISHING_TOOLS = {
+    '.github/workflows/npm-publish.yml', 'node/scripts/check-npm-oidc.mjs',
+    'node/scripts/test-npm-oidc.mjs', 'node/scripts/promotion_source.py',
+    'node/scripts/test-npm-promotion.py', 'node/scripts/assemble-npm.py',
+    'node/scripts/publish-npm.mjs', 'scripts/test_plan.py', 'tests/test_ci_plan.py',
+}
 
 
 def git(*args):
@@ -52,6 +58,12 @@ def choose(files, *, requested='auto', release=None, previous=None, uncertain=Fa
         tier = TIERS[max(TIERS.index(tier), TIERS.index(requested))]
         reasons.append('manual floor: ' + requested)
     from ci import TARGETS
+    publishing_only = bool(files) and set(files) <= PUBLISHING_TOOLS and any(p.startswith('node/scripts/') for p in files)
+    if publishing_only and not (release or uncertain or override or requested != 'auto'):
+        return dict(tier='patch', reasons=['publication tools only; original certified archives are unchanged; publishing workflow runs rejection/source-identity tests'],
+            files=files, native=False, node=False, matrix=TARGETS[:2],
+            node_matrix=[dict(target, node='24', race=False) for target in TARGETS[:2]], extended=[],
+            node_soak=False, candidates=False, pypi=False, soak_seconds=300, full_performance=False)
     python_adapter = 'python/fastls/_native.py' in files
     if python_adapter:
         reasons.append('Python native adapter requires all existing platform installations')

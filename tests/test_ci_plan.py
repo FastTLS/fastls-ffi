@@ -14,6 +14,19 @@ import test_plan
 
 
 class Selection(unittest.TestCase):
+    def test_publishing_tools_use_rejection_checks_without_rebuilding_native_artifacts(self):
+        import runpy
+        promotion = runpy.run_path(str(Path(__file__).resolve().parents[1] / 'node/scripts/promotion_source.py'))
+        self.assertEqual(promotion['PUBLISHING_TOOLS'], test_plan.PUBLISHING_TOOLS)
+        files = ['node/scripts/check-npm-oidc.mjs', '.github/workflows/npm-publish.yml', 'scripts/test_plan.py', 'tests/test_ci_plan.py']
+        plan = test_plan.choose(files)
+        self.assertFalse(any(plan[k] for k in ('native', 'node', 'node_soak', 'pypi', 'candidates')))
+        for path in ('node/src/session.ts', 'go.mod', 'node/package.json', 'scripts/build.py', '.github/workflows/ci.yml', 'unknown'):
+            with self.subTest(path=path):
+                self.assertTrue(test_plan.choose(files + [path])['native'])
+        self.assertTrue(test_plan.choose(files, requested='minor')['native'])
+        self.assertTrue(test_plan.choose(files, uncertain=True)['native'])
+
     def test_docs_avoid_native_and_node(self):
         plan = test_plan.choose(['README.md', 'docs/install.md'])
         self.assertEqual(plan['tier'], 'docs')

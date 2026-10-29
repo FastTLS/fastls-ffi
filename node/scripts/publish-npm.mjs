@@ -9,7 +9,14 @@ const report = JSON.parse(readFileSync(resolve(directory, 'npm-release-manifest.
 const npmCLI = process.env.npm_execpath;
 if (!npmCLI) throw Error('Use npm run publish:npm');
 if (report.license_review_required.length) throw Error('Resolve dependency license review before publishing');
-if (process.env.GITHUB_ACTIONS && (process.env.GITHUB_REF !== 'refs/heads/main' || report.revision !== process.env.GITHUB_SHA)) throw Error('Release revision must match main workflow');
+if (process.env.GITHUB_ACTIONS) {
+  if (process.env.GITHUB_REF !== 'refs/heads/main' || (report.publisher_revision ?? report.revision) !== process.env.GITHUB_SHA) throw Error('Publication revision must match main workflow');
+  if (report.revision !== process.env.GITHUB_SHA) {
+    const proof = spawnSync(process.env.PYTHON ?? 'python', [resolve(import.meta.dirname, 'promotion_source.py'), report.revision, process.env.GITHUB_SHA],
+      { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+    if (proof.status !== 0 || JSON.stringify(JSON.parse(proof.stdout)) !== JSON.stringify(report.source_verification)) throw Error('Producer/publisher source verification failed');
+  }
+}
 const expected = [...platforms.map(p => p.name).sort(), '@fastls/fastls'];
 const names = report.publish_order.map(p => p.name);
 if (names.at(-1) !== '@fastls/fastls' || JSON.stringify([...names.slice(0, -1)].sort().concat(names.at(-1))) !== JSON.stringify(expected)) throw Error('Expected five native packages followed by the main package');

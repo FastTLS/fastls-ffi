@@ -7,16 +7,27 @@ from pathlib import Path
 import shutil
 import sys
 import tarfile
+from promotion_source import certify_source
 
 root = Path(__file__).resolve().parents[2]
 run_file, candidates, destination = map(Path, sys.argv[1:4])
 publishable = '--publishable' in sys.argv[4:]
 run = json.loads(run_file.read_text())
-sha = os.environ['GITHUB_SHA']
+publisher_sha = os.environ['GITHUB_SHA']
+sha = run['head_sha']
 pkg = json.loads((root/'node/package.json').read_text())
-if not (run['status'] == 'completed' and run['conclusion'] == 'success' and run['head_sha'] == sha
+if not (run['status'] == 'completed' and run['conclusion'] == 'success'
         and run['head_branch'] == 'main' and run['event'] == 'push' and run['path'] == '.github/workflows/ci.yml'):
     raise ValueError('Expected successful same-commit main CI run')
+if publisher_sha != sha:
+    try:
+        source_verification = certify_source(sha, publisher_sha)
+    except ValueError as error:
+        raise ValueError('Expected successful same-commit main CI run or a verified publication-only ancestor') from error
+else:
+    source_verification = dict(schema=1, producer_revision=sha, publisher_revision=publisher_sha,
+        changed_publishing_tools=[], production_inputs_unchanged=True,
+        native_bytes='Original immutable producer artifacts; no rebuilding or relabelling.')
 targets = {('win32', 'x64'), ('linux', 'x64'), ('linux', 'arm64'), ('darwin', 'x64'), ('darwin', 'arm64')}
 names = {f"@fastls/fastls-{os_}-{cpu}" + ('-glibc' if os_ == 'linux' else '') for os_, cpu in targets}
 dependencies = {name: pkg['version'] for name in names}
@@ -88,6 +99,14 @@ if seen != targets or main is None:
 if publishable and blockers:
     raise ValueError('Resolve native dependency license review before npm publication: '+', '.join(sorted(blockers)))
 report = {'schema': 1, 'revision': sha, 'run_id': run['id'], 'version': pkg['version'],
+          'publisher_revision': publisher_sha, 'source_verification': source_verification,
           'license_review_required': sorted(blockers), 'publish_order': records+[main]}
 (destination/'npm-release-manifest.json').write_text(json.dumps(report, indent=2)+'\n')
+(destination/'RELEASE_NOTES.md').write_text(
+    f"# Node {pkg['version']}\n\nSix original npm archives from certified main CI {run['id']}.\n\n"
+    f"Producer/native source: `{sha}`. Publication workflow source: `{publisher_sha}`.\n\n"
+    "The complete source difference is restricted to verified publication tools. No SDK, dependency, "
+    "version or native-build input changed, and no archive was rebuilt or renamed. The npm SLSA "
+    "attestations identify the publication workflow; the signed promotion manifest binds the original "
+    "producer, its CI run and the exact archives.\n")
 print(json.dumps(report, indent=2))
