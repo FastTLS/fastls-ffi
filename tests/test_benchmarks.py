@@ -14,7 +14,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"benchmarks"))
 from common import Histogram, cases
 from report import summaries, render
 from run import snapshot, fastls_input
-from worker import require_certificate_error
+from worker import Client, require_certificate_error
 import psutil
 
 
@@ -100,9 +100,15 @@ class BenchmarkContract(unittest.TestCase):
         shards=[plan[i::6] for i in range(6)]
         self.assertEqual(sum(map(len,shards)),len(plan))
         self.assertTrue(all(c["concurrency"]<=128 for c in plan))
+        self.assertTrue(all(c["clients"] and set(c["clients"]) <= {"requests", "fastls", "fastls-poll"} for c in plan))
+        self.assertTrue(all(c["clients"] == ["requests", "fastls"] for c in plan if c["protocol"] == "h1" and c["mode"] == "sync"))
         for name in ("notifications-small-paired","notifications-idle-paired"):
             paired=next(c for c in plan if c["name"]==name)
             self.assertEqual(paired["clients"],["fastls","fastls-poll"])
+
+    def test_unsupported_client_is_rejected_before_loading_sdk(self):
+        with self.assertRaisesRegex(ValueError, "unsupported benchmark client"):
+            Client({"client": "unknown"})
 
     def test_report_is_offline_and_escapes_embedded_json(self):
         report=dict(environment_id="<script>alert(1)</script>",profile="smoke",runs=[])

@@ -1,78 +1,65 @@
-# Python客户端性能与资源基准
+# Python 客户端性能与资源基准
+
+本工具检查 Fastls 的协议、请求行为和资源回收，并在 HTTP/1.1 同步场景中与 Requests 比较。基准依赖固定在 `benchmarks/requirements.lock`，不增加 SDK 运行依赖。阶段范围见 [NEXT_PHASE.md](NEXT_PHASE.md)。
 
 ## 运行与查看
 
-使用Python 3.11创建独立环境，安装锁定依赖。四个兄弟仓库的布局与普通原生CI相同，目标平台需要cgo编译器；Windows沿用CI的MinGW选择，也可设置CC为已验证的Zig命令。
+使用 Python 3.11 创建独立环境。源码模式需要与原生 CI 相同的四个兄弟仓库布局及 cgo 编译器。
 
 ```shell
 python -m pip install -r benchmarks/requirements.lock
 python benchmarks/prepare.py
 python benchmarks/run.py --profile smoke --output build/benchmark-smoke
-python benchmarks/run.py --profile full --output build/benchmark-full
 ```
 
-已发布包基线使用独立环境安装 `fastls==0.1.4` 及锁定的基准依赖，再运行：
+默认 `checkout` 模式测量当前源码 SDK 与 dist 库。已发布包使用独立环境安装所需版本及基准依赖，再运行：
 
 ```shell
 python benchmarks/run.py --fastls-source installed --fixture /absolute/path/to/ffi-fixture --profile smoke --output build/published-smoke
-```
-
-`installed` 模式加载该环境的 wheel 和包内原生库，验证包版本、build-info 与库摘要；不需要四个兄弟源码仓库，也不会加载当前工作区的 Python SDK。`--fixture` 明确指定预先构建的独立靶场程序；报告保存其 SHA256，靶场源码和构建来源另随测量清单保存。默认 `checkout` 仍测量当前源码 SDK 与 dist 库。报告分别记录这两个输入来源、已发布包原生源码、基准工具提交与实际模块加载路径，禁止将源码 H3 改进算入已发布 Python 0.1.4。
-
-额外的行为基线可用相同环境运行：
-
-```shell
 python tests/client_conformance.py --fastls-source installed --fixture /absolute/path/to/ffi-fixture --output build/published-conformance
 ```
 
-检查上传/解压摘要、Cookie 跳转链与会话隔离、重定向开关及 POST/303、截断报错与恢复、超时后的服务端取消、独立 CONNECT 代理、异步取消与兄弟流隔离、Fastls 原生句柄归零。同步 Requests 的 asyncio/H2 标记不适用；已观察的竞品行为差异与检查失败分别记录。例如异步提前关闭等待远端正文超过两秒会保留观察证据，不能记作取消通过；Fastls 出现该行为则视为项目回归。初次运行发现的靶场/适配器错误也应保留，不作为库行为差异。
+`installed` 模式验证 wheel 版本、build-info 和原生库摘要，记录真实模块路径，不加载当前源码 SDK。显式指定的靶场也记录 SHA256；其源码和构建来源随测量清单保存。不同源码、版本或原生库的结果分别标识，不把当前改进算入旧发行包。
 
-手动工作流 `Published Python client baseline` 在 Windows 2022 / Ubuntu 24.04 使用 Python 3.11、Go 1.26.10 构建独立靶场；客户端均来自固定 PyPI wheel，无需 cgo。smoke 覆盖全部现有场景，full 对上述八个大文件传输场景各运行五轮。源码基准工作流与此工作流分别保留；发布包测量失败会使作业失败并保存原始产物，不能把对照客户端失败改成跳过通过。工作流文件的存在不代表远端已经执行。
-
-在所选输出目录双击 `report.html` 查看，完整数据为 `results.json`。工作进程的输入、结果与错误日志也保留，不含测试CA私钥。用 `--case` 多次选择具体场景；名称可从 `benchmarks/common.py` 或已生成的JSON取得。
-
-- smoke：缩小到256KiB、少并发、1轮和0.15秒的小请求采样，用于验证脚本与契约，不能作为速度排名。
-- quick：64MiB正文、32并发小请求、2轮和1秒采样，用于诊断，不能当作正式性能结论。
-- full：64MiB正文、1/32并发小请求、1/8并发大下载、32条空闲流；小请求每组预热10秒、测量30秒、至少5轮。大传输按固定完成次数，慢消费者限速16MiB/s，空闲流等待5秒。
-
-完整矩阵耗时较长。Actions将场景分为6组，同时在Windows/Linux运行；同一个场景的全部客户端及五轮始终留在同一台runner，避免跨硬件排名。每次push/PR在两个系统执行smoke；手动工作流可选择quick/full。原有六组功能回归保持独立。
-
-通知与轮询作为同一paired场景的两个候选执行，始终在同一台runner比较。手动工作流的cases输入可按逗号选择具体场景，非空时不分片。早期29f1f15主矩阵的单独native/poll空闲场景分属不同runner，不能互算倍率；这项对照用后续同机补测代替。
-
-多份产物可在本地合并成一份离线报告，仍按原始环境分组：
+输出目录中的 `report.html` 可直接打开，`results.json` 保存完整数据；输入、结果和错误日志同时保留，不含测试 CA 私钥。用重复的 `--case` 选择场景，名称见 [benchmarks/common.py](benchmarks/common.py)。多份记录可按环境合并：
 
 ```shell
 python benchmarks/report.py path/to/results-a.json path/to/results-b.json --output comparison.html
 ```
 
-## 实际比较内容
+- `smoke`：256 KiB、少并发、1 轮及 0.15 秒小请求采样，只验证脚本和契约。
+- `quick`：64 MiB 正文、32 并发小请求、2 轮及 1 秒采样，用于诊断。
+- `full`：至少 5 轮；小请求预热 10 秒、测量 30 秒；大文件按完成次数，慢消费者限速 16 MiB/s，空闲流等待 5 秒。
 
-每个库/场景/轮次使用独立子进程。Requests线程独立Session，其它异步客户端使用一个共享AsyncSession。所有客户端关闭环境代理、自动重试、自动重定向，验证相同临时CA，并通过错误CA拒绝探测。性能数据只包含完整读取并校验成功的响应；失败计数、预热失败与错误轮仍保存，错误轮不参加性能汇总。
+公共基准仅手动触发，默认 `quick`，不进入每次提交的发布关键路径。完整模式可分 6 组在 Windows/Linux 执行；同一场景的全部客户端和轮次留在同一台 runner。`cases` 输入非空时不分片。完整性能认证另按项目测试策略决定，不因提交或改写历史自动重跑。
 
-服务器使用独立标准库实现，增加的 `/bench/` 路由不改变原有验收端点。正文固定为重复的 `00 01 80 ff`，上传/下载均验证长度和SHA256；这不是现实网页内容分布，gzip压缩率不能外推。服务器返回并记录实际协议、连接ID、TLS版本、套件和恢复状态；冷连接必须每请求新建，热负载必须观察到复用。统计按轮清理，避免靶场无限积累逐请求观测。
+## 场景与正确性
 
-## 计时、资源与限制
+H1 同步覆盖 Fastls 和 Requests；H1/H2 异步仅检查 Fastls。场景包括冷热连接、小响应、下载、gzip、上传、慢消费者、空闲 SSE 字节流及浏览器预设。Fastls 原生通知与轮询按同机 paired 场景执行；SSE 解析只统计事件 data 字节，单独展示。Requests 的 H2 和异步接口标记为不适用。
 
-回调基线的TTFB以首次非空回调为准。慢消费者还每约200ms记录已消费字节、可观测的库内缓冲及服务端已接受写入字节；服务端进度包含网络/OS缓冲，不能直接当作客户端Python队列长度。Requests及同步回调没有同类队列观测时记为未取得，不填成零。新建/关闭会话计入该组吞吐时间，单请求延迟从实际发起请求计时，不含会话构造与上下文进入。
+每个客户端、场景和轮次使用独立子进程；同步线程独立创建 Session，异步场景共享 AsyncSession。关闭环境代理、重试和重定向，验证同一临时 CA，并要求错误 CA 确实触发证书错误。行为检查覆盖 Cookie、会话隔离、重定向、截断恢复、超时取消、CONNECT 代理及异步兄弟流隔离。提前关闭未能取消远端正文视为失败。
 
-延迟使用固定大小的2%乘法桶，p50/p95是桶上界；少于20个成功样本不展示p95，不生成样本不足的p99。只有该客户端/场景全部计划轮次有效才展示性能汇总，有失败/缺失轮时仍保留逐轮数据及失败计数，避免只选存活轮。指标聚合不保存无限增长的每请求样本数组。
+独立服务端记录实际协议、连接 ID 和 TLS 信息。冷热组分别验证新建和复用；上传与下载均检查长度及 SHA256。正文是重复的 `00 01 80 ff`，压缩率不能外推到真实网页。通用组使用 portable-h1/h2，浏览器组使用 `chrome/156/windows`；不同协议和预设分别展示。
 
-外部控制进程约每50ms读取客户端及服务器资源，不在被测客户端增加采样线程。阶段切换经握手确认，确保关闭后指标在子进程退出前取得。Windows虚拟环境的python.exe可能只是启动器，因此统计整个客户端进程树，并保留各进程PID/CPU/RSS，句柄和线程也按进程树求和；有专项子进程内存测试防止漏算真正解释器。记录包含原生库/Go运行时的CPU秒、平均核占用、采样RSS峰值，以及关闭后的统计；服务器单独采样。Fastls结束时请求、worker、通知和会话登记必须归零；RSS缓存不被强制GC掩盖，也不承诺关闭后立即回到初值。初版f921c76的Windows启动器采样值无效，已取消其正式测量，不用于最终资源对照。
+## 指标与限制
 
-共享runner性能受负载、网络及虚拟化影响，smoke不设竞品倍率门槛；正式数据也只能在相同环境和场景内比较。冷连接并发还可能受端口/TIME_WAIT和握手能力限制，需同时查看错误及服务器资源。测试期间修改基准源码会使本次运行无效。
+TTFB 从实际发起请求到迭代器取得第一个非空正文块计时。gzip 统计解压后的业务字节，大文件测量包含摘要计算。小请求包含截止前已发起请求的完整收尾；超时和外部截止时间保证有界。Requests 使用连接/读取预算，Fastls 使用总预算，正常测量不触及预算。
 
-首次正式矩阵及独立复测中，Windows的32并发HTTP/1.1冷连接负载出现Fastls通知握手超时，Linux相同负载通过。修复让专用通知TCP连接在会话结束时以reset关闭，避免其积累TIME_WAIT；业务HTTP连接不受此设置影响。同时保留原生通知拨号/写入错误，握手超时不再只给空错误消息。增加32路独立会话反复创建/请求/关闭的回归，并使用相同冷连接负载在两个系统补测。旧失败轮必须保留，新旧提交分开标识；在补测完成前不宣称该问题已经解决。
+延迟使用固定大小的 2% 乘法桶，展示 p50/p95 桶上界；不足 20 个成功样本不展示 p95。任一计划轮失败或缺失，保留原始失败及错误计数，不生成该组性能汇总；不同主机、协议、工具版本和靶场来源分组。smoke/quick 不作为性能结论，共享 runner 也不设速度倍率门槛。
 
-## 工具正确性门禁
+外部采样约每 50 ms 记录整个客户端进程树及独立服务端的 CPU、RSS、句柄和线程。阶段边界通过握手确认，关闭后采样在进程退出前完成，避免遗漏 Windows 启动器后的实际解释器。慢消费者另记录已消费字节和可观测缓冲；无法取得的值留空。Fastls 请求、worker、通知和会话登记必须归零，不强制 GC，也不承诺 RSS 立即回到初值。
 
-### H2 SETTINGS 确认与靶场来源
+历史记录保留其原有失败和测量限制，不能用新结果覆盖旧结论。测量期间修改源码会使该轮无效。
 
-`scripts/build_benchmark_fixture.py` 使用 Go 的文件 overlay，仅为独立基准靶场将 ACK 布尔值改为计数器；不修改 GOROOT、SDK 或客户端窗口参数。工具固定 Go 1.26.10 和上游源码 SHA256，未知版本/源码明确拒绝，无默认回退。输出 `build/ffi-fixture-benchmark[.exe]` 及 `.build.json`，包含原始/覆盖源码摘要、构建命令和靶场摘要。`benchmarks/prepare.py` 保留原始验收靶场，另构建基准靶场并执行每连接八个连续 SETTINGS、20 轮逐帧 ACK 黑盒门禁。基准控制器和启动诊断默认使用新靶场，显式 `--fixture` 仍可复核原始靶场；报告记录构建来源。修正前后数据必须分组。
+## 工具检查
+
+基准靶场通过 Go 文件 overlay 将 H2 SETTINGS ACK 的布尔状态改为计数器，以逐帧确认连续设置。构建固定 Go 版本及源码 SHA256，未知输入明确拒绝；不修改 GOROOT 或 SDK。输出靶场及构建清单，报告按靶场来源分组。
 
 ```shell
 python scripts/build_benchmark_fixture.py
 python tests/probe_h2_settings_ack.py --fixture build/ffi-fixture-benchmark.exe --output build/settings-ack.json
-python tests/client_resource_soak.py --fixture build/ffi-fixture-benchmark.exe --rounds 50 --output build/client-soak
 ```
 
-`tests/test_benchmarks.py`检查进程树采样、分位数边界、聚合空间、错误轮保留、环境隔离、协议适用范围与离线报告转义；Go另验证独立正文、gzip、上传摘要、统计及普通端点观测隔离。smoke通过真实库覆盖全部适用场景；这些检查不以某客户端必须更快为通过条件。
+`benchmarks/prepare.py` 执行独立 ACK 黑盒检查。`tests/client_resource_soak.py` 保留下载、待响应取消、慢上传及同会话恢复等资源检查，按风险需要单独运行；日常工具清理不默认执行完整轮次。
+
+`tests/test_benchmarks.py` 检查采样、分位数、失败保留、环境隔离、场景范围、客户端选择及离线报告转义。独立的回归与观察工具测试继续检查失败拦截和子进程清理。
