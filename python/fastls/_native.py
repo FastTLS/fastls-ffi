@@ -10,7 +10,8 @@ import threading
 class FastlsError(Exception):
     def __init__(self, message, *, code=None):
         super().__init__(message)
-        self.code = code
+        if code is not None or not hasattr(self, "code"):
+            self.code = code
 
 
 class FastlsTimeoutError(FastlsError):

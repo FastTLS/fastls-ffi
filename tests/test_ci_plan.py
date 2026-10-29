@@ -34,6 +34,17 @@ class Selection(unittest.TestCase):
         self.assertTrue(plan['pypi'] and plan['candidates'] and plan['node'])
         self.assertFalse(plan['node_soak'])
 
+    def test_python_native_adapter_checks_all_platforms_without_unchanged_suites(self):
+        plan = test_plan.choose(['python/fastls/_native.py', 'scripts/test_plan.py', 'tests/test_ci_plan.py'])
+        self.assertEqual(plan['tier'], 'patch')
+        self.assertEqual(len(plan['matrix']), 5)
+        self.assertEqual(plan['extended'], [])
+        self.assertFalse(plan['node'] or plan['node_soak'] or plan['candidates'])
+        changed = test_plan.choose(['python/fastls/_native.py', 'internal/bridge/options.go'])
+        self.assertEqual(changed['tier'], 'minor')
+        self.assertTrue(changed['node'] and changed['node_soak'])
+        self.assertEqual(changed['extended'], ['race', 'soak'])
+
     def test_minor_and_major_keep_distinct_compatibility_and_soak_scopes(self):
         minor = test_plan.choose(['README.md'], release='v0.2.0', previous='v0.1.5')
         major = test_plan.choose(['README.md'], release='v1.0.0', previous='v0.1.5')
