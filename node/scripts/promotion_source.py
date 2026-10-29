@@ -21,7 +21,20 @@ def certify_source(producer, publisher, root=None):
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
         raise ValueError('Certified producer is not an ancestor of this publisher')
     changed = subprocess.check_output(['git', 'diff', '--name-only', '--no-renames', producer, publisher], cwd=root, text=True).splitlines()
-    if not set(changed) <= PUBLISHING_TOOLS:
+    allowed = PUBLISHING_TOOLS
+    if '.github/workflows/ci.yml' in changed or set(changed) - allowed:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+        from promote_tag import PYPI_TOOLS, workflow_inputs_unchanged
+        allowed = allowed | PYPI_TOOLS | {'.github/workflows/ci.yml'}
+        if '.github/workflows/ci.yml' in changed:
+            try:
+                before = subprocess.check_output(['git', 'show', producer + ':.github/workflows/ci.yml'], cwd=root, text=True, stderr=subprocess.DEVNULL)
+                after = subprocess.check_output(['git', 'show', publisher + ':.github/workflows/ci.yml'], cwd=root, text=True, stderr=subprocess.DEVNULL)
+            except subprocess.CalledProcessError as error:
+                raise ValueError('Cannot verify original native test configuration') from error
+            if not workflow_inputs_unchanged(before, after):
+                raise ValueError('Native test configuration changed outside publication scope')
+    if not set(changed) <= allowed:
         raise ValueError('Certified archive promotion cannot include SDK, dependency, version or native build changes')
     return dict(schema=1, producer_revision=producer, publisher_revision=publisher,
                 changed_publishing_tools=changed, production_inputs_unchanged=True,

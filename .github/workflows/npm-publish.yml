@@ -133,4 +133,4 @@ jobs:
           BUNDLE_PATH: ${{ steps.promotion.outputs.bundle-path }}
         run: |
           cp "$BUNDLE_PATH" npm-release/provenance.sigstore.json
-          gh release create "node-v${VERSION}" npm-release/* --target "$SOURCE_REVISION" --title "@fastls/fastls ${VERSION}" --notes-file npm-release/RELEASE_NOTES.md
+          gh release create "node-v${VERSION}" npm-release/* --verify-tag --title "@fastls/fastls ${VERSION}" --notes-file npm-release/RELEASE_NOTES.md
