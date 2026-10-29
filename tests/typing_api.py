@@ -18,6 +18,13 @@ async def async_consumer() -> None:
 
 
 if TYPE_CHECKING:
+    credentials = fastls.BasicAuth("user", "password")
+    retry = fastls.RetryPolicy(max_retries=1)
+    reliable = fastls.Session(auth=credentials, retry=retry)
+    reliable.get("https://example.com", request_cookies={"language": "zh"}, auth=None)
+    reliable.put("https://example.com", body_factory=lambda: iter([b"body"]))
+    fastls.get("https://example.com", auth=fastls.BearerAuth("token"), retry=retry, request_cookies={"x": "y"})
+    local_store = fastls.ProfileStore(Path("offline-profiles"))
     spec = fastls.ProfileSpec({"schema_version": 1})
     configured = fastls.Session(profile_spec=spec, address_policy={"allow_hosts": ["example.com"]})
     configured.get("https://example.com", profile_spec=spec, http_version="auto")

@@ -10,12 +10,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	fastls "github.com/FastTLS/fastls"
@@ -482,6 +484,10 @@ func (r *request) setErrorLocked(err error) {
 	r.info.ErrorCode, r.info.TimeoutPhase = "request_error", ""
 	var phase *fastls.TimeoutError
 	var decoding *fastls.DecodeError
+	var authority x509.UnknownAuthorityError
+	var hostname x509.HostnameError
+	var certificate x509.CertificateInvalidError
+	var dns *net.DNSError
 	switch {
 	case errors.As(err, &phase):
 		r.info.ErrorCode, r.info.TimeoutPhase = "timeout", phase.Phase
@@ -493,6 +499,15 @@ func (r *request) setErrorLocked(err error) {
 		r.info.ErrorCode = "decode_error"
 	case errors.Is(err, fastls.ErrAddressDenied):
 		r.info.ErrorCode, r.info.Error = "address_denied", "address policy denied request"
+	case errors.As(err, &authority), errors.As(err, &hostname), errors.As(err, &certificate):
+		r.info.ErrorCode = "certificate_error"
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF),
+		errors.Is(err, syscall.ECONNRESET), errors.Is(err, syscall.ECONNREFUSED),
+		errors.Is(err, syscall.ECONNABORTED), errors.Is(err, syscall.EPIPE),
+		errors.Is(err, syscall.ETIMEDOUT), errors.Is(err, syscall.ENETUNREACH), errors.Is(err, syscall.EHOSTUNREACH):
+		r.info.ErrorCode = "network_error"
+	case errors.As(err, &dns) && (dns.IsTemporary || dns.IsTimeout):
+		r.info.ErrorCode = "network_error"
 	}
 }
 

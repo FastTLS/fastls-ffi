@@ -22,6 +22,8 @@ from .timeout import Timeout
 from .redirects import Redirects
 from .request_options import Multipart, prepare, response_encoding
 from .profiles import ProfileSpec
+from .auth import INHERIT, authorization
+from .retry import RetryPolicy
 
 
 class FastlsHTTPError(FastlsError):
@@ -169,7 +171,13 @@ class Session:
     """Configuration, request ownership and isolated reusable connection pools."""
     def __init__(self, *, profile=None, headers=None, timeout=30, library=None, ca_file=None, cookies=True,
                  decode_content=True, max_decoded_bytes=256 * 1024 * 1024, notifications="auto", proxy=None, proxy_ca_file=None,
-                 address_policy=None, profile_spec: ProfileSpec | None=None, http_version="auto"):
+                 address_policy=None, profile_spec: ProfileSpec | None=None, http_version="auto", auth=None, retry=None):
+        self._auth = authorization(auth)
+        if retry is not None and not isinstance(retry, RetryPolicy):
+            raise TypeError("retry must be RetryPolicy or None")
+        self._retry = retry
+        self._closed_event = threading.Event()
+        self._retry_waiters = set()
         if profile is not None and not isinstance(profile, str):
             raise TypeError("profile must be a selector string or None")
         if profile_spec is not None and not isinstance(profile_spec, ProfileSpec):
@@ -436,13 +444,83 @@ class Session:
                     self._close_handle(handle)
                     raise
 
-    def _open(self, method, url, **kwargs):
+    def _request_plan(self, method, url, kwargs):
+        kwargs = dict(kwargs)
+        auth = kwargs.pop("auth", INHERIT)
+        selected_auth = self._auth if auth is INHERIT else authorization(auth)
+        retry = kwargs.pop("retry", self._retry)
+        if retry is not None and not isinstance(retry, RetryPolicy):
+            raise TypeError("retry must be RetryPolicy or None")
+        factory = kwargs.get("body_factory")
+        if factory is not None:
+            if not callable(factory):
+                raise TypeError("body_factory must be callable")
+            if any(key in kwargs for key in ("data", "json", "files")):
+                raise ValueError("body_factory cannot be combined with data, json or files")
+        if kwargs.get("duplex") and (retry is not None or factory is not None):
+            raise ValueError("duplex does not support retry or body_factory")
+        overrides = kwargs.pop("request_cookies", None)
         url, kwargs = prepare(url, kwargs, self.headers)
-        redirects = Redirects(method, url, kwargs, self.timeout)
+        if selected_auth is not None:
+            kwargs["headers"].setdefault("authorization", selected_auth)
+        if overrides is not None:
+            overlay = Cookies(self)
+            overlay.update(overrides, url=url)
+            kwargs["_request_cookie_overlay"] = overlay
+            kwargs["_session_cookies"] = self.cookies
+        return Redirects(method, url, kwargs, self.timeout), retry
+
+    def _retry_wait(self, plan, delay):
+        remaining = plan.deadline - time.monotonic()
+        if remaining <= delay:
+            from ._native import FastlsTimeoutError
+            raise FastlsTimeoutError("total deadline exceeded before retry", "total")
+        if self._closed_event.wait(delay):
+            raise FastlsError("session is closed", code="cancelled")
+
+    async def _aretry_wait(self, plan, delay):
+        remaining = plan.deadline - time.monotonic()
+        if remaining <= delay:
+            from ._native import FastlsTimeoutError
+            raise FastlsTimeoutError("total deadline exceeded before retry", "total")
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        waiter = (loop, future)
+        with self._lock:
+            if self._closed:
+                raise FastlsError("session is closed", code="cancelled")
+            self._retry_waiters.add(waiter)
+        def finish():
+            if not future.done():
+                future.set_result(None)
+        timer = loop.call_later(delay, finish)
+        try:
+            await future
+        finally:
+            timer.cancel()
+            with self._lock:
+                self._retry_waiters.discard(waiter)
+
+    def _open(self, method, url, **kwargs):
+        redirects, retry = self._request_plan(method, url, kwargs)
+        used = 0
         while True:
             method, url, options = redirects.request()
-            response = self._open_hop(method, url, **options)
             try:
+                response = self._open_hop(method, url, **options)
+            except Exception as error:
+                if retry is None or not retry.eligible(method, used, redirects.replayable, error=error):
+                    raise
+                self._retry_wait(redirects, retry.delay(used))
+                used += 1
+                continue
+            try:
+                if retry is not None and retry.eligible(method, used, redirects.replayable, response=response):
+                    delay = retry.delay(used, response.headers.get("retry-after"))
+                    response.close()
+                    self._retry_wait(redirects, delay)
+                    used += 1
+                    continue
                 if not redirects.follow(response):
                     return response
                 response.read()
@@ -533,6 +611,16 @@ class Session:
             self._cookie_handles.clear()
             self._ws_cookie_requests.clear()
             self._closed = True
+            self._closed_event.set()
+            for loop, future in self._retry_waiters:
+                def abort_waiter(future=future):
+                    if not future.done():
+                        future.set_exception(FastlsError("session is closed", code="cancelled"))
+                try:
+                    loop.call_soon_threadsafe(abort_waiter)
+                except RuntimeError:
+                    pass  # A closed event loop has no remaining request to wake.
+            self._retry_waiters.clear()
             if self._notifier is not None:
                 self._notifier.stop()
             for producer in self._producers.values():
@@ -747,12 +835,25 @@ class AsyncSession(Session):
                     raise
 
     async def _aopen(self, method, url, **kwargs):
-        url, kwargs = prepare(url, kwargs, self.headers)
-        redirects = Redirects(method, url, kwargs, self.timeout)
+        redirects, retry = self._request_plan(method, url, kwargs)
+        used = 0
         while True:
             method, url, options = redirects.request()
-            response = await self._aopen_hop(method, url, **options)
             try:
+                response = await self._aopen_hop(method, url, **options)
+            except Exception as error:
+                if retry is None or not retry.eligible(method, used, redirects.replayable, error=error):
+                    raise
+                await self._aretry_wait(redirects, retry.delay(used))
+                used += 1
+                continue
+            try:
+                if retry is not None and retry.eligible(method, used, redirects.replayable, response=response):
+                    delay = retry.delay(used, response.headers.get("retry-after"))
+                    await response.aclose()
+                    await self._aretry_wait(redirects, delay)
+                    used += 1
+                    continue
                 if not redirects.follow(response):
                     return response
                 await response.aread()

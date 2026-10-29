@@ -1,12 +1,12 @@
 # Python / Node 验收对应关系
 
-当前范围是十六个 Python 行为套件的 212 个场景，加 2 项原生绑定和 18 项 Node 专有检查，共 232 项。源码、GitHub 内置库候选和 npm 拆分包分别运行完整套件。TypeScript、真实库 Cookie 兼容、安装门禁和 9 项发布边界检查另计。
+当前共享清单为 18 个 Python 行为套件、234 个具名场景，新增的 15 项可靠性/离线配置场景已有 Node 对应。另有原生绑定、Node SDK/fetch 专有检查和本批 2 项 fetch 重试/取消检查；完整运行总数以候选日志为准。源码、GitHub 内置库候选和 npm 拆分包分别运行适用套件。TypeScript、真实库 Cookie 兼容、安装及发布边界检查另计。
 
 当前开发源码新增独立原始响应的缓冲/流式字节、多值头与 Trailer 对照；已发布 Node 0.10.1 的历史验收仍为 211 个 Python 对应场景、231 项功能检查，不据此扩大旧版本覆盖。
 
 ## Python 专有入口
 
-Python 0.1.4 新增模块级 request/get/post 等一次性同步调用，独立的 tests/test_api.py 覆盖临时会话、响应缓存与异常清理。该套件在 Python 源码和 wheel 验收中执行；Node 另有 fetch 入口，其 4 项独立测试覆盖标准响应、输入、取消、Cookie 与重定向；没有 Python 同名便捷导出，未计入下方 212 项跨语言场景，不宣称该入口已在 Node 提供。
+Python 0.1.4 新增模块级 request/get/post 等一次性同步调用，tests/test_api.py 覆盖临时会话、响应缓存与异常清理。Python 0.3.0 的 tests/test_python_compat.py 另覆盖认证、请求 Cookie、跨 origin 与同步/异步兼容入口；这两个 Python 专有套件均在源码和 wheel 执行。Node 保留自身 fetch 入口，不宣称提供 Python 同名便捷 API。
 
 - `test_sdk_sessions.py`：2 项，SDK Cookie 所有权与重定向限额清理。
 
@@ -29,6 +29,10 @@ Python 0.1.4 新增模块级 request/get/post 等一次性同步调用，独立�
 - `test_websocket.py`：25 项。
 - `test_websocket_cookies.py`：16 项。
 - `test_response_metadata.py`：1 项。
+- `test_capabilities.py`：7 项。
+- `test_reliability.py`：15 项，重试/正文重放、H1/H2/H3、取消与离线配置。
+
+可靠性语言适配：Python 同时测试同步线程关闭和 asyncio Task 取消；Node 使用 AbortSignal 和 Promise，并覆盖共享/独立 fetch owner。配置的 Python 时长单位为秒，Node 为毫秒。两语言共享 Spec 文本/摘要封装，Cookie 存储和跳转状态各自拥有。新场景不扩大旧发行版本的认证范围。
 
 `test_network.py` 已含请求尾部字段；`test_websocket.py` 包括 main 的四项补充用例；`test_response_metadata.py` 验证最终 URL、协议和 EOF trailers。不能沿用早期 21 项 WebSocket、217/219 项完整套件的旧计数。
 

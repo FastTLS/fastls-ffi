@@ -1,11 +1,13 @@
 """Keyword completion for one-shot requests, compatible with Python 3.10+."""
 from collections.abc import Iterable, Mapping, Sequence
 from os import PathLike
-from typing import Any, BinaryIO, Literal, TypeAlias
+from typing import Any, BinaryIO, Callable, Literal, TypeAlias
 
 from .client import Response
 from .timeout import Timeout
 from .profiles import ProfileSpec
+from .auth import BasicAuth, BearerAuth
+from .retry import RetryPolicy
 
 _Path: TypeAlias = str | PathLike[str]
 _Bytes: TypeAlias = bytes | bytearray | memoryview
@@ -25,6 +27,10 @@ def request(
     *,
     params: _Fields | str | None = None,
     headers: Mapping[str, str] | None = None,
+    auth: BasicAuth | BearerAuth | tuple[str, str] | None = None,
+    request_cookies: Mapping[str, str] | None = None,
+    retry: RetryPolicy | None = None,
+    body_factory: Callable[[], Any] | None = None,
     json: Any = ...,
     data: _Data | None = None,
     files: _Files | None = None,
@@ -53,6 +59,10 @@ def get(
     *,
     params: _Fields | str | None = None,
     headers: Mapping[str, str] | None = None,
+    auth: BasicAuth | BearerAuth | tuple[str, str] | None = None,
+    request_cookies: Mapping[str, str] | None = None,
+    retry: RetryPolicy | None = None,
+    body_factory: Callable[[], Any] | None = None,
     json: Any = ...,
     data: _Data | None = None,
     files: _Files | None = None,
@@ -81,6 +91,10 @@ def post(
     *,
     params: _Fields | str | None = None,
     headers: Mapping[str, str] | None = None,
+    auth: BasicAuth | BearerAuth | tuple[str, str] | None = None,
+    request_cookies: Mapping[str, str] | None = None,
+    retry: RetryPolicy | None = None,
+    body_factory: Callable[[], Any] | None = None,
     json: Any = ...,
     data: _Data | None = None,
     files: _Files | None = None,
@@ -109,6 +123,10 @@ def put(
     *,
     params: _Fields | str | None = None,
     headers: Mapping[str, str] | None = None,
+    auth: BasicAuth | BearerAuth | tuple[str, str] | None = None,
+    request_cookies: Mapping[str, str] | None = None,
+    retry: RetryPolicy | None = None,
+    body_factory: Callable[[], Any] | None = None,
     json: Any = ...,
     data: _Data | None = None,
     files: _Files | None = None,
@@ -137,6 +155,10 @@ def patch(
     *,
     params: _Fields | str | None = None,
     headers: Mapping[str, str] | None = None,
+    auth: BasicAuth | BearerAuth | tuple[str, str] | None = None,
+    request_cookies: Mapping[str, str] | None = None,
+    retry: RetryPolicy | None = None,
+    body_factory: Callable[[], Any] | None = None,
     json: Any = ...,
     data: _Data | None = None,
     files: _Files | None = None,
@@ -165,6 +187,10 @@ def delete(
     *,
     params: _Fields | str | None = None,
     headers: Mapping[str, str] | None = None,
+    auth: BasicAuth | BearerAuth | tuple[str, str] | None = None,
+    request_cookies: Mapping[str, str] | None = None,
+    retry: RetryPolicy | None = None,
+    body_factory: Callable[[], Any] | None = None,
     json: Any = ...,
     data: _Data | None = None,
     files: _Files | None = None,
@@ -193,6 +219,10 @@ def head(
     *,
     params: _Fields | str | None = None,
     headers: Mapping[str, str] | None = None,
+    auth: BasicAuth | BearerAuth | tuple[str, str] | None = None,
+    request_cookies: Mapping[str, str] | None = None,
+    retry: RetryPolicy | None = None,
+    body_factory: Callable[[], Any] | None = None,
     json: Any = ...,
     data: _Data | None = None,
     files: _Files | None = None,
@@ -221,6 +251,10 @@ def options(
     *,
     params: _Fields | str | None = None,
     headers: Mapping[str, str] | None = None,
+    auth: BasicAuth | BearerAuth | tuple[str, str] | None = None,
+    request_cookies: Mapping[str, str] | None = None,
+    retry: RetryPolicy | None = None,
+    body_factory: Callable[[], Any] | None = None,
     json: Any = ...,
     data: _Data | None = None,
     files: _Files | None = None,

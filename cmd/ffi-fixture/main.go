@@ -31,6 +31,7 @@ import (
 )
 
 type observation struct {
+	Attempts  int    `json:"attempts"`
 	Started   bool   `json:"started"`
 	Done      bool   `json:"done"`
 	Cancelled bool   `json:"cancelled"`
@@ -72,7 +73,7 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.entries[id] = o
 	}
 	if r.URL.Path == "/state" {
-		snapshot := map[string]any{"started": o.Started, "done": o.Done, "cancelled": o.Cancelled, "bytes": o.Bytes, "protocol": o.Protocol, "read_error": o.ReadError}
+		snapshot := map[string]any{"started": o.Started, "done": o.Done, "cancelled": o.Cancelled, "bytes": o.Bytes, "protocol": o.Protocol, "read_error": o.ReadError, "attempts": o.Attempts}
 		f.mu.Unlock()
 		json.NewEncoder(w).Encode(snapshot)
 		return
@@ -409,6 +410,43 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			status = 400
 		}
 		w.WriteHeader(status)
+	case "/retry":
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "upload failed", 400)
+			return
+		}
+		f.mu.Lock()
+		o.Attempts++
+		attempt := o.Attempts
+		f.mu.Unlock()
+		failures, _ := strconv.Atoi(r.URL.Query().Get("failures"))
+		if attempt <= failures {
+			if r.URL.Query().Get("disconnect") == "1" {
+				panic(http.ErrAbortHandler)
+			}
+			if after := r.URL.Query().Get("after"); after != "" {
+				w.Header().Set("Retry-After", after)
+			}
+			status, _ := strconv.Atoi(r.URL.Query().Get("code"))
+			if status < 400 || status > 599 {
+				status = 503
+			}
+			w.WriteHeader(status)
+			io.WriteString(w, "retry fixture")
+			return
+		}
+		if target := r.URL.Query().Get("target"); target != "" {
+			http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+			return
+		}
+		if r.URL.Query().Get("truncate") == "1" {
+			w.Header().Set("Content-Length", "100")
+			io.WriteString(w, "first")
+			w.(http.Flusher).Flush()
+			panic(http.ErrAbortHandler)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"attempts": attempt, "method": r.Method, "body": body, "headers": r.Header})
 	case "/redirect-code":
 		status, _ := strconv.Atoi(r.URL.Query().Get("code"))
 		if status < 301 || status > 308 || status == 304 || status == 305 || status == 306 {

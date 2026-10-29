@@ -1,9 +1,14 @@
 # Fastls Node.js SDK
 
-开发候选新增 Session `addressPolicy`、`profileSpec: new ProfileSpec(...)` 和
+Node 0.11.0 起支持 Session `addressPolicy`、`profileSpec: new ProfileSpec(...)` 和
 `httpVersion: "h3"`；Session/fetch 可选择完整 Spec 或显式协议。
 `addressPolicy` 只能创建可信 owner，不能由 `session.fetch()` 或请求替换。
-现有发布库不具备新能力，旧库或缺符号会明确报错，见[能力契约](../CAPABILITIES.md)。
+较旧原生库缺能力或符号时会明确报错，见[能力契约](../CAPABILITIES.md)。
+
+Node 0.12.0 新增默认关闭的 RetryPolicy、Session/fetch 的 bodyFactory 和
+ProfileBundle/ProfileStore 离线配置工具。重试与跳转共用总超时，不重放一次性正文，
+不重试取消、策略/证书拒绝或响应正文读取错误。见[中文指南](https://github.com/FastTLS/fastls-ffi/blob/main/RELIABILITY.zh-CN.md)
+及 [English contract](https://github.com/FastTLS/fastls-ffi/blob/main/RELIABILITY.md)。
 
 ```typescript
 import { Session, ProfileSpec } from '@fastls/fastls';
@@ -16,7 +21,7 @@ const h3 = new Session({ httpVersion: 'h3' });
 try { await h3.get('https://example.com'); } finally { await h3.closeAsync(); }
 ```
 
-Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应 **0.10.1**。
+Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应 **0.12.0**。
 
 支持 HTTP/1.1、HTTP/2、流式上传下载、双工、SSE、WebSocket、会话 Cookie 和 HTTP/HTTPS/SOCKS 代理。网络请求由 Go 执行，通过 Koffi 在当前 Node 进程中调用；使用者无需 Python 或 RPC 服务。
 
@@ -32,7 +37,7 @@ Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明�
 安装指定版本：
 
 ```sh
-npm install @fastls/fastls@0.10.1
+npm install @fastls/fastls@0.12.0
 ```
 
 主包通过同版本的可选依赖自动安装当前平台的 Fastls 原生库。保留 optional dependencies；支持 Windows x64、Linux glibc x64/arm64、macOS x64/arm64。Linux musl 和其它架构没有内置包。具体系统最低版本见原生包的 `native/manifest.json`。

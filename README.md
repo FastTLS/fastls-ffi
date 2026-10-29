@@ -1,6 +1,6 @@
 # Fastls Python / Node.js SDK
 
-[G1 development integration and outstanding performance checks](G1_INTEGRATION_STATUS.md).
+[Historical G1 integration record](G1_INTEGRATION_STATUS.md).
 
 [English documentation](https://fasttls.github.io/en/guide/)
 
@@ -8,12 +8,14 @@
 
 在 Python 或 Node.js 进程内使用 Fastls 原生 HTTP 客户端，不需要运行 RPC 服务。平台包内置动态库，普通安装无需 Go 或 C 编译器。
 
+Python 0.3.0 / Node 0.12.0 新增认证与请求 Cookie 接口、可选重试和正文重放，以及离线配置固定/回滚；新增业务重试默认关闭。详见[中文指南](RELIABILITY.zh-CN.md) · [English contract](RELIABILITY.md)。
+
 ## Python：安装与使用
 
-需要 Python 3.10+；当前稳定版为 `fastls==0.1.4`，发行名和导入名均为 `fastls`。
+需要 Python 3.10+；本版本为 `fastls==0.3.0`，发行名和导入名均为 `fastls`。
 
 ```sh
-python -m pip install --only-binary=:all: fastls==0.1.4
+python -m pip install --only-binary=:all: fastls==0.3.0
 ```
 
 ```python
@@ -30,10 +32,10 @@ print(response.status_code, response.text)
 
 ## Node.js：安装与使用
 
-需要 Node.js 22+。以下命令安装正式版 `@fastls/fastls@0.10.1`。
+需要 Node.js 22+。以下命令安装正式版 `@fastls/fastls@0.12.0`。
 
 ```sh
-npm install @fastls/fastls@0.10.1
+npm install @fastls/fastls@0.12.0
 ```
 
 ```js

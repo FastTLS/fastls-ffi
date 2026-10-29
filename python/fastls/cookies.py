@@ -145,6 +145,21 @@ class Cookies:
     def delete(self, name: str, *, url: str, path: str | None = None, domain: str | None = None) -> None:
         self.set(name, "", url=url, path=path, domain=domain, max_age=-1)
 
+    def update(self, values, *, url: str) -> None:
+        """Atomically merge a mapping as host-only root-path cookies."""
+        from collections.abc import Mapping
+        self._check()
+        if not self._enabled:
+            raise FastlsError("cookie store is disabled")
+        if not isinstance(values, Mapping):
+            raise TypeError("cookies must be a mapping")
+        staged = Cookies(self._owner)
+        for name, value in values.items():
+            staged.set(name, value, url=url, path="/", secure=urlsplit(cookie_url(url)).scheme == "https")
+        with self._lock:
+            for cookie in staged._jar:
+                self._jar.set_cookie(cookie)
+
     def clear(self) -> None:
         self._check()
         with self._lock:

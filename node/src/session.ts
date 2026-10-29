@@ -14,8 +14,11 @@ import { prepare, type QueryParams, type JSONValue, type FormFields, type Multip
 import { WebSocket, wsBudget, type WebSocketOptions } from "./websocket.js";
 import { fetchWithSession, type FetchOptions, type FetchResponse } from "./fetch.js";
 import { ProfileSpec, type AddressPolicy } from "./profiles.js";
+import { RetryPolicy, replayable, retryWait } from "./retry.js";
 
 export interface RequestOptions {
+  retry?: RetryPolicy | null;
+  bodyFactory?: () => UploadBody;
   profileSpec?: ProfileSpec;
   httpVersion?: "auto" | "h3";
   /** Undefined inherits the session proxy; null or an empty string connects directly. */
@@ -44,6 +47,7 @@ export interface RequestOptions {
 export type DuplexOptions = Omit<RequestOptions, "body" | "duplex" | "json" | "form" | "files">;
 
 export interface SessionOptions {
+  retry?: RetryPolicy;
   addressPolicy?: AddressPolicy;
   profileSpec?: ProfileSpec;
   httpVersion?: "auto" | "h3";
@@ -131,10 +135,14 @@ export class Session {
   private readonly websockets = new Set<WebSocket>();
   private readonly producers = new Set<UploadLifecycle>();
   private closed = false;
+  private readonly closing = new AbortController();
+  private readonly retry?: RetryPolicy;
   private notifier?: Notifier;
   private setup?: Promise<void>;
 
   constructor(options: SessionOptions = {}) {
+    if (options.retry !== undefined && !(options.retry instanceof RetryPolicy)) throw new TypeError("retry must be RetryPolicy");
+    this.retry = options.retry;
     this.proxy = proxyValue(options.proxy);
     this.proxyCaPem = proxyTrust(options.proxyCaFile);
     const notifications = options.notifications === undefined ? "auto" : options.notifications;
@@ -326,22 +334,44 @@ export class Session {
   }
 
   async stream(method: string, url: string, options: RequestOptions = {}): Promise<StreamResponse> {
+    const retry = options.retry === undefined ? this.retry : options.retry ?? undefined;
+    if (retry !== undefined && !(retry instanceof RetryPolicy)) throw new TypeError("retry must be RetryPolicy or null");
+    let factory = options.bodyFactory;
+    if (factory !== undefined && typeof factory !== "function") throw new TypeError("bodyFactory must be a function");
+    if (factory !== undefined && ["body", "json", "form", "files"].some(key => key in options)) throw new TypeError("bodyFactory cannot be combined with body, json, form or files");
+    if (options.duplex && (retry !== undefined || factory !== undefined)) throw new TypeError("duplex does not support retry or bodyFactory");
+    if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) throw new TypeError("signal must be an AbortSignal");
+    const signal = options.signal === undefined ? this.closing.signal : AbortSignal.any([options.signal, this.closing.signal]);
     const headers = mergeHeaders(this.headers, options.headers);
     const prepared = prepare(url, options, headers);
     url = prepared.url;
-    options = { ...options, headers, body: prepared.body };
+    options = { ...options, headers, body: prepared.body, signal };
     for (const key of ["params", "json", "form", "files"] as const) delete options[key];
     const maximum = options.maxRedirects ?? 30;
     if (!Number.isSafeInteger(maximum) || maximum < 0) throw new RangeError("maxRedirects must be a non-negative integer");
     const policy = options.timeoutMs === undefined ? this.timeouts : timeoutFields(options.timeoutMs);
     const deadline = performance.now() + policy.timeout_ms;
-    for (let redirects = 0; ; redirects++) {
+    let used = 0, redirects = 0;
+    for (;;) {
+      this.ensureOpen();
+      if (signal.aborted) throw new AbortError(undefined, { cause: signal.reason });
+      if (factory !== undefined) options.body = factory();
       const remaining = Math.ceil(deadline - performance.now());
       if (remaining <= 0) throw new FastlsTimeoutError("total deadline exceeded", "total");
       options.timeoutMs = { total: remaining, connect: policy.connect_timeout_ms, write: policy.write_timeout_ms, headers: policy.headers_timeout_ms, read: policy.read_timeout_ms };
-      const response = await this.streamHop(method, url, options);
+      let response: StreamResponse;
+      try { response = await this.streamHop(method, url, options); }
+      catch (error) {
+        if (!retry?.eligible(method, used, replayable(options.body, factory), error)) throw error;
+        await retryWait(retry.delay(used), deadline, signal); used++; continue;
+      }
+      if (retry?.eligible(method, used, replayable(options.body, factory), undefined, response.status)) {
+        const delay = retry.delay(used, response.headers.get("retry-after"));
+        await response.closeAsync();
+        await retryWait(delay, deadline, signal); used++; continue;
+      }
       const location = response.headers.get("location");
-      if (options.duplex || options.allowRedirects === false || ![301,302,303,307,308].includes(response.status) || !location || ([307,308].includes(response.status) && isStreamingBody(options.body))) return response;
+      if (options.duplex || options.allowRedirects === false || ![301,302,303,307,308].includes(response.status) || !location || ([307,308].includes(response.status) && !replayable(options.body, factory))) return response;
       try {
         if (redirects >= maximum) throw new FastlsError("maximum redirects exceeded");
         const previous = new URL(url), target = new URL(location, url);
@@ -349,10 +379,11 @@ export class Session {
         target.hash = "";
         if (previous.origin !== target.origin) for (const name of ["authorization", "cookie", "host"]) delete headers[name];
         if (([302,303].includes(response.status) && method.toUpperCase() !== "HEAD") || (response.status === 301 && method.toUpperCase() === "POST")) {
-          method = "GET"; delete options.body; delete options.trailers;
+          method = "GET"; delete options.body; delete options.trailers; factory = undefined;
           for (const name of ["content-type", "content-length", "transfer-encoding"]) delete headers[name];
         }
         url = target.href;
+        redirects++;
         await response.read();
       } finally { await response.closeAsync(); }
     }
@@ -378,6 +409,7 @@ export class Session {
 
   /** Open a manual exchange; send() and response reads can run concurrently. */
   duplex(method: string, url: string, options: DuplexOptions = {}): DuplexExchange {
+    if (options.retry !== undefined || options.bodyFactory !== undefined) throw new TypeError("manual duplex does not support retry or bodyFactory");
     if (["body", "duplex", "json", "form", "files"].some(key => key in options)) throw new TypeError("manual duplex uses send() and finishUpload(), not body, json, form, files or duplex options");
     this.ensureOpen();
     const cancellation = new AbortController();
@@ -435,6 +467,7 @@ export class Session {
     if (this.closed) return;
     this.cookies.clear();
     this.closed = true;
+    this.closing.abort(new AbortError("session is closed"));
     try {
       for (const transfer of this.active) transfer.close(new FastlsError("session is closed"));
       for (const ws of this.websockets) ws.abort(new FastlsError("session is closed"));

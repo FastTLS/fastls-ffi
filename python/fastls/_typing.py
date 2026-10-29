@@ -4,6 +4,9 @@ from os import PathLike
 from typing import Any, BinaryIO, Literal, TypedDict, Union
 from .timeout import Timeout
 from .profiles import ProfileSpec
+from .auth import BasicAuth, BearerAuth
+from .retry import RetryPolicy
+from typing import Callable
 
 Path = Union[str, PathLike[str]]
 Scalar = Union[str, bytes, int, float, None]
@@ -13,6 +16,10 @@ File = Union[FileBody, tuple[Union[str, None], FileBody], tuple[Union[str, None]
 
 
 class RequestOptions(TypedDict, total=False):
+    auth: Union[BasicAuth, BearerAuth, tuple[str, str], None]
+    request_cookies: Union[Mapping[str, str], None]
+    retry: Union[RetryPolicy, None]
+    body_factory: Union[Callable[[], Any], None]
     params: Union[Fields, str, None]
     headers: Union[Mapping[str, str], None]
     json: Any
@@ -37,6 +44,8 @@ class SyncRequestOptions(RequestOptions, total=False):
 
 
 class SessionOptions(TypedDict, total=False):
+    auth: Union[BasicAuth, BearerAuth, tuple[str, str], None]
+    retry: Union[RetryPolicy, None]
     profile: Union[str, None]
     profile_spec: Union[ProfileSpec, None]
     address_policy: Union[Mapping[str, Any], None]

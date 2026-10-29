@@ -1,4 +1,28 @@
-# Python 0.2.0 / Node 0.11.0
+# Python 0.3.0 / Node 0.12.0
+
+This minor release adds Python Basic/Bearer authentication and request-local
+Cookie mappings, opt-in business retries in Python sync/async and Node
+Session/fetch, and pinned offline profile bundles with atomic activation and
+rollback. New retries are disabled by default and share a bounded deadline with
+redirects. Non-idempotent methods require explicit authorization, one-shot bodies
+are not replayed, and response-body failures never trigger another request.
+
+Structured native network/certificate errors remain within ABI v1. Unsupported
+or unclassified errors are conservative, including older native libraries.
+Existing H3, address policy and full Spec capabilities remain available with
+their documented limits. No service or dependency module is republished.
+
+The offline tools validate exact pinned Spec bytes and native backend support
+without network access. Checksums do not authenticate producers. Browser online
+capture/update, QUIC fingerprints, UDP proxies and new platforms remain future
+work. See [English contract](RELIABILITY.md) and [中文指南](RELIABILITY.zh-CN.md).
+
+The release candidate uses the minor validation tier: existing five platforms,
+source/installed SDK interfaces, Linux race and one short resource campaign.
+Full performance certification and hour-long observation are not repeated.
+Publication uses original checked artifacts and OIDC Trusted Publishing.
+
+## Previous release: Python 0.2.0 / Node 0.11.0
 
 This minor release adds trusted Session address policies, immutable full profile
 Spec snapshots, and explicit HTTP/3 through the C ABI, Python sync/async APIs,
@@ -11,7 +35,8 @@ WebSocket close codes alongside the new structured native error codes.
 HTTP/3 currently requires direct HTTPS and never falls back to TCP. Address
 policies, proxies, H1/H2 fingerprint settings, request trailers, WebSocket and H2
 duplex cannot be combined with explicit H3. Browser QUIC fingerprints, UDP proxy
-support, automatic Alt-Svc discovery and generic retries are future work.
+support and automatic Alt-Svc discovery remain future work. Generic retries
+were added by the release described above.
 
 The reviewed public core dependency is
 `v0.1.3-0.20261029044750-32699153caa1`. No unchanged service is republished.

@@ -15,13 +15,14 @@ class FastlsError(Exception):
 
 
 class FastlsTimeoutError(FastlsError):
+    code = "timeout"
     def __init__(self, message, phase):
         super().__init__(message)
         self.phase = phase
 
 
 class FastlsDecodeError(FastlsError):
-    pass
+    code = "decode_error"
 
 
 def raise_response_error(info):

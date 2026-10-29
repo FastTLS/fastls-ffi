@@ -273,6 +273,8 @@ def run(stage="all"):
             execute("api-source", [sys.executable, "tests/test_api.py"])
             execute("sdk-sessions-source", [sys.executable, "tests/test_sdk_sessions.py"])
             execute("capabilities-source", [sys.executable, "tests/test_capabilities.py"])
+            execute("python-compat-source", [sys.executable, "tests/test_python_compat.py"])
+            execute("reliability-source", [sys.executable, "tests/test_reliability.py"])
             execute("stability-source", [sys.executable, "tests/test_stability.py"])
             execute("network-source", [sys.executable, "tests/test_network.py"])
             execute("pooling-source", [sys.executable, "tests/test_pooling.py"])

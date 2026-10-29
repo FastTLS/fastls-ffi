@@ -1,3 +1,7 @@
+> Python 0.3.0 / Node 0.12.0 保留本页能力，并增加 [认证、重试与离线配置](RELIABILITY.zh-CN.md)。
+> Full Spec / address policy / explicit H3 first shipped in Python 0.2.0 / Node 0.11.0.
+> The older baseline mentioned below records the original capability introduction.
+
 # Native transport capabilities (development candidate)
 
 These APIs are implemented in this source candidate. They are not enabled in

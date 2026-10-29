@@ -1,8 +1,8 @@
 # fastls Python SDK
 
-开发候选新增 Session `address_policy`、`profile_spec=ProfileSpec(...)` 和
+Python 0.2.0 起支持 Session `address_policy`、`profile_spec=ProfileSpec(...)` 和
 `http_version="h3"`，同步/异步入口共用契约。请求也可指定完整 Spec 或显式协议；
-策略只在创建 Session 时配置。现有发布库不具备这些新能力，缺能力会明确报错。
+策略只在创建 Session 时配置。较旧原生库缺能力时会明确报错。
 完整范围和限制见 [能力契约](../CAPABILITIES.md)。
 
 ```python
@@ -17,14 +17,14 @@ with Session(http_version="h3") as session:
     response = session.get("https://example.com")  # 必须由目标支持 H3
 ```
 
-通过原生 Fastls 动态库发送带浏览器配置的 HTTP 请求，支持同步、asyncio、流式上传下载、HTTP/2 全双工、SSE 和 WebSocket。Python 发行包名与导入名均为 `fastls`，仓库名为 `fastls-ffi`。本文对应 Python **0.1.4**，发行文件与版本状态以 PyPI 为准。
+通过原生 Fastls 动态库发送带浏览器配置的 HTTP 请求，支持同步、asyncio、流式上传下载、HTTP/2 全双工、SSE 和 WebSocket。Python 发行包名与导入名均为 `fastls`，仓库名为 `fastls-ffi`。本文对应 Python **0.3.0**，发行文件与版本状态以 PyPI 为准。
 
 ## 安装与平台
 
 需要 Python 3.10+。推荐在虚拟环境中安装：
 
 ```shell
-python -m pip install --only-binary=:all: fastls==0.1.4
+python -m pip install --only-binary=:all: fastls==0.3.0
 ```
 
 平台 wheel 已包含动态库，无需 Go、C 编译器或额外下载 DLL。`--only-binary=:all:` 确保没有匹配平台时明确失败，避免误装不含动态库的源码包。
@@ -119,7 +119,13 @@ asyncio.run(main())
 
 `await response.read()/text()/json()` 与 `response.content.iter_chunked(n)` 是该入口的常用读取方式；`response.release()` 或 `await response.wait_for_close()` 可显式释放。`ClientSession.close()` 为异步方法。已有 `AsyncSession` 保留其缓冲响应、`aread/aiter_bytes`、双工、SSE 和 WebSocket 接口。
 
-兼容以常用流程为目标，不承诺完整替换：不接受 requests 的 `auth/hooks/adapters/verify=False`，不自动读取环境代理；没有 aiohttp 的连接器、TraceConfig 或完整 StreamReader API。超时使用 Fastls 的秒数或 `Timeout`，证书使用 `ca_file`，代理使用 `proxy`。Cookie 仍以 URL 范围访问，不是 RequestsCookieJar 的完整兼容对象；不支持 `cookies={...}`，需要 `session.cookies.set(..., url=...)` 或显式 Cookie 头。未支持的关键字会报错。
+兼容以常用流程为目标，不承诺完整替换：认证接受 BasicAuth、BearerAuth 或用户名/密码元组；不接受 hooks/adapters/verify=False，也不自动读取环境代理。没有 aiohttp 的连接器、TraceConfig 或完整 StreamReader API。超时使用 Fastls 的秒数或 `Timeout`，证书使用 `ca_file`，代理使用 `proxy`。逐请求 Cookie 映射使用 `request_cookies={...}`；原有 `cookies: bool` 继续控制会话自动管理。Cookie 以 URL 范围访问，不是完整 RequestsCookieJar 兼容对象。未支持的关键字会报错。
+
+## 认证、可选重试与离线配置
+
+Python 0.3.0 新增 BasicAuth/BearerAuth、逐请求 request_cookies、Cookies.update、RetryPolicy 和 body_factory。同步、异步及兼容入口使用一致契约；新增重试默认关闭，取消、策略/证书拒绝、不可重放正文和响应正文读取错误不重试。ProfileBundle/ProfileStore 与 `python -m fastls profile` 提供离线校验、导入导出、固定和回滚。
+
+完整参数、优先级、限制与示例：[中文指南](https://github.com/FastTLS/fastls-ffi/blob/main/RELIABILITY.zh-CN.md) · [English contract](https://github.com/FastTLS/fastls-ffi/blob/main/RELIABILITY.md)。
 
 ## 会话职责与重定向
 

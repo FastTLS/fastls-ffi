@@ -1,5 +1,7 @@
 > 历史维护/阶段记录：下文按当时阶段保存，不代表当前发布状态。当前安装、能力与限制以 [README](README.md)、[统一文档](https://fasttls.github.io/) 和实际发布标签为准。
 
+> 2026-10-30 合并批次：Python 认证/请求 Cookie、Python/Node 可选重试及正文重放、离线配置工具；目标 Python 0.3.0 / Node 0.12.0。范围与限制见 [本批契约](RELIABILITY.zh-CN.md)，功能验收与正式发布结果另以候选记录和标签为准。原生模块依赖与服务版本未变化。
+
 > 本文保留历史实施记录。Python 0.1.4 / Node 0.10.1 的应用 Cookie 和重定向已迁至 SDK；最新使用方法以 README、python/README.md 和 node/README.md 为准。
 
 # 下一阶段并行实施计划

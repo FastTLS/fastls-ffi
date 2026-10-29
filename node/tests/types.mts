@@ -1,6 +1,19 @@
 import { Session, ServerSentEvent, type SSEOptions, type SSEStream, type RequestOptions, type Response, type StreamResponse } from '@fastls/fastls';
 import { fetch, type FetchResponse } from '@fastls/fastls';
 import { ProfileSpec, type AddressPolicy } from '@fastls/fastls';
+import { RetryPolicy, ProfileBundle, ProfileStore } from '@fastls/fastls';
+
+async function reliability() {
+  const retry = new RetryPolicy({ maxRetries: 1 });
+  const session = new Session({ retry });
+  await session.put('https://example.com', { bodyFactory: () => [Buffer.from('body')] });
+  await session.fetch('https://example.com', { retry });
+  const bundle = ProfileBundle.create(new ProfileSpec({ schema_version: 1 }), { source: 'local' });
+  new ProfileStore('profiles').install('bundle.json', bundle.sha256);
+  // @ts-expect-error Retry policies are explicit immutable objects.
+  await session.get('https://example.com', { retry: { maxRetries: 3 } });
+}
+void reliability;
 
 async function capabilities() {
   const profileSpec = new ProfileSpec({ schema_version: 1 });

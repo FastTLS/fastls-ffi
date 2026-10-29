@@ -3,6 +3,8 @@ import { Session, type SessionOptions, type RequestOptions } from "./session.js"
 import type { ProfileSpec, AddressPolicy } from "./profiles.js";
 
 export interface FetchOptions extends RequestInit {
+  retry?: RequestOptions["retry"];
+  bodyFactory?: RequestOptions["bodyFactory"];
   profileSpec?: ProfileSpec;
   httpVersion?: "auto" | "h3";
   /** Only standalone fetch can create a new trusted policy owner. */
@@ -30,12 +32,14 @@ export async function fetchWithSession(session: Session, input: string | URL | R
     for (const key of ["cache", "credentials", "integrity", "keepalive", "mode", "referrer", "referrerPolicy"] as const) {
       if (init[key] !== undefined) throw new TypeError(`Fastls fetch does not support ${key}`);
     }
-    const allowed = new Set(["method", "headers", "body", "redirect", "signal", "duplex", "profile", "profileSpec", "httpVersion", "addressPolicy", "proxy", "proxyCaFile", "caFile", "library", "timeoutMs", "maxRedirects"]);
+    const allowed = new Set(["method", "headers", "body", "redirect", "signal", "duplex", "profile", "profileSpec", "httpVersion", "addressPolicy", "proxy", "proxyCaFile", "caFile", "library", "timeoutMs", "maxRedirects", "retry", "bodyFactory"]);
     if (!owned && init.addressPolicy !== undefined) throw new TypeError("addressPolicy is a Session creation option");
     for (const key of Object.keys(init)) if (!allowed.has(key)) throw new TypeError(`Fastls fetch does not support ${key}`);
     // Request performs the platform's normal URL/method/header validation and
     // serializes URLSearchParams, Blob and FormData without a second encoder.
     const request = new Request(input, init);
+    if (init.bodyFactory !== undefined && request.body !== null) throw new TypeError("bodyFactory cannot be combined with a Request body");
+    if (init.bodyFactory !== undefined && ["GET", "HEAD"].includes(request.method)) throw new TypeError("fetch GET/HEAD cannot have a bodyFactory");
     const headers = Object.fromEntries(request.headers);
     let body: RequestOptions["body"];
     if (request.body) {
@@ -44,7 +48,8 @@ export async function fetchWithSession(session: Session, input: string | URL | R
       else body = Readable.fromWeb(request.body as import("node:stream/web").ReadableStream<Uint8Array>);
     }
     const stream = await session.stream(request.method, request.url, {
-      headers, body, profile: init.profile, profileSpec: init.profileSpec, httpVersion: init.httpVersion, proxy: init.proxy, proxyCaFile: init.proxyCaFile,
+      headers, ...(init.bodyFactory === undefined ? { body } : { bodyFactory: init.bodyFactory }), retry: init.retry,
+      profile: init.profile, profileSpec: init.profileSpec, httpVersion: init.httpVersion, proxy: init.proxy, proxyCaFile: init.proxyCaFile,
       timeoutMs: init.timeoutMs, maxRedirects: init.maxRedirects,
       allowRedirects: request.redirect === "follow", signal: request.signal,
     });
