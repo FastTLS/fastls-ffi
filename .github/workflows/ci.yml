@@ -416,7 +416,7 @@ jobs:
       run: python scripts/test_plan.py --check-results
   publish-github-release:
     name: Publish GitHub release
-    if: github.ref_type == 'tag'
+    if: always() && github.ref_type == 'tag' && needs.required.result == 'success'
     needs: required
     runs-on: ubuntu-24.04
     permissions:
@@ -782,10 +782,10 @@ jobs:
         path: pypi-dist/
         if-no-files-found: error
         retention-days: 14
-    if: needs.dependencies.outputs.pypi == 'true'
+    if: always() && needs.dependencies.result == 'success' && needs.required.result == 'success' && needs.dependencies.outputs.pypi == 'true'
   publish-pypi:
     name: Publish fastls to PyPI
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: always() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.pypi-candidate.result == 'success' && needs.publish-github-release.result == 'success'
     needs:
     - pypi-candidate
     - publish-github-release
@@ -816,9 +816,11 @@ jobs:
       name: pypi
       url: https://pypi.org/p/fastls
     permissions:
-      contents: read
+      contents: write
       actions: read
       id-token: write
+      attestations: write
+      artifact-metadata: write
     env:
       PYPI_SOURCE_RUN: ${{ inputs.pypi_run_id }}
       PYPI_VERSION: ${{ inputs.pypi_version }}
@@ -826,30 +828,93 @@ jobs:
     - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       with:
         persist-credentials: false
+        fetch-depth: 0
     - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
       with:
         python-version: '3.11'
     - name: Require certified tag, source run and successful release gates
+      if: '!inputs.promote_tag_packages'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: python scripts/resume_pypi.py validate-run
     - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      if: '!inputs.promote_tag_packages'
       with:
         name: pypi-validated
         path: dist/
         run-id: ${{ inputs.pypi_run_id }}
         github-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Verify exact published bytes, package identity and source commit
+      if: '!inputs.promote_tag_packages'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: python scripts/resume_pypi.py verify-files
+    - name: Validate original platform gates, tag and unchanged production inputs
+      if: inputs.promote_tag_packages
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: python scripts/promote_tag.py validate
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      if: inputs.promote_tag_packages
+      with:
+        pattern: release-candidate-*
+        path: candidates/
+        run-id: ${{ inputs.pypi_run_id }}
+        github-token: ${{ github.token }}
+    - name: Validate the original formal package set without rebuilding
+      if: inputs.promote_tag_packages
+      run: |
+        python scripts/promote_tag.py assemble
+        python -m pip install twine==7.0.0
+        python -m twine check --strict dist/*
+    - name: Sign original formal package promotion
+      if: inputs.promote_tag_packages
+      id: tag-promotion
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+      with:
+        subject-checksums: release-assets/SHA256SUMS
+        predicate-type: https://fasttls.github.io/attestations/python-promotion/v1
+        predicate-path: promotion.json
+    - name: Publish original formal assets at the unchanged tag
+      if: inputs.promote_tag_packages
+      env:
+        GH_TOKEN: ${{ github.token }}
+        BUNDLE_PATH: ${{ steps.tag-promotion.outputs.bundle-path }}
+        VERSION: ${{ inputs.pypi_version }}
+      run: |
+        cp "$BUNDLE_PATH" release-assets/provenance.sigstore.json
+        gh release create "v${VERSION}" release-assets/* --verify-tag --title "fastls-ffi v${VERSION}" --notes-file RELEASE_NOTES.md
+    - name: Retain exact promoted artifacts and source proof
+      if: inputs.promote_tag_packages
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: pypi-promoted
+        path: |
+          dist/
+          release-assets/*.json
+          release-assets/SHA256SUMS
+          promotion.json
+        if-no-files-found: error
+    - name: Select only missing matching registry files
+      if: inputs.promote_tag_packages
+      id: stage
+      run: python scripts/promote_tag.py stage-upload
+    - name: Publish original tag bytes using PyPI Trusted Publishing
+      if: inputs.promote_tag_packages && steps.stage.outputs.upload == 'true'
+      uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
+      with:
+        packages-dir: upload-dist/
+        attestations: true
     - name: Upload original artifacts using the configured Trusted Publisher
+      if: '!inputs.promote_tag_packages'
       uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
       with:
         packages-dir: dist/
         attestations: true
 'on':
-  push: null
+  push:
+    branches: ['**']
+    tags: ['v*']
   pull_request: null
   workflow_dispatch:
     inputs:
@@ -881,3 +946,7 @@ jobs:
         - minor
         - major
         default: auto
+      promote_tag_packages:
+        description: Promote original checked tag packages when delivery jobs were skipped
+        type: boolean
+        default: false

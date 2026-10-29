@@ -58,7 +58,9 @@ def choose(files, *, requested='auto', release=None, previous=None, uncertain=Fa
         tier = TIERS[max(TIERS.index(tier), TIERS.index(requested))]
         reasons.append('manual floor: ' + requested)
     from ci import TARGETS
-    publishing_only = bool(files) and set(files) <= PUBLISHING_TOOLS and any(p.startswith('node/scripts/') for p in files)
+    pypi_tools = {'scripts/promote_tag.py', 'tests/publish_promotion_checks.py'}
+    publishing_only = bool(files) and set(files) <= PUBLISHING_TOOLS | pypi_tools and any(
+        p.startswith('node/scripts/') or p == 'scripts/promote_tag.py' for p in files)
     if publishing_only and not (release or uncertain or override or requested != 'auto'):
         return dict(tier='patch', reasons=['publication tools only; original certified archives are unchanged; publishing workflow runs rejection/source-identity tests'],
             files=files, native=False, node=False, matrix=TARGETS[:2],
@@ -110,8 +112,18 @@ def context(env):
         if release:
             version(release)  # Invalid release tags must fail, never silently downgrade.
         files, uncertain = [], True
-    plan = choose(files, requested=env.get('TEST_TIER') or 'auto', release=release, previous=previous,
+    selected_files = files
+    if '.github/workflows/ci.yml' in files:
+        from promote_tag import workflow_inputs_unchanged, PYPI_TOOLS
+        workflow = '.github/workflows/ci.yml'
+        if (not uncertain and not release and set(files) <= PUBLISHING_TOOLS | PYPI_TOOLS | {workflow}
+                and workflow_inputs_unchanged(git('show', base + ':' + workflow), git('show', 'HEAD:' + workflow))):
+            selected_files = [p for p in files if p != workflow]
+    plan = choose(selected_files, requested=env.get('TEST_TIER') or 'auto', release=release, previous=previous,
                   uncertain=uncertain, override=any(env.get(n) for n in ('FASTLS_REF', 'FTRANSPORT_REF', 'IMITATE_REF', 'CERTIFICATION_SOAK_SECONDS')))
+    if selected_files != files:
+        plan['files'] = files
+        plan['reasons'].append('verified unchanged production jobs, toolchains, environment and existing event inputs; publication guards/explicit promotion only')
     duration = env.get('CERTIFICATION_SOAK_SECONDS')
     if duration:
         if not re.fullmatch(r'[0-9]+', duration) or not 300 <= int(duration) <= 7200:
