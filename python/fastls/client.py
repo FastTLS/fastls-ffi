@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 from contextlib import contextmanager, asynccontextmanager
+from collections.abc import Mapping
 import ctypes
 import json
 from pathlib import Path
@@ -20,6 +21,7 @@ from .cookies import Cookies
 from .timeout import Timeout
 from .redirects import Redirects
 from .request_options import Multipart, prepare, response_encoding
+from .profiles import ProfileSpec
 
 
 class FastlsHTTPError(FastlsError):
@@ -165,8 +167,19 @@ def _collect(chunks):
 
 class Session:
     """Configuration, request ownership and isolated reusable connection pools."""
-    def __init__(self, *, profile="chrome/156/windows", headers=None, timeout=30, library=None, ca_file=None, cookies=True,
-                 decode_content=True, max_decoded_bytes=256 * 1024 * 1024, notifications="auto", proxy=None, proxy_ca_file=None):
+    def __init__(self, *, profile=None, headers=None, timeout=30, library=None, ca_file=None, cookies=True,
+                 decode_content=True, max_decoded_bytes=256 * 1024 * 1024, notifications="auto", proxy=None, proxy_ca_file=None,
+                 address_policy=None, profile_spec: ProfileSpec | None=None, http_version="auto"):
+        if profile is not None and not isinstance(profile, str):
+            raise TypeError("profile must be a selector string or None")
+        if profile_spec is not None and not isinstance(profile_spec, ProfileSpec):
+            raise TypeError("profile_spec must be a ProfileSpec")
+        if profile_spec is not None and profile is not None:
+            raise ValueError("profile and profile_spec are mutually exclusive")
+        if http_version not in ("auto", "h3"):
+            raise ValueError("http_version must be auto or h3")
+        self._profile_spec = profile_spec
+        self._http_version = http_version
         if proxy is not None and not isinstance(proxy, str):
             raise TypeError("proxy must be a URL string or None")
         self.proxy = proxy
@@ -177,7 +190,8 @@ class Session:
             raise ValueError("notifications must be auto, required or poll")
         if not isinstance(cookies, bool):
             raise TypeError("cookies must be a boolean")
-        self.profile, self.headers, self.timeout = profile, dict(headers or {}), timeout
+        self.profile = profile if profile is not None else "" if profile_spec is not None or http_version == "h3" else "chrome/156/windows"
+        self.headers, self.timeout = dict(headers or {}), timeout
         self.decode_content, self.max_decoded_bytes = decode_content, max_decoded_bytes
         self._ca_pem = Path(ca_file).read_text(encoding="utf-8") if ca_file is not None else None
         if self._ca_pem is not None and not self._ca_pem.strip():
@@ -202,9 +216,36 @@ class Session:
             raise FastlsError("connection pools require a newer Fastls native library")
         if not hasattr(self._native.lib, "fastls_transport_create"):
             raise FastlsError("SDK-owned sessions require the Fastls 0.1.4 native library or newer")
-        self._session = self._native.call("fastls_transport_create")
+        configuration = {"schema_version": 1}
+        required = set()
+        if address_policy is not None:
+            if not isinstance(address_policy, Mapping):
+                raise TypeError("address_policy must be a mapping")
+            configuration["address_policy"] = dict(address_policy)
+            required.add("transport_address_policy_v1")
+        if profile_spec is not None:
+            configuration["profile_spec"] = profile_spec.to_dict()
+            required.add("profile_spec_v1")
+        if http_version == "h3":
+            configuration["http_version"] = "h3"
+            required.add("http3_v1")
+        if required:
+            self._require_capabilities(required)
+            if profile is not None:
+                configuration["profile"] = profile
+            if proxy and (address_policy is not None or http_version == "h3"):
+                raise FastlsError("unsupported transport combination", code="unsupported_capability")
+            raw = json.dumps(configuration, ensure_ascii=False, allow_nan=False).encode("utf-8")
+            self._session = self._native.call("fastls_transport_create_with_options", raw, len(raw))
+        else:
+            self._session = self._native.call("fastls_transport_create")
         self.cookies = Cookies(self, enabled=cookies)
         self._ws_cookie_requests = {}
+
+    def _require_capabilities(self, required):
+        available = set(self._native.call("fastls_features"))
+        if not set(required).issubset(available) or not hasattr(self._native.lib, "fastls_transport_create_with_options"):
+            raise FastlsError("native transport capability is unavailable", code="unsupported_capability")
 
     def close_idle_connections(self):
         with self._lock:
@@ -231,7 +272,21 @@ class Session:
             time.sleep(POLL_INTERVAL)
 
     def _begin(self, method, url, *, profile=None, headers=None, trailers=None, data=None, timeout=None, allow_redirects=True,
-               decode_content=None, max_decoded_bytes=None, duplex=False, proxy=_INHERIT_PROXY, proxy_ca_file=_INHERIT_PROXY):
+               decode_content=None, max_decoded_bytes=None, duplex=False, proxy=_INHERIT_PROXY, proxy_ca_file=_INHERIT_PROXY,
+               profile_spec: ProfileSpec | None=None, http_version=None):
+        if profile_spec is not None and not isinstance(profile_spec, ProfileSpec):
+            raise TypeError("profile_spec must be a ProfileSpec")
+        if profile_spec is not None and profile is not None:
+            raise ValueError("profile and profile_spec are mutually exclusive")
+        required = set()
+        if profile_spec is not None:
+            required.add("profile_spec_v1")
+        if http_version is not None:
+            if http_version not in ("auto", "h3"):
+                raise ValueError("http_version must be auto or h3")
+            required.add("http3_v1")
+        if required:
+            self._require_capabilities(required)
         selected_proxy = self.proxy if proxy is _INHERIT_PROXY else proxy
         if selected_proxy is not None and not isinstance(selected_proxy, str):
             raise TypeError("proxy must be a URL string or None")
@@ -278,9 +333,14 @@ class Session:
             raise TypeError("decode_content must be a boolean")
         if isinstance(maximum, bool) or not isinstance(maximum, int) or not 1 <= maximum <= 1 << 40:
             raise ValueError("max_decoded_bytes must be 1..1099511627776")
-        request = dict(url=url, method=method, profile=self.profile if profile is None else profile,
+        selected_profile = profile if profile is not None else "" if profile_spec is not None or http_version == "h3" else self.profile
+        request = dict(url=url, method=method, profile=selected_profile,
                        session=self._session, headers=merged, disable_redirect=True,
                        decode_content=decode, max_decoded_bytes=maximum, **limit.native_fields())
+        if profile_spec is not None:
+            request["profile_spec"] = profile_spec.to_dict()
+        if http_version is not None:
+            request["http_version"] = http_version
         if normalized_trailers:
             request["trailers"] = normalized_trailers
         if self._ca_pem is not None:

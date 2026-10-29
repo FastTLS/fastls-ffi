@@ -1,5 +1,21 @@
 # Fastls Node.js SDK
 
+开发候选新增 Session `addressPolicy`、`profileSpec: new ProfileSpec(...)` 和
+`httpVersion: "h3"`；Session/fetch 可选择完整 Spec 或显式协议。
+`addressPolicy` 只能创建可信 owner，不能由 `session.fetch()` 或请求替换。
+现有发布库不具备新能力，旧库或缺符号会明确报错，见[能力契约](../CAPABILITIES.md)。
+
+```typescript
+import { Session, ProfileSpec } from '@fastls/fastls';
+import { readFileSync } from 'node:fs';
+const profileSpec = new ProfileSpec(JSON.parse(readFileSync('browser.json', 'utf8')));
+const session = new Session({ profileSpec });
+try { await session.get('https://example.com'); } finally { await session.closeAsync(); }
+// 强制 H3 直连，不支持时不会回退到 TCP；目标须支持 H3。
+const h3 = new Session({ httpVersion: 'h3' });
+try { await h3.get('https://example.com'); } finally { await h3.closeAsync(); }
+```
+
 Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应 **0.10.1**。
 
 支持 HTTP/1.1、HTTP/2、流式上传下载、双工、SSE、WebSocket、会话 Cookie 和 HTTP/HTTPS/SOCKS 代理。网络请求由 Go 执行，通过 Koffi 在当前 Node 进程中调用；使用者无需 Python 或 RPC 服务。

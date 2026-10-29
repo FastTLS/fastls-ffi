@@ -249,6 +249,8 @@ jobs:
 
           workspace/fastls-ffi/build/stability-*.json
 
+          workspace/fastls-ffi/build/capability-resource-*.json
+
           workspace/fastls-ffi/build/checks-*/
 
           '
@@ -261,6 +263,8 @@ jobs:
         path: 'workspace/fastls-ffi/build/ci-*/source/
 
           workspace/fastls-ffi/build/stability-*.json
+
+          workspace/fastls-ffi/build/capability-resource-*.json
 
           workspace/fastls-ffi/build/checks-*/
 
@@ -275,6 +279,8 @@ jobs:
 
           workspace/fastls-ffi/build/stability-*.json
 
+          workspace/fastls-ffi/build/capability-resource-*.json
+
           workspace/fastls-ffi/build/checks-*/
 
           '
@@ -288,6 +294,8 @@ jobs:
         path: 'workspace/fastls-ffi/build/ci-*/release/
 
           workspace/fastls-ffi/build/stability-*.json
+
+          workspace/fastls-ffi/build/capability-resource-*.json
 
           workspace/fastls-ffi/build/checks-*/
 
@@ -369,6 +377,8 @@ jobs:
         path: 'workspace/fastls-ffi/build/ci-*/
 
           workspace/fastls-ffi/build/stability-*.json
+
+          workspace/fastls-ffi/build/capability-resource-*.json
 
           workspace/fastls-ffi/build/checks-*/
 

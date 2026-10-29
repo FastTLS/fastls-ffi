@@ -28,7 +28,7 @@ THE SOFTWARE.
 
 ==============================================================================
 Module: github.com/FastTLS/fastls
-Version: v0.1.2
+Version: v0.1.3-0.20261029044750-32699153caa1
 File: LICENSE
 ------------------------------------------------------------------------------
 
@@ -1636,7 +1636,7 @@ Additional reviewed development-source license materials.
 The native build-info identifies the actual artifact inputs; these records preserve the reviewed source bytes.
 
 ==============================================================================
-Reviewed source: fastls@e04d468cccf5b7aff99bdf239b2f76f9418cc2af
+Reviewed source: fastls@32699153caa15a9bbbe11e178465a315d3b59861
 File: LICENSE
 ------------------------------------------------------------------------------
 

@@ -2,7 +2,6 @@
 package bridge
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/x509"
@@ -20,7 +19,6 @@ import (
 	"time"
 
 	fastls "github.com/FastTLS/fastls"
-	use "github.com/FastTLS/fastls/imitate"
 	"github.com/FastTLS/fastls/profile"
 	generators "github.com/FastTLS/imitate"
 )
@@ -51,6 +49,8 @@ type Input struct {
 	URL              string            `json:"url"`
 	Method           string            `json:"method"`
 	Profile          string            `json:"profile"`
+	ProfileSpec      json.RawMessage   `json:"profile_spec,omitempty"`
+	HTTPVersion      string            `json:"http_version,omitempty"`
 	Headers          map[string]string `json:"headers"`
 	Trailers         http.Header       `json:"trailers,omitempty"`
 	Body             string            `json:"body"`
@@ -116,6 +116,7 @@ func New() *Engine {
 }
 
 type session struct {
+	config  *transportConfig
 	watch   *watcher
 	pools   map[string]*fastls.Session
 	cookies *fastls.CookieStore
@@ -137,13 +138,17 @@ func (e *Engine) CreateTransport() (uint64, error) {
 }
 
 func (e *Engine) createSession(legacyCookies bool) (uint64, error) {
+	return e.createConfiguredSession(legacyCookies, nil)
+}
+
+func (e *Engine) createConfiguredSession(legacyCookies bool, config *transportConfig) (uint64, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if len(e.sessions) >= 64 {
 		return 0, errors.New("too many open sessions (64)")
 	}
 	id := e.next.Add(1)
-	s := &session{pools: make(map[string]*fastls.Session)}
+	s := &session{pools: make(map[string]*fastls.Session), config: config}
 	if legacyCookies {
 		s.cookies = fastls.NewCookieStore()
 	}
@@ -239,20 +244,12 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 		return 0, errors.New("request JSON size must be 1..1048576 bytes")
 	}
 	var in Input
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&in); err != nil {
+	if err := strictJSON(raw, &in, MaxInput, MaxInput); err != nil {
 		return 0, err
-	}
-	if err := dec.Decode(new(any)); err != io.EOF {
-		return 0, errors.New("expected exactly one JSON object")
 	}
 	u, err := url.Parse(in.URL)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
 		return 0, errors.New("url must be an absolute HTTP(S) URL without credentials")
-	}
-	if in.Profile == "" {
-		in.Profile = "chrome/156/windows"
 	}
 	if in.Method == "" {
 		in.Method = "GET"
@@ -328,7 +325,11 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 		}
 		opts.TLSRootCAs = roots
 	}
-	match, err := use.Use(&opts, in.Profile, use.WithProvider(e.provider))
+	configuration, err := e.transportConfiguration(in.Session)
+	if err != nil {
+		return 0, err
+	}
+	match, identity, err := applyTransport(&in, &opts, configuration, e)
 	if err != nil {
 		return 0, err
 	}
@@ -350,8 +351,7 @@ func (e *Engine) Start(raw []byte) (uint64, error) {
 			cancel()
 			return 0, errors.New("invalid or closed session handle")
 		}
-		identity, _ := json.Marshal([]string{in.Profile, in.CAPEM, in.Proxy, in.ProxyCAPEM})
-		key := fmt.Sprintf("%x", sha256.Sum256(identity))
+		key := fmt.Sprintf("%x", sha256.Sum256([]byte(identity)))
 		pool := s.pools[key]
 		if pool == nil {
 			if len(s.pools) >= 16 {
@@ -491,6 +491,8 @@ func (r *request) setErrorLocked(err error) {
 		r.info.ErrorCode = "cancelled"
 	case errors.As(err, &decoding):
 		r.info.ErrorCode = "decode_error"
+	case errors.Is(err, fastls.ErrAddressDenied):
+		r.info.ErrorCode, r.info.Error = "address_denied", "address policy denied request"
 	}
 }
 

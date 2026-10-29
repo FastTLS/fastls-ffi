@@ -18,6 +18,16 @@ import (
 
 var engine = bridge.New()
 
+//export fastls_transport_create_with_options
+func fastls_transport_create_with_options(data *C.char, length C.size_t) *C.char {
+	return result(func() (any, error) {
+		if data == nil || length < 1 || length > bridge.MaxInput {
+			return nil, &bridge.ConfigurationError{Code: "invalid_configuration"}
+		}
+		return engine.CreateTransportWithOptions(C.GoBytes(unsafe.Pointer(data), C.int(length)))
+	})
+}
+
 //export fastls_transport_create
 func fastls_transport_create() *C.char {
 	return result(func() (any, error) { return engine.CreateTransport() })
@@ -26,7 +36,7 @@ func fastls_transport_create() *C.char {
 //export fastls_features
 func fastls_features() *C.char {
 	return result(func() (any, error) {
-		return []string{"transport_context_v1", "websocket_cookie_control_v1", "websocket_cookies", "websocket_cookies_v1", "websocket_v1", "https_proxy_tls", "proxy_tunnels", "session_notifications", "duplex_h2", "stream_upload", "write_timeout", "stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers", "request_trailers", "response_metadata"}, nil
+		return []string{"transport_options_v1", "transport_address_policy_v1", "profile_spec_v1", "http3_v1", "transport_context_v1", "websocket_cookie_control_v1", "websocket_cookies", "websocket_cookies_v1", "websocket_v1", "https_proxy_tls", "proxy_tunnels", "session_notifications", "duplex_h2", "stream_upload", "write_timeout", "stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers", "request_trailers", "response_metadata"}, nil
 	})
 }
 
@@ -96,7 +106,7 @@ func result(fn func() (any, error)) (out *C.char) {
 	value, err := fn()
 	envelope := map[string]any{"ok": true, "result": value}
 	if err != nil {
-		envelope = map[string]any{"ok": false, "error": err.Error()}
+		envelope = map[string]any{"ok": false, "error": err.Error(), "error_code": bridge.ErrorCode(err)}
 	}
 	b, err := json.Marshal(envelope)
 	if err != nil {

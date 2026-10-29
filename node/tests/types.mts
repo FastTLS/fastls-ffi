@@ -1,5 +1,22 @@
 import { Session, ServerSentEvent, type SSEOptions, type SSEStream, type RequestOptions, type Response, type StreamResponse } from '@fastls/fastls';
 import { fetch, type FetchResponse } from '@fastls/fastls';
+import { ProfileSpec, type AddressPolicy } from '@fastls/fastls';
+
+async function capabilities() {
+  const profileSpec = new ProfileSpec({ schema_version: 1 });
+  const addressPolicy: AddressPolicy = { allow_hosts: ['example.com'], deny_cidrs: ['127.0.0.0/8'] };
+  const session = new Session({ profileSpec, addressPolicy });
+  await session.get('https://example.com', { profileSpec });
+  await session.closeAsync();
+  const h3 = new Session({ httpVersion: 'h3' });
+  await h3.fetch('https://example.com', { httpVersion: 'h3' });
+  await h3.closeAsync();
+  // @ts-expect-error Address policy belongs to Session creation.
+  session.get('https://example.com', { addressPolicy });
+  // @ts-expect-error Raw objects must use the explicit ProfileSpec wrapper.
+  session.get('https://example.com', { profileSpec: { schema_version: 1 } });
+}
+void capabilities;
 
 async function fetchConsumer(session: Session) {
   const response: FetchResponse = await fetch(new URL('https://example.com'), { profile: 'chrome/156/windows', headers: new Headers({ X: 'yes' }) });

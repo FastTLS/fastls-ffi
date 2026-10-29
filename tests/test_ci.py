@@ -73,6 +73,20 @@ class FormalModuleInputs(unittest.TestCase):
         info['module_graph'][0]['Sum']='h1:changed'
         with self.assertRaisesRegex(ValueError,'formal module differs'):resolve(module,info)
 
+    def test_public_pseudo_version_binds_exact_reviewed_commit(self):
+        path='github.com/FastTLS/fastls'
+        source=self.downloaded.pop((path,'v0.1.1'))
+        version='v0.1.3-0.20261029044750-'+('a'*12)
+        self.selected[0]['Version']=version;source['Version']=version
+        source.pop('VersionTag');source['VersionCommit']=dict(version=version,commit='a'*40)
+        self.downloaded[(path,version)]=source
+        self.assertTrue(self.validate())
+        source['VersionCommit']['commit']='b'*40
+        with self.assertRaisesRegex(RuntimeError,'origin/tag'):self.validate()
+        source['VersionCommit']['commit']='a'*40
+        source['VersionCommit']['version']='refs/heads/main'
+        with self.assertRaisesRegex(RuntimeError,'origin/tag'):self.validate()
+
 
 class DependencyGate(unittest.TestCase):
     def test_release_mode_cannot_select_local_or_unknown_dependencies(self):

@@ -4,6 +4,7 @@ from .api import request, get, post, put, patch, delete, head, options
 from .headers import Headers
 from .cookies import Cookies
 from .timeout import Timeout
+from .profiles import ProfileSpec
 from .aio import ClientSession, ClientResponse
 from .sse import ServerSentEvent, SSEStream, AsyncSSEStream
 
@@ -13,3 +14,4 @@ from .websocket import WebSocket, AsyncWebSocket, WebSocketClosed
 __all__ += ["WebSocket", "AsyncWebSocket", "WebSocketClosed"]
 __all__ += ["request", "get", "post", "put", "patch", "delete", "head", "options"]
 __all__ += ["ClientSession", "ClientResponse"]
+__all__ += ["ProfileSpec"]

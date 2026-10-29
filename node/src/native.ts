@@ -73,6 +73,7 @@ function pinLibrary(path: string): void {
 
 export class Native {
   private functions: Record<string, NativeFunction> = {};
+  readonly transportOptionsAvailable: boolean = false;
   readonly notificationsAvailable: boolean;
   readonly websocketAvailable: boolean;
   readonly path: string;
@@ -115,6 +116,12 @@ export class Native {
       this.functions.read = lib.func("int fastls_read(uint64_t handle, _Out_ void *buffer, size_t capacity, _Out_ size_t *length)");
       this.functions.write = lib.func("int fastls_write(uint64_t handle, const void *buffer, size_t length, int end)");
       const features = new Set(this.call<string[]>("features"));
+      if (features.has("transport_options_v1")) {
+        try {
+          this.functions.transport_create_with_options = lib.func("void *fastls_transport_create_with_options(void *json, size_t length)");
+          this.transportOptionsAvailable = true;
+        } catch { /* Optional symbol: old default transport stays loadable. */ }
+      }
       if (features.has("transport_context_v1")) {
         this.functions.transport_create = lib.func("void *fastls_transport_create(void)");
       }
@@ -151,23 +158,36 @@ export class Native {
   call<T = unknown>(name: string, ...args: unknown[]): T {
     const pointer = this.functions[name](...args);
     if (!pointer) throw new FastlsError("native library returned a null result");
-    let envelope: { ok: boolean; result: T; error?: string };
+    let envelope: { ok: boolean; result: T; error?: string; error_code?: string };
     try {
       const json = koffi.decode.string(pointer);
       // Starts, sessions and notification batches contain uint64 handles. Catalogs, headers
       // and info metadata use strings and bounded numeric fields; avoid the
       // allocating JS numeric parser on every poll and catalog lookup.
-      envelope = (name === "start" || name === "ws_start" || name === "session_create" || name === "session_events" ? parseNativeJSON(json) : JSON.parse(json)) as typeof envelope;
+      envelope = (name === "start" || name === "ws_start" || name === "session_create" || name === "transport_create" || name === "transport_create_with_options" || name === "session_events" ? parseNativeJSON(json) : JSON.parse(json)) as typeof envelope;
     } finally {
       this.functions.free(pointer);
     }
-    if (!envelope?.ok) throw new FastlsError(envelope?.error ?? "invalid native result");
+    if (!envelope?.ok) {
+      const error = new FastlsError(envelope?.error ?? "invalid native result");
+      error.code = envelope?.error_code;
+      throw error;
+    }
     return envelope.result;
   }
 
   start(input: unknown): bigint {
     const raw = encodeNativeJSON(input);
     return asHandle(this.call("start", raw, raw.length));
+  }
+
+  requireCapabilities(required: readonly string[]): void {
+    const features = new Set(this.call<string[]>("features"));
+    if (!this.transportOptionsAvailable || required.some(name => !features.has(name))) {
+      const error = new FastlsError("native transport capability is unavailable");
+      error.code = "unsupported_capability";
+      throw error;
+    }
   }
 
   wsStart(input: unknown): bigint {

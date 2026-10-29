@@ -16,7 +16,8 @@
     "test_websocket.py": "d4b840308fcf62ae659cc95137c6cfe7364c17f39e2b884963da51a144debf28",
     "test_websocket_cookies.py": "f88adbf0e134795ecc183a008461fbe581e453f8ecb13c1d52f9db086f08995c",
     "test_response_metadata.py": "de73969b2b693655c0000760bd39347c2b32b2485c6ece4feba78cd34dc30c39",
-    "test_sdk_sessions.py": "21c43ea4882d9b28fecdb29a57c92bbf72e0dc0f0908a8a0184ffe364d6c7343"
+    "test_sdk_sessions.py": "21c43ea4882d9b28fecdb29a57c92bbf72e0dc0f0908a8a0184ffe364d6c7343",
+    "test_capabilities.py": "20e4643b026e7cd880c2690b21de5d06d8eb5ca8c243a9ad43e25cfcd89de146"
   },
   "additionalSuites": {
     "test_websocket_cookies.py": "Integrated Node Cookie contract from 7788ff8",

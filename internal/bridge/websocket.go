@@ -96,6 +96,13 @@ func (e *Engine) StartWebSocket(raw []byte) (uint64, error) {
 	if dec.Decode(new(any)) != io.EOF {
 		return 0, errors.New("expected one WebSocket JSON object")
 	}
+	configuration, err := e.transportConfiguration(in.Session)
+	if err != nil {
+		return 0, err
+	}
+	if configuration.policy != nil || configuration.spec != nil || configuration.version != fastls.HTTPVersionAuto {
+		return 0, unsupported()
+	}
 	u, err := url.Parse(in.URL)
 	if err != nil || u.Hostname() == "" || u.User != nil || u.Fragment != "" || (u.Scheme != "ws" && u.Scheme != "wss") {
 		return 0, errors.New("url must be an absolute ws/wss URL without credentials or fragment")

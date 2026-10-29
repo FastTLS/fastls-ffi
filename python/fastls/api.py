@@ -11,6 +11,7 @@ from .client import Response, Session
 def request(method: str, url: str, *, library: str | PathLike[str] | None = None,
             ca_file: str | PathLike[str] | None = None, cookies: bool = True,
             notifications: Literal["auto", "required", "poll"] = "auto",
+            address_policy: dict | None = None,
             **kwargs: Any) -> Response:
     """Send a request using a temporary session.
 
@@ -19,7 +20,7 @@ def request(method: str, url: str, *, library: str | PathLike[str] | None = None
     or connections. With stream=True, close the response to release its session.
     Use Session for reuse and advanced APIs.
     """
-    session = Session(library=library, ca_file=ca_file, cookies=cookies, notifications=notifications)
+    session = Session(library=library, ca_file=ca_file, cookies=cookies, notifications=notifications, address_policy=address_policy)
     try:
         response = session.request(method, url, **kwargs)
         if kwargs.get("stream"):

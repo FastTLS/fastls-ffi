@@ -1,5 +1,8 @@
 import fastls = require('@fastls/fastls');
 
+const configured = { profileSpec: new fastls.ProfileSpec({ schema_version: 1 }), httpVersion: 'auto' } satisfies fastls.SessionOptions;
+void configured;
+
 const options: fastls.SessionOptions = { timeoutMs: 1000, cookies: false, notifications: 'required', proxy: 'https://127.0.0.1:8080', proxyCaFile: '/path/to/proxy-ca.pem' };
 function consume(session: fastls.Session): Promise<fastls.Response> {
   return session.get('https://example.com', { headers: { X: 'value' }, proxy: null });

@@ -272,6 +272,7 @@ def run(stage="all"):
             execute("python-source", [sys.executable, "tests/test_python.py"])
             execute("api-source", [sys.executable, "tests/test_api.py"])
             execute("sdk-sessions-source", [sys.executable, "tests/test_sdk_sessions.py"])
+            execute("capabilities-source", [sys.executable, "tests/test_capabilities.py"])
             execute("stability-source", [sys.executable, "tests/test_stability.py"])
             execute("network-source", [sys.executable, "tests/test_network.py"])
             execute("pooling-source", [sys.executable, "tests/test_pooling.py"])
@@ -299,7 +300,7 @@ def run(stage="all"):
             seconds = extended_soak_seconds(env)
             soak_env = dict(env, FASTLS_STABILITY_SECONDS=str(seconds), FASTLS_TEST_LABEL="extended")
             runner.results["requested_soak_seconds"] = seconds
-            execute("extended-soak", [sys.executable, "tests/test_stability.py", "Stability.test_soak_and_resource_recovery"], command_env=soak_env, timeout=seconds + 180)
+            execute("extended-soak", [sys.executable, "tests/capability_resource_soak.py"], command_env=soak_env, timeout=seconds + 180)
         verify_inputs(target, sources)
         success = True
     except (RuntimeError, ValueError, OSError, KeyError) as error:

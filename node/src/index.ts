@@ -1,4 +1,6 @@
 export { Session } from "./session.js";
+export { ProfileSpec } from "./profiles.js";
+export type { AddressPolicy } from "./profiles.js";
 export { fetch } from "./fetch.js";
 export type { FetchOptions, FetchResponse } from "./fetch.js";
 export type { SessionOptions, RequestOptions, DuplexOptions, Stats } from "./session.js";

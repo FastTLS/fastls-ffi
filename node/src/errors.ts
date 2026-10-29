@@ -1,5 +1,6 @@
 export class FastlsError extends Error {
   override name = "FastlsError";
+  code?: string | number;
 }
 export class FastlsHTTPError extends FastlsError {
   override name = "FastlsHTTPError";
@@ -20,12 +21,14 @@ export function responseError(info: { error?: string; error_code?: string; timeo
   const message = info.error ?? "native request failed";
   if (info.error_code === "timeout") return new FastlsTimeoutError(message, (info.timeout_phase ?? "total") as TimeoutPhase);
   if (info.error_code === "decode_error") return new FastlsDecodeError(message);
-  return new FastlsError(message);
+  const error = new FastlsError(message);
+  error.code = info.error_code;
+  return error;
 }
 
 export class AbortError extends FastlsError {
   override name = "AbortError";
-  readonly code = "ABORT_ERR";
+  override readonly code = "ABORT_ERR";
   constructor(message = "The request was aborted", options?: ErrorOptions) {
     super(message, options);
   }

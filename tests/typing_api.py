@@ -18,6 +18,10 @@ async def async_consumer() -> None:
 
 
 if TYPE_CHECKING:
+    spec = fastls.ProfileSpec({"schema_version": 1})
+    configured = fastls.Session(profile_spec=spec, address_policy={"allow_hosts": ["example.com"]})
+    configured.get("https://example.com", profile_spec=spec, http_version="auto")
+    forced_h3 = fastls.AsyncSession(http_version="h3")
     query: dict[str, str] = {"q": "hello"}
     repeated: dict[str, list[str]] = {"tag": ["a", "b"]}
     fastls.get("https://example.com/", params=query)

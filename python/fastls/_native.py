@@ -8,7 +8,9 @@ import threading
 
 
 class FastlsError(Exception):
-    pass
+    def __init__(self, message, *, code=None):
+        super().__init__(message)
+        self.code = code
 
 
 class FastlsTimeoutError(FastlsError):
@@ -27,7 +29,7 @@ def raise_response_error(info):
         raise FastlsTimeoutError(message, info.get("timeout_phase", "total"))
     if info.get("error_code") == "decode_error":
         raise FastlsDecodeError(message)
-    raise FastlsError(message)
+    raise FastlsError(message, code=info.get("error_code"))
 
 
 _libraries = {}
@@ -72,6 +74,8 @@ class Native:
             signatures["fastls_stats"] = []
         if hasattr(self.lib, "fastls_transport_create"):
             signatures["fastls_transport_create"] = []
+        if hasattr(self.lib, "fastls_transport_create_with_options"):
+            signatures["fastls_transport_create_with_options"] = [C.c_char_p, C.c_size_t]
         if hasattr(self.lib, "fastls_features"):
             signatures["fastls_features"] = []
         if hasattr(self.lib, "fastls_ws_start"):
@@ -131,7 +135,7 @@ class Native:
         finally:
             self.lib.fastls_free(ptr)
         if not envelope["ok"]:
-            raise FastlsError(envelope["error"])
+            raise FastlsError(envelope["error"], code=envelope.get("error_code"))
         return envelope["result"]
 
     def start(self, request):

@@ -541,6 +541,16 @@ func main() {
 		log.Fatal(err)
 	}
 	f := &fixture{entries: make(map[string]*observation)}
+	h3URL, closeH3, err := h3Fixture(f, cert)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer closeH3()
+	wireURL, closeWire, err := wireFixture(cert)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer closeWire()
 	plain := httptest.NewUnstartedServer(f)
 	plain.Config.ConnContext = connectionContext
 	plain.Start()
@@ -573,7 +583,7 @@ func main() {
 	wrongWS.Config.ErrorLog = log.New(io.Discard, "", 0)
 	wrongWS.StartTLS()
 	servers = append(servers, wrongWS)
-	json.NewEncoder(os.Stdout).Encode(map[string]string{"http": plain.URL, "https1": urls[0], "https2": urls[1], "ca_file": ca, "wrong_ca_file": wrong,
+	json.NewEncoder(os.Stdout).Encode(map[string]string{"http": plain.URL, "https1": urls[0], "https2": urls[1], "https3": h3URL, "wire": wireURL, "ca_file": ca, "wrong_ca_file": wrong,
 		"proxy_ca_file": proxyFiles["ca"], "proxy_cert_file": proxyFiles["cert"], "proxy_key_file": proxyFiles["key"],
 		"proxy_wrong_host_ca_file": wrongHost["ca"], "proxy_wrong_host_cert_file": wrongHost["cert"], "proxy_wrong_host_key_file": wrongHost["key"], "ws_wrong_host": wrongWS.URL})
 	io.Copy(io.Discard, os.Stdin)

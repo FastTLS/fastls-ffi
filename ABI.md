@@ -1,5 +1,10 @@
 # C ABI v1
 
+新增能力的开发候选契约见 [CAPABILITIES.md](CAPABILITIES.md)：
+`fastls_transport_create_with_options(data, length)` 使用独立能力标识，
+校验成功后才返回传输 owner；可选符号缺失时不得回退忽略配置。
+旧符号及 ABI 号不变，失败 envelope 新增可选 `error_code`。
+
 
 以构建生成的 `fastls.h` 为准确声明。接口均为 C 调用约定：
 

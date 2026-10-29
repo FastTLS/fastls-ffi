@@ -7,6 +7,10 @@ import subprocess
 
 OWN = {'github.com/FastTLS/' + name: name for name in ('fastls', 'ftransport', 'imitate')}
 
+def pseudo_version(version, commit):
+    return bool(re.fullmatch(r'v\d+\.\d+\.\d+-(?:0\.)?\d{14}-[0-9a-f]{12}', version) and
+                re.fullmatch(r'[0-9a-f]{40}', commit) and version.endswith('-'+commit[:12]))
+
 
 def json_stream(text):
     decoder = json.JSONDecoder(); offset = 0
@@ -33,11 +37,14 @@ def validate(selected, downloaded, reviewed):
         record = {k: source[k] for k in ('Path', 'Version', 'Sum', 'GoModSum')}
         if source.get('Origin'): record['Origin'] = source['Origin']
         if source.get('VersionTag'): record['VersionTag'] = source['VersionTag']
+        if source.get('VersionCommit'): record['VersionCommit'] = source['VersionCommit']
         if path in OWN:
             origin = source.get('Origin', {}); name = OWN[path]
             if origin.get('VCS') != 'git' or origin.get('Hash') != reviewed.get(name + '_ref') or not re.fullmatch(r'[0-9a-f]{40}', origin.get('Hash', '')):
                 raise RuntimeError('formal module differs from reviewed source: ' + path)
-            if origin.get('URL', '').removesuffix('.git') != 'https://github.com/FastTLS/' + name or source.get('VersionTag') != dict(ref='refs/tags/' + version,commit=origin['Hash']):
+            tag_ok = source.get('VersionTag') == dict(ref='refs/tags/' + version,commit=origin['Hash'])
+            commit_ok = pseudo_version(version,origin['Hash']) and source.get('VersionCommit') == dict(version=version,commit=origin['Hash'])
+            if origin.get('URL', '').removesuffix('.git') != 'https://github.com/FastTLS/' + name or not (tag_ok or commit_ok):
                 raise RuntimeError('formal module origin/tag mismatch: ' + path)
             directory = Path(source['Dir'])
             record['license_files'] = {p.name: hashlib.sha256(p.read_text(encoding='utf-8').replace('\r\n', '\n').encode()).hexdigest()
@@ -63,6 +70,15 @@ def capture(root, env):
             origin=source.get('Origin',{})
             if not origin.get('URL') or not origin.get('Hash'):
                 raise RuntimeError('formal module source origin missing: '+module['Path'])
+            if pseudo_version(module['Version'],origin['Hash']):
+                # Go resolves the full reviewed commit to its canonical public
+                # pseudo-version; existing checksum verification still applies.
+                canonical=json.loads(run('go','list','-m','-json',module['Path']+'@'+origin['Hash']))
+                if canonical.get('Version')!=module['Version']:
+                    raise RuntimeError('formal pseudo-version/source mismatch: '+module['Path'])
+                source['VersionCommit']=dict(version=module['Version'],commit=origin['Hash'])
+                downloaded[index]=source
+                continue
             ref='refs/tags/'+(origin['Subdir']+'/' if origin.get('Subdir') else '')+module['Version']
             refs=dict(line.split()[::-1] for line in run('git','ls-remote','--tags',origin['URL'],ref,ref+'^{}').splitlines())
             commit=refs.get(ref+'^{}',refs.get(ref))

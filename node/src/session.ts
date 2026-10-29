@@ -13,8 +13,11 @@ import { Notifier } from "./notifications.js";
 import { prepare, type QueryParams, type JSONValue, type FormFields, type MultipartFiles } from "./request-options.js";
 import { WebSocket, wsBudget, type WebSocketOptions } from "./websocket.js";
 import { fetchWithSession, type FetchOptions, type FetchResponse } from "./fetch.js";
+import { ProfileSpec, type AddressPolicy } from "./profiles.js";
 
 export interface RequestOptions {
+  profileSpec?: ProfileSpec;
+  httpVersion?: "auto" | "h3";
   /** Undefined inherits the session proxy; null or an empty string connects directly. */
   proxy?: string | null;
   /** Undefined inherits proxy trust; null uses system roots. Only HTTPS proxies use this file. */
@@ -41,6 +44,9 @@ export interface RequestOptions {
 export type DuplexOptions = Omit<RequestOptions, "body" | "duplex" | "json" | "form" | "files">;
 
 export interface SessionOptions {
+  addressPolicy?: AddressPolicy;
+  profileSpec?: ProfileSpec;
+  httpVersion?: "auto" | "h3";
   /** HTTP/HTTPS CONNECT, socks5 (local DNS), or socks5h (proxy DNS) URL. */
   proxy?: string | null;
   /** Private roots for proxy TLS, independent of the target's caFile. */
@@ -133,7 +139,11 @@ export class Session {
     this.proxyCaPem = proxyTrust(options.proxyCaFile);
     const notifications = options.notifications === undefined ? "auto" : options.notifications;
     if (!["auto", "required", "poll"].includes(notifications)) throw new TypeError("notifications must be auto, required or poll");
-    this.profile = options.profile ?? "chrome/156/windows";
+    if (options.profile !== undefined && typeof options.profile !== "string") throw new TypeError("profile must be a selector string");
+    if (options.profileSpec !== undefined && !(options.profileSpec instanceof ProfileSpec)) throw new TypeError("profileSpec must be a ProfileSpec");
+    if (options.profile !== undefined && options.profileSpec !== undefined) throw new TypeError("profile and profileSpec are mutually exclusive");
+    if (options.httpVersion !== undefined && !["auto", "h3"].includes(options.httpVersion)) throw new TypeError("httpVersion must be auto or h3");
+    this.profile = options.profile ?? (options.profileSpec !== undefined || options.httpVersion === "h3" ? "" : "chrome/156/windows");
     this.timeouts = timeoutFields(options.timeoutMs ?? 30000);
     this.decodeContent = options.decodeContent ?? true;
     this.maxDecodedBytes = options.maxDecodedBytes ?? 256 * 1024 * 1024;
@@ -147,7 +157,30 @@ export class Session {
     if (notifications === "required" && !supported) throw new FastlsError("notifications require a newer Fastls native library");
     this.notificationMode = notifications !== "poll" && supported ? "async-events" : "poll";
     if (!this.native.call<string[]>("features").includes("transport_context_v1")) throw new FastlsError("SDK-owned sessions require the Fastls 0.1.4 native library or newer");
-    this.handle = asHandle(this.native.call("transport_create"));
+    const configuration: Record<string, unknown> = { schema_version: 1 };
+    const required: string[] = [];
+    if (options.addressPolicy !== undefined) {
+      if (!options.addressPolicy || typeof options.addressPolicy !== "object" || Array.isArray(options.addressPolicy)) throw new TypeError("addressPolicy must be an object");
+      configuration.address_policy = options.addressPolicy;
+      required.push("transport_address_policy_v1");
+    }
+    if (options.profileSpec !== undefined) {
+      configuration.profile_spec = options.profileSpec.toJSON();
+      required.push("profile_spec_v1");
+    }
+    if (options.httpVersion === "h3") {
+      configuration.http_version = "h3";
+      required.push("http3_v1");
+    }
+    if (required.length) {
+      this.native.requireCapabilities(required);
+      if (options.profile !== undefined) configuration.profile = options.profile;
+      if (this.proxy && (options.addressPolicy !== undefined || options.httpVersion === "h3")) {
+        const error = new FastlsError("unsupported transport combination");error.code = "unsupported_capability";throw error;
+      }
+      const raw = encodeNativeJSON(configuration);
+      this.handle = asHandle(this.native.call("transport_create_with_options", raw, raw.length));
+    } else this.handle = asHandle(this.native.call("transport_create"));
     this.cookies = new Cookies(() => this.ensureOpen(), options.cookies !== false);
   }
 
@@ -187,6 +220,7 @@ export class Session {
 
   private begin(method: string, url: string, options: RequestOptions, manual = false, completeHeaders = false): { transfer: Transfer; body: UploadBody | undefined; streaming: boolean } {
     this.ensureOpen();
+    if ("addressPolicy" in options) throw new TypeError("addressPolicy is a Session creation option");
     if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) {
       throw new TypeError("signal must be an AbortSignal");
     }
@@ -238,9 +272,19 @@ export class Session {
         trailers[name] = [...values];
       }
     }
+    if (options.profileSpec !== undefined && !(options.profileSpec instanceof ProfileSpec)) throw new TypeError("profileSpec must be a ProfileSpec");
+    if (options.profileSpec !== undefined && options.profile !== undefined) throw new TypeError("profile and profileSpec are mutually exclusive");
+    const required: string[] = [];
+    if (options.profileSpec !== undefined) required.push("profile_spec_v1");
+    if (options.httpVersion !== undefined) {
+      if (!["auto", "h3"].includes(options.httpVersion)) throw new TypeError("httpVersion must be auto or h3");
+      required.push("http3_v1");
+    }
+    if (required.length) this.native.requireCapabilities(required);
     const handle = this.native.start({
       session: this.handle, url, method, headers, trailers, proxy: proxy || undefined, proxy_ca_pem: proxyCaPem,
-      profile: options.profile ?? this.profile,
+      profile: options.profile ?? (options.profileSpec !== undefined || options.httpVersion === "h3" ? "" : this.profile),
+      profile_spec: options.profileSpec?.toJSON(), http_version: options.httpVersion,
       ...timeouts, decode_content: decodeContent, max_decoded_bytes: maxDecodedBytes,
       disable_redirect: true,
       ca_pem: this.caPem,

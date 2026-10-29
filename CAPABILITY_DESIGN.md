@@ -1,4 +1,14 @@
-# Address policy and complete profile.Spec: S3 design decision
+# Transport capability contract and historical S3 decision
+
+Current source candidate: policy, complete Spec and explicit H3 are implemented
+through an optional ABI-v1 constructor and independent feature markers. The
+frozen contract, limits and evidence requirements are in
+[CAPABILITIES.md](CAPABILITIES.md). Existing release libraries do not gain the
+features from a documentation update. The following is the historical S3
+design snapshot; its proposed names and implementation status describe S3,
+not the current candidate.
+
+## Historical S3 design
 
 Status: design only, based on FFI `3aaa273`, core `cb551d8` and transport
 `d5afcd1`. Neither capability is implemented or advertised by this commit.

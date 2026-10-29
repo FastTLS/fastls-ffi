@@ -3,6 +3,7 @@ from collections.abc import Iterable, AsyncIterable, Mapping, Sequence
 from os import PathLike
 from typing import Any, BinaryIO, Literal, TypedDict, Union
 from .timeout import Timeout
+from .profiles import ProfileSpec
 
 Path = Union[str, PathLike[str]]
 Scalar = Union[str, bytes, int, float, None]
@@ -19,6 +20,8 @@ class RequestOptions(TypedDict, total=False):
     files: Union[Mapping[str, File], Sequence[tuple[str, File]], None]
     trailers: Union[Mapping[str, Union[str, list[str], tuple[str, ...]]], None]
     profile: Union[str, None]
+    profile_spec: Union[ProfileSpec, None]
+    http_version: Union[Literal["auto", "h3"], None]
     timeout: Union[float, Timeout, None]
     allow_redirects: bool
     max_redirects: int
@@ -34,7 +37,10 @@ class SyncRequestOptions(RequestOptions, total=False):
 
 
 class SessionOptions(TypedDict, total=False):
-    profile: str
+    profile: Union[str, None]
+    profile_spec: Union[ProfileSpec, None]
+    address_policy: Union[Mapping[str, Any], None]
+    http_version: Literal["auto", "h3"]
     headers: Union[Mapping[str, str], None]
     timeout: Union[float, Timeout]
     library: Union[Path, None]

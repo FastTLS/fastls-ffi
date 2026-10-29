@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "id": "chrome/156/windows",
+  "metadata": {
+    "kind": "browser",
+    "family": "chrome",
+    "product": "chrome",
+    "product_version": "156",
+    "engine_version": "156",
+    "platform": "windows",
+    "device": "desktop"
+  },
+  "tls": {
+    "min_version": "0x0303",
+    "max_version": "0x0304",
+    "record_version": "0x0301",
+    "legacy_version": "0x0303",
+    "cipher_suites": [
+      "0x0a0a",
+      "0x1301",
+      "0x1302",
+      "0x1303",
+      "0xc02b",
+      "0xc02f",
+      "0xc02c",
+      "0xc030",
+      "0xcca9",
+      "0xcca8",
+      "0xc013",
+      "0xc014",
+      "0x009c",
+      "0x009d",
+      "0x002f",
+      "0x0035"
+    ],
+    "extensions": [
+      {
+        "id": "0x0a0a"
+      },
+      {
+        "id": "0xff01"
+      },
+      {
+        "id": "0x000b",
+        "point_formats": "AA=="
+      },
+      {
+        "id": "0x0000"
+      },
+      {
+        "id": "0x44cd",
+        "alpn": [
+          "h2"
+        ]
+      },
+      {
+        "id": "0x0005"
+      },
+      {
+        "id": "0x002d",
+        "psk_modes": "AQ=="
+      },
+      {
+        "id": "0x0017"
+      },
+      {
+        "id": "0xfe0d",
+        "strategy": "grease-ech"
+      },
+      {
+        "id": "0x0010",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      },
+      {
+        "id": "0x001b",
+        "compression_algorithms": [
+          "0x0002"
+        ]
+      },
+      {
+        "id": "0x000d",
+        "signature_algorithms": [
+          "0x0403",
+          "0x0804",
+          "0x0401",
+          "0x0503",
+          "0x0805",
+          "0x0501",
+          "0x0806",
+          "0x0601"
+        ]
+      },
+      {
+        "id": "0x000a",
+        "groups": [
+          "0x0a0a",
+          "0x11ec",
+          "0x001d",
+          "0x0017",
+          "0x0018"
+        ]
+      },
+      {
+        "id": "0x0012"
+      },
+      {
+        "id": "0x0023"
+      },
+      {
+        "id": "0x0033",
+        "key_shares": [
+          "0x0a0a",
+          "0x11ec",
+          "0x001d"
+        ]
+      },
+      {
+        "id": "0x002b",
+        "versions": [
+          "0x0a0a",
+          "0x0304",
+          "0x0303"
+        ]
+      },
+      {
+        "id": "0x0a0a"
+      }
+    ],
+    "extension_order": "fixed",
+    "grease_policy": "per-connection",
+    "session_policy": "disabled"
+  },
+  "http2": {
+    "settings": [
+      {
+        "id": 1,
+        "value": 65536
+      },
+      {
+        "id": 2,
+        "value": 0
+      },
+      {
+        "id": 4,
+        "value": 6291456
+      },
+      {
+        "id": 6,
+        "value": 262144
+      }
+    ],
+    "connection_flow": 15663105,
+    "header_priority": {
+      "stream_id": 0,
+      "dependency": 0,
+      "weight": 256,
+      "exclusive": true
+    },
+    "priority_frames": null
+  },
+  "headers": {
+    "defaults": [
+      {
+        "name": "Accept",
+        "values": [
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+        ]
+      },
+      {
+        "name": "Sec-Ch-Ua",
+        "values": [
+          "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\""
+        ]
+      },
+      {
+        "name": "Sec-Ch-Ua-Mobile",
+        "values": [
+          "?0"
+        ]
+      },
+      {
+        "name": "Sec-Ch-Ua-Platform",
+        "values": [
+          "\"Windows\""
+        ]
+      },
+      {
+        "name": "Sec-Fetch-Dest",
+        "values": [
+          "document"
+        ]
+      },
+      {
+        "name": "Sec-Fetch-Mode",
+        "values": [
+          "navigate"
+        ]
+      },
+      {
+        "name": "Sec-Fetch-Site",
+        "values": [
+          "none"
+        ]
+      },
+      {
+        "name": "Sec-Fetch-User",
+        "values": [
+          "?1"
+        ]
+      },
+      {
+        "name": "Upgrade-Insecure-Requests",
+        "values": [
+          "1"
+        ]
+      }
+    ],
+    "order": [
+      "pragma",
+      "host",
+      "connection",
+      "cache-control",
+      "device-memory",
+      "viewport-width",
+      "rtt",
+      "downlink",
+      "ect",
+      "sec-ch-ua",
+      "sec-ch-ua-mobile",
+      "sec-ch-ua-full-version",
+      "sec-ch-ua-arch",
+      "sec-ch-ua-platform",
+      "sec-ch-ua-platform-version",
+      "sec-ch-ua-model",
+      "upgrade-insecure-requests",
+      "user-agent",
+      "accept",
+      "sec-fetch-site",
+      "sec-fetch-mode",
+      "sec-fetch-user",
+      "sec-fetch-dest",
+      "referer",
+      "accept-encoding",
+      "accept-language",
+      "cookie",
+      "priority"
+    ],
+    "pseudo_order": [
+      ":method",
+      ":authority",
+      ":scheme",
+      ":path"
+    ],
+    "extra_order": "sorted"
+  },
+  "identity": {
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+  },
+  "capabilities": {
+    "protocols": [
+      "tls",
+      "http1",
+      "http2"
+    ],
+    "required_features": null,
+    "advertised_only": [],
+    "limitations": [
+      "Materialized from historical recipe; no new live-browser verification. Cold connections only; no fabricated PSK identities."
+    ]
+  },
+  "evidence": null
+}

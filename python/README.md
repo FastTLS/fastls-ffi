@@ -1,5 +1,22 @@
 # fastls Python SDK
 
+开发候选新增 Session `address_policy`、`profile_spec=ProfileSpec(...)` 和
+`http_version="h3"`，同步/异步入口共用契约。请求也可指定完整 Spec 或显式协议；
+策略只在创建 Session 时配置。现有发布库不具备这些新能力，缺能力会明确报错。
+完整范围和限制见 [能力契约](../CAPABILITIES.md)。
+
+```python
+import json
+from pathlib import Path
+from fastls import Session, ProfileSpec
+
+spec = ProfileSpec(json.loads(Path("browser.json").read_text()))
+with Session(profile_spec=spec) as session:
+    response = session.get("https://example.com")
+with Session(http_version="h3") as session:
+    response = session.get("https://example.com")  # 必须由目标支持 H3
+```
+
 通过原生 Fastls 动态库发送带浏览器配置的 HTTP 请求，支持同步、asyncio、流式上传下载、HTTP/2 全双工、SSE 和 WebSocket。Python 发行包名与导入名均为 `fastls`，仓库名为 `fastls-ffi`。本文对应 Python **0.1.4**，发行文件与版本状态以 PyPI 为准。
 
 ## 安装与平台
