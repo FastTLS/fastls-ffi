@@ -80,6 +80,16 @@ class Selection(unittest.TestCase):
             with self.subTest(filename=filename):
                 self.assertEqual(test_plan.choose([filename], requested='patch')['tier'], 'minor')
 
+    def test_sdk_auth_retry_cookie_and_session_changes_raise_risk_floor(self):
+        for filename in ('python/fastls/client.py', 'python/fastls/auth.py', 'python/fastls/cookies.py',
+                         'python/fastls/redirects.py', 'python/fastls/retry.py', 'python/fastls/profile_store.py',
+                         'node/src/session.ts', 'node/src/retry.ts', 'node/src/cookies.ts', 'node/src/profile-store.ts'):
+            with self.subTest(filename=filename):
+                plan = test_plan.choose([filename], requested='patch')
+                self.assertEqual(plan['tier'], 'minor')
+                self.assertEqual(len(plan['matrix']), 5)
+                self.assertEqual(plan['extended'], ['race', 'soak'])
+
     def test_missing_baseline_and_unclassified_files_expand_coverage(self):
         for options in ({'uncertain': True}, {'override': True}):
             self.assertEqual(test_plan.choose(['README.md'], **options)['tier'], 'minor')

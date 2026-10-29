@@ -41,8 +41,11 @@ def choose(files, *, requested='auto', release=None, previous=None, uncertain=Fa
     tier = 'docs' if docs else 'patch'
     reasons = ['documentation only' if docs else 'ordinary change']
     fixture = any(p.startswith('cmd/ffi-fixture/') for p in files)
+    sdk_state = {'python/fastls/client.py', 'python/fastls/auth.py', 'python/fastls/cookies.py',
+                 'python/fastls/redirects.py', 'python/fastls/retry.py', 'python/fastls/profile_store.py',
+                 'node/src/session.ts', 'node/src/retry.ts', 'node/src/cookies.ts', 'node/src/profile-store.ts'}
     resource = any(p.endswith('.go') and not p.startswith('cmd/ffi-fixture/') or p in ('go.mod', 'go.sum', 'ci/dependencies.json') or
-                   any(word in p.lower() for word in ('pool', 'duplex', 'timeout', 'proxy', 'decode', 'websocket')) for p in files)
+                   p in sdk_state or any(word in p.lower() for word in ('pool', 'duplex', 'timeout', 'proxy', 'decode', 'websocket')) for p in files)
     packaging = any(p.startswith(('scripts/build', 'scripts/package', 'scripts/repair', 'scripts/native', 'scripts/module', 'scripts/release', 'scripts/prepare_pypi')) or
                     p in ('pyproject.toml', 'setup.py', 'setup.cfg', 'MANIFEST.in', 'LICENSE') or p.startswith('ci/') for p in files)
     unknown = any(not (p.endswith(('.md', '.go')) or p.startswith(('docs/', 'python/', 'node/', 'tests/', 'scripts/', 'benchmarks/', '.github/', 'ci/')) or

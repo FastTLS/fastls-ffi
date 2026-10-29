@@ -345,7 +345,9 @@ export class Session {
     const headers = mergeHeaders(this.headers, options.headers);
     const prepared = prepare(url, options, headers);
     url = prepared.url;
-    options = { ...options, headers, body: prepared.body, signal };
+    // Session close has its own established transfer error. Its signal only
+    // interrupts retry backoff; forwarding it as a caller abort changes that error.
+    options = { ...options, headers, body: prepared.body };
     for (const key of ["params", "json", "form", "files"] as const) delete options[key];
     const maximum = options.maxRedirects ?? 30;
     if (!Number.isSafeInteger(maximum) || maximum < 0) throw new RangeError("maxRedirects must be a non-negative integer");
