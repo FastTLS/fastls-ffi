@@ -34,7 +34,8 @@ def choose(files, *, requested='auto', release=None, previous=None, uncertain=Fa
     docs = bool(files) and all(p.endswith('.md') or p.startswith('docs/') for p in files)
     tier = 'docs' if docs else 'patch'
     reasons = ['documentation only' if docs else 'ordinary change']
-    resource = any(p.endswith('.go') or p in ('go.mod', 'go.sum', 'ci/dependencies.json') or
+    fixture = any(p.startswith('cmd/ffi-fixture/') for p in files)
+    resource = any(p.endswith('.go') and not p.startswith('cmd/ffi-fixture/') or p in ('go.mod', 'go.sum', 'ci/dependencies.json') or
                    any(word in p.lower() for word in ('pool', 'duplex', 'timeout', 'proxy', 'decode', 'websocket')) for p in files)
     packaging = any(p.startswith(('scripts/build', 'scripts/package', 'scripts/repair', 'scripts/native', 'scripts/module', 'scripts/release', 'scripts/prepare_pypi')) or
                     p in ('pyproject.toml', 'setup.py', 'setup.cfg', 'MANIFEST.in', 'LICENSE') or p.startswith('ci/') for p in files)
@@ -54,7 +55,7 @@ def choose(files, *, requested='auto', release=None, previous=None, uncertain=Fa
     python_adapter = 'python/fastls/_native.py' in files
     if python_adapter:
         reasons.append('Python native adapter requires all existing platform installations')
-    targets = TARGETS if tier == 'major' else TARGETS[:5] if tier == 'minor' or release or python_adapter else TARGETS[:2]
+    targets = TARGETS if tier == 'major' else TARGETS[:5] if tier == 'minor' or release or python_adapter or fixture else TARGETS[:2]
     node = tier != 'docs' and (tier in ('minor', 'major') or bool(release) or any(p.startswith('node/') or p.endswith('.go') for p in files))
     candidates = node and (tier in ('minor', 'major') or bool(release))
     extended = ['race', 'soak'] if tier in ('minor', 'major') else ['race'] if release else []

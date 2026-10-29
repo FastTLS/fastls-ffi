@@ -7,7 +7,7 @@
     "test_pooling.py": "cb067c75a805cce7ba6e46badf9c1cbe5d6489a1b8b871cbb051655196cadfc8",
     "test_cookies.py": "464475fa37e785469aaaf440fe0f85b566dadcdb81f9ecb87c618587a5c3eb64",
     "test_decode_timeouts.py": "f6ca6f951772f8af90bba39a0441811f97660f846ac2d932d51b7ac5b04650f8",
-    "test_upload.py": "bf3b188e04d2c8a3bbd11c3c0a85a313e43256fd9edb10f73cf98bb13826b729",
+    "test_upload.py": "876585b708e330ee39db7c91841802a515d79d10327df81c131a89b5def4d3c9",
     "test_duplex.py": "570df447c0b73acc62875263b9538430e28d2fec91d0e3555ffec2f84ccf6e8d",
     "test_sse.py": "d50638d18da1c22ae9795595c94e0081fbe996849d51f8fc1e8e99d9e21ae09b",
     "test_notifications.py": "1b35c407a5037bacf00391f0ee94b8d6da4daae8cd29f090535d0e3fed184a4e",

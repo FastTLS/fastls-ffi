@@ -275,6 +275,14 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewEncoder(w).Encode(map[string]any{"bytes": total, "sha256": fmt.Sprintf("%x", hash.Sum(nil)), "protocol": r.Proto, "length": r.ContentLength})
 	case "/upload-reject", "/upload-early-ok":
+		// Opt-in handshake for tests of an already-active producer. Closing a
+		// generator before its first next() does not execute its finally block.
+		if r.URL.Query().Get("active_producer") == "1" {
+			first := make([]byte, 1)
+			if _, err := io.ReadFull(r.Body, first); err != nil {
+				return
+			}
+		}
 		if r.URL.Path == "/upload-reject" {
 			w.WriteHeader(413)
 		} else {

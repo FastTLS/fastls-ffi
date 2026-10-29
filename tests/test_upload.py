@@ -222,7 +222,7 @@ class Upload(FixtureCase):
                     await asyncio.Event().wait()
                 finally: closed.set()
             async with self.session(async_=True) as session:
-                response = await session.post(self.fixture["https2"] + "/upload-reject", data=source())
+                response = await session.post(self.fixture["https2"] + "/upload-reject?active_producer=1", data=source())
                 self.assertEqual(response.status_code, 413)
                 self.assertTrue(closed.is_set())
                 sync_closed = []
@@ -230,7 +230,12 @@ class Upload(FixtureCase):
                     try:
                         while True: yield SLAB
                     finally: sync_closed.append(True)
-                response = await session.post(self.fixture["https2"] + "/upload-reject", data=sync_source())
+                # Require a real first byte before early rejection. This proves
+                # finalization of active work, without depending on scheduling.
+                unstarted = sync_source()
+                unstarted.close()
+                self.assertFalse(sync_closed)
+                response = await session.post(self.fixture["https2"] + "/upload-reject?active_producer=1", data=sync_source())
                 self.assertEqual(response.status_code, 413)
                 self.assertTrue(sync_closed)
                 # Early 2xx could be a duplex echo server. Refuse explicitly
