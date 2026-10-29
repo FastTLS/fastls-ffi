@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "source": "48a94192c1056fc91a21a9df3eebf96529b8f421",
+  "run_id": 40851118341,
+  "reason": "Only release-test infrastructure changes, including a Python-only proxy lab unused by the resource jobs. Production, dependencies, build, Go fixture and resource scenarios must match this source. Individual resource prerequisites must succeed. The original Node inventory and Python proxy failures remain failed and require fresh platform checks."
+}

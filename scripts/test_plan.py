@@ -105,7 +105,8 @@ def context(env):
         if not re.fullmatch(r'[0-9]+', duration) or not 300 <= int(duration) <= 7200:
             raise ValueError('Resource observation must be an integer in 300..7200 seconds')
         plan['soak_seconds'] = max(plan['soak_seconds'], int(duration))
-    if (env.get('GITHUB_ACTIONS') == 'true' and env.get('GITHUB_REF_TYPE') == 'tag'
+    if (env.get('GITHUB_ACTIONS') == 'true' and (env.get('GITHUB_REF_TYPE') == 'tag'
+            or env.get('GITHUB_REF') == 'refs/heads/main' and (ROOT / 'ci/resource-reuse.json').is_file())
             and plan['tier'] == 'minor' and not any(env.get(n) for n in
                 ('FASTLS_REF', 'FTRANSPORT_REF', 'IMITATE_REF', 'CERTIFICATION_SOAK_SECONDS'))):
         from release_reuse import find
@@ -116,7 +117,15 @@ def context(env):
             reused = None
         if reused:
             plan.update(extended=[], node_soak=False, resource_reuse=reused)
-            plan['reasons'].append('same-commit main race/resource evidence verified; fresh tag identity and installs remain required')
+            plan['reasons'].append('unchanged race/resource inputs and successful source jobs verified; fresh platform identity and installs remain required')
+            if env.get('GITHUB_REF_TYPE') == 'tag':
+                try:
+                    node_delivery = find(env, platform_only=True)
+                except (OSError, ValueError, KeyError):
+                    node_delivery = None
+                if node_delivery:
+                    plan.update(node=False, candidates=False, node_delivery_reuse=node_delivery)
+                    plan['reasons'].append('Node registry packages use the verified same-commit main artifacts; this tag publishes only fresh Python/C ABI artifacts')
     return plan
 
 

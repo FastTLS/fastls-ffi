@@ -17,11 +17,15 @@ The reviewed public core dependency is
 `v0.1.3-0.20261029044750-32699153caa1`. No unchanged service is republished.
 
 Release validation retains five-platform source and installed-package checks.
-A minor tag can reuse Linux race/resource checks only after verifying successful
-same-commit main CI, the workflow identity, and every required platform/resource
-job. Missing evidence keeps the full test plan. Tag-native bytes are separately
-built, identified and installed; prior resource observations do not certify their
-exact bytes. Major releases and explicit resource requests retain their checks.
+A minor tag can reuse Linux race/resource checks after verifying immutable source
+inputs, the workflow identity and every required source job. A pinned ancestor
+may supply individual successful resource jobs only when the entire source diff
+is limited to the reviewed release-test infrastructure and release notes; an
+unrelated failed job remains failed. Missing evidence keeps the full test plan.
+Node packages consume the separately verified same-commit main artifacts instead
+of being rebuilt by the Python tag. Tag-native bytes are separately built,
+identified and installed; prior resource observations do not certify their exact
+bytes. Major releases and explicit resource requests retain their checks.
 
 See [capabilities and limitations](CAPABILITIES.md) for the complete input contract.
 

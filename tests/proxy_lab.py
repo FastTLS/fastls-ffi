@@ -7,8 +7,10 @@ import socket
 import socketserver
 import ssl
 import struct
+import sys
 import threading
 import time
+import traceback
 from urllib.parse import quote
 
 
@@ -124,6 +126,9 @@ class ProxyLab(AbstractContextManager):
             with self.lock: self.sockets.add(upstream)
             try:
                 ready()
+                if isinstance(c, ssl.SSLSocket):
+                    self.relay_tls(c, upstream)
+                    return
                 readers = [c, upstream]
                 while readers:
                     active = [source for source in readers if isinstance(source,ssl.SSLSocket) and source.pending()]
@@ -138,13 +143,79 @@ class ProxyLab(AbstractContextManager):
             finally:
                 with self.lock: self.sockets.discard(upstream)
 
+    @staticmethod
+    def relay_tls(client, upstream):
+        # OS readability can represent only TLS control records. Blocking SSL
+        # recv can then stall application bytes and the other direction's EOF.
+        # Retain partial writes and drain accepted bytes before closing.
+        endpoints = (client, upstream)
+        for endpoint in endpoints:
+            endpoint.setblocking(False)
+        pending = {endpoint: bytearray() for endpoint in endpoints}
+        write_frames = {endpoint: None for endpoint in endpoints}
+        receive_wants_write, send_wants_read = set(), set()
+        eof = False
+        while not eof or any(pending.values()):
+            readers = [] if eof else [source for source in endpoints
+                if len(pending[upstream if source is client else client]) < 262144]
+            writers = [target for target in endpoints if pending[target] and target not in send_wants_read]
+            readable, writable, _ = select.select(
+                list(set(readers) | send_wants_read), list(set(writers) | receive_wants_write), [],
+                0 if client in readers and client.pending() else .1)
+            for source in readers:
+                ready = source in readable or source in writable and source in receive_wants_write
+                if source is client:
+                    ready = ready or bool(client.pending())
+                if not ready:
+                    continue
+                target = upstream if source is client else client
+                try:
+                    data = source.recv(min(65536, 262144 - len(pending[target])))
+                except ssl.SSLWantWriteError:
+                    receive_wants_write.add(source)
+                    continue
+                except (ssl.SSLWantReadError, BlockingIOError):
+                    receive_wants_write.discard(source)
+                    continue
+                receive_wants_write.discard(source)
+                if not data:
+                    eof = True
+                    receive_wants_write.clear()
+                    break
+                pending[target].extend(data)
+            for target in endpoints:
+                if not pending[target] or not (target in writable or target in readable and target in send_wants_read):
+                    continue
+                try:
+                    # SSL wants-read/write retries require the original write
+                    # bytes and length, even if the peer queues more data.
+                    if write_frames[target] is None:
+                        write_frames[target] = bytes(pending[target][:65536])
+                    sent = target.send(write_frames[target])
+                except ssl.SSLWantReadError:
+                    send_wants_read.add(target)
+                    continue
+                except (ssl.SSLWantWriteError, BlockingIOError):
+                    send_wants_read.discard(target)
+                    continue
+                if sent == 0:
+                    raise EOFError('proxy relay write closed')
+                send_wants_read.discard(target)
+                del pending[target][:sent]
+                write_frames[target] = None
+
     def wait_idle(self, timeout=4):
         end = time.monotonic()+timeout
         while time.monotonic() < end:
             with self.lock:
                 if not self.sockets: return
             time.sleep(.01)
-        raise AssertionError("proxy retained active sockets")
+        stacks = []
+        for frame in sys._current_frames().values():
+            stack = traceback.extract_stack(frame)
+            if any(item.filename == __file__ for item in stack):
+                stacks.append(''.join(traceback.format_list(stack)))
+        raise AssertionError("proxy retained active sockets\n" + '\n'.join(stacks))
 
     def __exit__(self, *args):
         self.server.shutdown()
