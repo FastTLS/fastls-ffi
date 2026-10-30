@@ -20,7 +20,7 @@ def create(lab):
     value=json.loads((ROOT/'tests/fixtures/profile_spec.json').read_text())
     value['http2'].update(first_stream_id=3,stream_window_increment=12451840)
     value['http2']['settings']=[{'id':2,'value':0},{'id':4,'value':131072}]
-    value['capabilities']['required_features'].append('http2.stream.v1')
+    value['capabilities']['required_features']=list(value['capabilities'].get('required_features') or [])+['http2.stream.v1']
     spec=ProfileSpec(value)
     return [Session(address_policy={'allow_cidrs':['127.0.0.0/8']},notifications='poll'),
             Session(profile_spec=spec,ca_file=lab['ca_file'],notifications='poll'),

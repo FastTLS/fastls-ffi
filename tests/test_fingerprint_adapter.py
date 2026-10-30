@@ -13,7 +13,9 @@ H2 = '2:0;4:131072;1:4096|100000|3:1:0:201|p,a,m,s'
 
 
 def base():
-    return ProfileSpec(json.loads(SPEC.read_text(encoding='utf-8')))
+    value=json.loads(SPEC.read_text(encoding='utf-8'))
+    value['capabilities']['required_features']=list(value['capabilities'].get('required_features') or [])
+    return ProfileSpec(value)
 
 
 def ja3(spec):

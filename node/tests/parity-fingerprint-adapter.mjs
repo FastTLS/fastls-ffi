@@ -3,7 +3,11 @@ import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { mkdirSync, rmSync } from 'node:fs';
 const p = (name, fn) => parity('test_fingerprint_adapter.py', name, fn);
-const base = () => new sdk.ProfileSpec(JSON.parse(readFileSync(resolve(root,'tests/fixtures/profile_spec.json'),'utf8')));
+const base = () => {
+  const value=JSON.parse(readFileSync(resolve(root,'tests/fixtures/profile_spec.json'),'utf8'));
+  value.capabilities.required_features ??= [];
+  return new sdk.ProfileSpec(value);
+};
 const H2 = '2:0;4:131072;1:4096|100000|3:1:0:201|p,a,m,s';
 const ja3 = spec => {
   const s = spec.toJSON().tls, extensions = new Map(s.extensions.map(e=>[e.id,e]));

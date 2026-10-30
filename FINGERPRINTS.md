@@ -24,9 +24,10 @@ are not silently replaced.
 ```python
 value = base.to_dict()  # start with a complete, reviewed Spec
 value["http2"].update(first_stream_id=3, stream_window_increment=12451840)
-features = value["capabilities"]["required_features"]
+features = list(value["capabilities"].get("required_features") or [])
 if "http2.stream.v1" not in features:
     features.append("http2.stream.v1")
+value["capabilities"]["required_features"] = features
 spec = ProfileSpec(value)
 ```
 
