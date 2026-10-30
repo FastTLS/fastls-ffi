@@ -1,3 +1,36 @@
+# Python 0.5.0 / Node 0.14.0
+
+This minor release adds optional first request stream IDs and initial per-stream
+receive-window increments throughout Go, complete Spec, C ABI and both SDKs.
+Defaults preserve stream 1 and no initial stream update. New configuration
+requires `http2.stream.v1`; SDKs negotiate native `http2_stream_v1`, and older
+libraries reject it explicitly. Spec/Bundle schema and C ABI stay at version 1.
+
+The transport preserves fresh-connection, single-use, GOAWAY retry and stream-ID
+exhaustion behavior, and accounts for the advertised receive credit. Initial
+stream updates follow request HEADERS exactly once, including fragmented header
+blocks, without repeating for trailers. Window limits are validated before
+networking. Extra credit increases potential per-stream response buffering.
+
+Compact JA3/H2 conversion preserves the unencoded stream fields. Bundle digest,
+Store, pin/rollback, async and fetch retain the same complete-Spec path. Browser
+tools now project the observed stream fields and independently compare stream IDs
+even without HEADERS priority. Stream-capable candidates must match all observed
+fields before acceptance; a TLS/header-only result cannot approve them.
+
+Firefox 159.0 Windows cold-request replay closes the two previously recorded H2
+stream differences in the explicitly imported candidate. Frozen Chrome/Edge
+observations cover affected-field regression. Installed browser selectors are
+unchanged; no automatic downloads or activation are introduced. These results do
+not claim full-browser or general dynamic flow-control equivalence.
+
+Validation uses one frozen platform/ABI/SDK acceptance, Linux race and a bounded
+resource check including a response larger than the initial stream window.
+Formal publication reuses matching evidence and checks new artifact identity and
+installation; full performance certification and hour-long observation are not
+routine release steps. H3 fingerprints, UDP proxies/Alt-Svc and new platforms
+remain separate work. See [the contract](FINGERPRINTS.md).
+
 # Python 0.4.0 / Node 0.13.0
 
 This minor release adds a shared Go-backed JA3/H2 converter that returns an

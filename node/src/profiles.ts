@@ -9,6 +9,14 @@ export interface AddressPolicy {
   readonly deny_cidrs?: readonly string[];
 }
 
+/** Optional stream settings within a complete schema-v1 profile. */
+export interface HTTP2StreamConfig {
+  /** 0 or omitted selects stream 1; other values are odd, up to 2^31-1. */
+  readonly first_stream_id?: number;
+  /** Receive credit sent once after initial request HEADERS; 0 disables it. */
+  readonly stream_window_increment?: number;
+}
+
 /** Explicit snapshot of a complete schema-v1 profile, validated by the core. */
 export class ProfileSpec {
   private readonly snapshot: string;
@@ -22,7 +30,16 @@ export class ProfileSpec {
     const { ja3 = "", h2 = "", library } = options;
     if (typeof ja3 !== "string" || typeof h2 !== "string") throw new TypeError("ja3 and h2 must be strings");
     if (Object.keys(options).some(key => !["ja3", "h2", "library"].includes(key))) throw new TypeError("unknown fingerprint option");
-    return new ProfileSpec(Native.load(library).adaptProfile({ schema_version: 1, base: base.toJSON(), ja3, h2 }));
+    const native = Native.load(library);
+    native.requireCapabilities(base.nativeCapabilities());
+    return new ProfileSpec(native.adaptProfile({ schema_version: 1, base: base.toJSON(), ja3, h2 }));
   }
   toJSON(): Record<string, unknown> { return JSON.parse(this.snapshot); }
+  /** @internal Capability negotiation happens before allocating a session. */
+  nativeCapabilities(): string[] {
+    const value = this.toJSON() as { http2?: HTTP2StreamConfig; capabilities?: { required_features?: unknown } };
+    const stream = value.http2?.first_stream_id || value.http2?.stream_window_increment ||
+      (Array.isArray(value.capabilities?.required_features) && value.capabilities.required_features.includes("http2.stream.v1"));
+    return stream ? ["profile_spec_v1", "http2_stream_v1"] : ["profile_spec_v1"];
+  }
 }

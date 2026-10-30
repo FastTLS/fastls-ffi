@@ -26,10 +26,18 @@ class ProfileSpec:
         native = Native(library)
         if (not hasattr(native.lib, "fastls_profile_adapt") or
                 not hasattr(native.lib, "fastls_features") or
-                not {"fingerprint_adapter_v1", "profile_spec_v1"}.issubset(native.call("fastls_features"))):
+                not ({"fingerprint_adapter_v1"} | base._required_capabilities()).issubset(native.call("fastls_features"))):
             raise FastlsError("native fingerprint adapter is unavailable", code="unsupported_capability")
         raw = json.dumps(dict(schema_version=1, base=base.to_dict(), ja3=ja3, h2=h2), ensure_ascii=False, allow_nan=False).encode("utf-8")
         return cls(native.call("fastls_profile_adapt", raw, len(raw)))
 
     def to_dict(self):
         return json.loads(self._json)
+
+    def _required_capabilities(self):
+        value = self.to_dict()
+        h2 = value.get("http2", {})
+        needs_stream = isinstance(h2, dict) and any(h2.get(key) for key in ("first_stream_id", "stream_window_increment"))
+        capabilities = value.get("capabilities", {})
+        features = capabilities.get("required_features", []) if isinstance(capabilities, dict) else []
+        return {"profile_spec_v1", "http2_stream_v1"} if needs_stream or isinstance(features, list) and "http2.stream.v1" in features else {"profile_spec_v1"}

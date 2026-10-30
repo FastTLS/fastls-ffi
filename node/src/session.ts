@@ -174,7 +174,7 @@ export class Session {
     }
     if (options.profileSpec !== undefined) {
       configuration.profile_spec = options.profileSpec.toJSON();
-      required.push("profile_spec_v1");
+      required.push(...options.profileSpec.nativeCapabilities());
     }
     if (options.httpVersion === "h3") {
       configuration.http_version = "h3";
@@ -283,7 +283,7 @@ export class Session {
     if (options.profileSpec !== undefined && !(options.profileSpec instanceof ProfileSpec)) throw new TypeError("profileSpec must be a ProfileSpec");
     if (options.profileSpec !== undefined && options.profile !== undefined) throw new TypeError("profile and profileSpec are mutually exclusive");
     const required: string[] = [];
-    if (options.profileSpec !== undefined) required.push("profile_spec_v1");
+    if (options.profileSpec !== undefined) required.push(...options.profileSpec.nativeCapabilities());
     if (options.httpVersion !== undefined) {
       if (!["auto", "h3"].includes(options.httpVersion)) throw new TypeError("httpVersion must be auto or h3");
       required.push("http3_v1");

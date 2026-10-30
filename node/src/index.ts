@@ -3,7 +3,7 @@ export { RetryPolicy } from "./retry.js";
 export { ProfileBundle, ProfileStore } from "./profile-store.js";
 export type { RetryOptions } from "./retry.js";
 export { ProfileSpec } from "./profiles.js";
-export type { AddressPolicy } from "./profiles.js";
+export type { AddressPolicy, HTTP2StreamConfig } from "./profiles.js";
 export { fetch } from "./fetch.js";
 export type { FetchOptions, FetchResponse } from "./fetch.js";
 export type { SessionOptions, RequestOptions, DuplexOptions, Stats } from "./session.js";

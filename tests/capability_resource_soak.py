@@ -17,7 +17,11 @@ monitor=Session();clients=[];samples=[];requests=0
 output=ROOT/'build'/('capability-resource-'+str(time.time_ns())+'.json')
 output.write_text(json.dumps(dict(success=False,state='starting',contract=contract))+'\n')
 def create(lab):
-    spec=ProfileSpec(json.loads((ROOT/'tests/fixtures/profile_spec.json').read_text()))
+    value=json.loads((ROOT/'tests/fixtures/profile_spec.json').read_text())
+    value['http2'].update(first_stream_id=3,stream_window_increment=12451840)
+    value['http2']['settings']=[{'id':2,'value':0},{'id':4,'value':131072}]
+    value['capabilities']['required_features'].append('http2.stream.v1')
+    spec=ProfileSpec(value)
     return [Session(address_policy={'allow_cidrs':['127.0.0.0/8']},notifications='poll'),
             Session(profile_spec=spec,ca_file=lab['ca_file'],notifications='poll'),
             Session(http_version='h3',ca_file=lab['ca_file'],notifications='poll')]
@@ -27,9 +31,10 @@ try:
     urls=[lab['http'],lab['https2'],lab['https3']]
     def cycle():
         global requests
-        for client,url in zip(clients,urls):
-            response=client.get(url+'/?n=65536')
-            assert response.content==SLAB
+        for index,(client,url) in enumerate(zip(clients,urls)):
+            size=524288 if index==1 else 65536
+            response=client.get(url+'/?n='+str(size))
+            assert response.content==SLAB*(size//len(SLAB))
             requests+=1
     for _ in range(30):cycle()
     baseline=sample();started=time.monotonic();next_sample=started;rounds=0

@@ -19,9 +19,11 @@
     "test_sdk_sessions.py": "21c43ea4882d9b28fecdb29a57c92bbf72e0dc0f0908a8a0184ffe364d6c7343",
     "test_capabilities.py": "20e4643b026e7cd880c2690b21de5d06d8eb5ca8c243a9ad43e25cfcd89de146",
     "test_reliability.py": "67318d865243ead750a0c6445f6d066b471534eeeb2ff0c6072ed99665da8da2",
-    "test_fingerprint_adapter.py": "734792249d6b7dc4f6f7e97a8fd72ccebf8e5c44a7eb0f42d8bc8a583391c29e"
+    "test_fingerprint_adapter.py": "0f47365b16ef2a5c81bb12a12c2e7cfb25ff04c100bb19c00155b116f733cad4"
   },
   "additionalSuites": {
+
+    "test_fingerprint_adapter.py": "H2 stream fields and capability rejection mirrored in Node; independent wire peer checks stream ID/window; compact conversion and Bundle/Store retain both fields.",
     "test_websocket_cookies.py": "Integrated Node Cookie contract from 7788ff8",
     "test_sdk_sessions.py": "SDK owns cookies; native transport context rejects cookie commands; redirect limits clean up.",
     "test_network.py": "G1 response byte/repeated-header/Set-Cookie/trailer contract mirrored with independent TCP bytes for buffered and streamed Node responses."

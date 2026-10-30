@@ -1,5 +1,13 @@
 # 浏览器配置候选与 JA3/H2 参数
 
+## H2 流级配置
+
+Python 0.5.0 / Node 0.14.0 支持完整 Spec 内的 `http2.first_stream_id`、`http2.stream_window_increment`。省略或零值保持流 1、不发送初始流更新。非零流编号须为不超过 2147483647 的奇数；每个物理连接重新起号，后续请求递增 2，不发送占位请求。窗口增量在每个请求初始 HEADERS（含全部 CONTINUATION）之后发送一次，Trailer 不重复触发；增量与 SETTINGS_INITIAL_WINDOW_SIZE 之和不得超过 31 位上限。增加额度也增加单流潜在缓冲，应结合并发预算配置。
+
+任一字段非零须把 `http2.stream.v1` 加入 `capabilities.required_features`，保留其它必要能力。SDK 在创建 owner/转换前检查原生 `http2_stream_v1`；旧解析器和后端明确拒绝不支持的配置。Spec、Bundle 和 C ABI 版本仍为 1。JA3/H2 紧凑参数没有编码这两项，转换保留 base 值；Bundle 摘要、pin/回滚、同步/异步及 fetch 继续共用契约。
+
+候选须显式导入与固定，不静默替换内置 selector。Firefox Windows 冷请求还需原始 TLS、头序和 SETTINGS；两个流级值不足以重现浏览器。回放独立检查首流编号，不依赖 HEADERS 是否携带优先级，并比较原始初始帧；匹配不代表整个浏览器语义等价。示例与协议来源见 [English contract](FINGERPRINTS.md#optional-h2-stream-configuration)。
+
 Python 0.4.0 / Node 0.13.0 提供同一个离线转换器。详细格式及 ABI 契约见 [English contract](FINGERPRINTS.md)。
 
 ```python

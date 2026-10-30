@@ -138,5 +138,7 @@ void consume;
 
 const compactSpec = ProfileSpec.fromFingerprints(new ProfileSpec({ schema_version: 1 }), { h2: '2:0|0|0|m,a,s,p' });
 void compactSpec;
+const streamConfig: import('@fastls/fastls').HTTP2StreamConfig = { first_stream_id: 3, stream_window_increment: 12451840 };
+void streamConfig;
 // @ts-expect-error Compact parameters require strings.
 ProfileSpec.fromFingerprints(new ProfileSpec({}), { ja3: 771 });

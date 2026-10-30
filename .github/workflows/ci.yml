@@ -4,7 +4,7 @@ permissions:
   actions: read
 env:
   FASTLS_EXTENDED_SOAK_SECONDS: ${{ inputs.certification_soak_seconds || '300' }}
-  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.4.0.dev{0}', github.run_number)
+  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.5.0.dev{0}', github.run_number)
     }}
   FASTLS_RELEASE_MODE: ${{ github.ref_type == 'tag' && 'true' || 'false' }}
 concurrency:

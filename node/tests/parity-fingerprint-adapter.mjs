@@ -11,8 +11,10 @@ const ja3 = spec => {
   return ['771',clean([...s.cipher_suites].reverse()),clean(s.extensions.map(e=>e.id)),clean(extensions.get('0x000a').groups),[...Buffer.from(extensions.get('0x000b').point_formats,'base64')].join('-')].join(',');
 };
 p('test_compact_parameters_on_independent_peer',async t=>{
-  const original=base(), spec=sdk.ProfileSpec.fromFingerprints(original,{ja3:ja3(original),h2:H2}), value=spec.toJSON();
-  const owner=session(t,{profileSpec:spec}), wire=(await owner.get(fixture.wire)).json();
+  const input=base().toJSON();Object.assign(input.http2,{first_stream_id:3,stream_window_increment:12451840});input.capabilities.required_features.push('http2.stream.v1');
+  const original=new sdk.ProfileSpec(input), spec=sdk.ProfileSpec.fromFingerprints(original,{ja3:ja3(original),h2:H2}), value=spec.toJSON();
+  const owner=session(t,{profileSpec:spec}), wire=(await owner.get(fixture.wire,{headers:{'x-fixture-stream-window':'12451840'}})).json();
+  assert.equal(wire.stream_id,3);assert.equal(wire.stream_window_increment,12451840);
   assert.deepEqual(wire.ciphers,value.tls.cipher_suites.map(Number));
   assert.deepEqual(wire.settings,value.http2.settings);
   assert.equal(wire.connection_flow,100000);
@@ -23,10 +25,13 @@ p('test_compact_parameters_on_independent_peer',async t=>{
   assert.deepEqual(wire.signatures,value.tls.extensions.find(e=>e.id==='0x000d').signature_algorithms.map(Number));
 });
 p('test_base_snapshot_and_unencoded_fields',()=>{
-  const original=base(), before=original.toJSON(), spec=sdk.ProfileSpec.fromFingerprints(original,{ja3:ja3(original)});
+  const input=base().toJSON();Object.assign(input.http2,{first_stream_id:3,stream_window_increment:12451840});input.capabilities.required_features.push('http2.stream.v1');
+  const original=new sdk.ProfileSpec(input), before=original.toJSON(), spec=sdk.ProfileSpec.fromFingerprints(original,{ja3:ja3(original)});
   assert.deepEqual(original.toJSON(),before);
   assert.deepEqual(spec.toJSON().http2,before.http2);
   assert.deepEqual(spec.toJSON().identity,before.identity);
+  const adapted=sdk.ProfileSpec.fromFingerprints(original,{h2:H2}).toJSON().http2;
+  assert.equal(adapted.first_stream_id,3);assert.equal(adapted.stream_window_increment,12451840);
   assert.ok(!spec.toJSON().evidence?.length);
   assert.ok(spec.toJSON().id.endsWith('/custom'));
   const changed=spec.toJSON();changed.tls.cipher_suites.length=0;
@@ -45,13 +50,19 @@ p('test_missing_native_capability_is_explicit',()=>{
   try {
     native.call=function(name,...args){const value=original.call(this,name,...args);return name==='features'?value.filter(f=>f!=='fingerprint_adapter_v1'):value;};
     assert.throws(()=>sdk.ProfileSpec.fromFingerprints(base(),{h2:H2}),error=>error.code==='unsupported_capability');
+    const value=base().toJSON();value.http2.first_stream_id=3;value.capabilities.required_features.push('http2.stream.v1');const stream=new sdk.ProfileSpec(value);
+    native.call=function(name,...args){const value=original.call(this,name,...args);return name==='features'?value.filter(f=>f!=='http2_stream_v1'):value;};
+    assert.throws(()=>new sdk.Session({profileSpec:stream}),error=>error.code==='unsupported_capability');
+    assert.throws(()=>sdk.ProfileSpec.fromFingerprints(stream,{h2:H2}),error=>error.code==='unsupported_capability');
   } finally {native.call=original;}
 });
 p('test_adapted_bundle_pin_and_rollback',t=>{
   const directory=join(tmpdir(),'fastls-adapter-'+randomUUID());mkdirSync(directory);t.after(()=>rmSync(directory,{recursive:true,force:true}));
-  const store=new sdk.ProfileStore(directory), first=sdk.ProfileBundle.create(base(),{source:'adapter base'}), second=sdk.ProfileBundle.create(sdk.ProfileSpec.fromFingerprints(base(),{h2:H2}),{source:'adapter candidate'});
+  const value=base().toJSON();Object.assign(value.http2,{first_stream_id:3,stream_window_increment:12451840});value.capabilities.required_features.push('http2.stream.v1');
+  const store=new sdk.ProfileStore(directory), first=sdk.ProfileBundle.create(base(),{source:'adapter base'}), second=sdk.ProfileBundle.create(sdk.ProfileSpec.fromFingerprints(new sdk.ProfileSpec(value),{h2:H2}),{source:'adapter candidate'});
   for(const [i,bundle] of [first,second].entries()){const file=join(directory,i+'.json');bundle.export(file);store.install(file,bundle.sha256);}
   assert.equal(store.load().sha256,second.sha256);
+  assert.equal(store.load().spec.toJSON().http2.first_stream_id,3);
   assert.equal(store.rollback().sha256,first.sha256);
 });
 p('test_strict_abi_envelope_and_no_session_allocation',()=>{

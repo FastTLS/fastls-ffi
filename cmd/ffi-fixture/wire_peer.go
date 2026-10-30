@@ -8,6 +8,7 @@ import (
 	"golang.org/x/net/http2/hpack"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -66,7 +67,13 @@ func wireFixture(cert tls.Certificate) (string, func(), error) {
 				flow := uint32(0)
 				priorities := []map[string]any{}
 				names := []string{}
-				decoder := hpack.NewDecoder(4096, func(field hpack.HeaderField) { names = append(names, field.Name) })
+				var wantStreamWindow uint64
+				decoder := hpack.NewDecoder(4096, func(field hpack.HeaderField) {
+					names = append(names, field.Name)
+					if field.Name == "x-fixture-stream-window" {
+						wantStreamWindow, _ = strconv.ParseUint(field.Value, 10, 31)
+					}
+				})
 				for {
 					frame, err := frames.ReadFrame()
 					if err != nil {
@@ -115,7 +122,22 @@ func wireFixture(cert tls.Certificate) (string, func(), error) {
 						if decoder.Close() != nil {
 							return
 						}
-						body, _ := json.Marshal(map[string]any{"ciphers": ciphers, "alpn": alpn, "groups": groups, "signatures": signatures, "settings": settings, "headers": names, "connection_flow": flow, "priorities": priorities})
+						var streamWindow uint32
+						if wantStreamWindow != 0 {
+							for streamWindow == 0 {
+								next, err := frames.ReadFrame()
+								if err != nil {
+									return
+								}
+								if update, ok := next.(*http2.WindowUpdateFrame); ok && update.StreamID == stream {
+									streamWindow = update.Increment
+								}
+							}
+							if uint64(streamWindow) != wantStreamWindow {
+								return
+							}
+						}
+						body, _ := json.Marshal(map[string]any{"ciphers": ciphers, "alpn": alpn, "groups": groups, "signatures": signatures, "settings": settings, "headers": names, "connection_flow": flow, "priorities": priorities, "stream_id": stream, "stream_window_increment": streamWindow})
 						var block bytes.Buffer
 						encoder := hpack.NewEncoder(&block)
 						_ = encoder.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})

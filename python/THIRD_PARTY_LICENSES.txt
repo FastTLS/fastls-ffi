@@ -28,7 +28,7 @@ THE SOFTWARE.
 
 ==============================================================================
 Module: github.com/FastTLS/fastls
-Version: v0.1.3-0.20261030065220-4c07fe9e4059
+Version: v0.1.3-0.20261030131347-13c745e861fa
 File: LICENSE
 ------------------------------------------------------------------------------
 
@@ -247,7 +247,7 @@ third-party works or assert ownership of their contributions.
 
 ==============================================================================
 Module: github.com/FastTLS/fastls/profile
-Version: v0.1.0
+Version: v0.1.1-0.20261030130219-e9e40f15c9ac
 File: LICENSE
 ------------------------------------------------------------------------------
 
@@ -466,7 +466,7 @@ third-party works or assert ownership of their contributions.
 
 ==============================================================================
 Module: github.com/FastTLS/ftransport
-Version: v0.1.1
+Version: v0.1.2-0.20261030131050-d9812320808e
 File: LICENSE
 ------------------------------------------------------------------------------
                                  Apache License
@@ -743,7 +743,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ==============================================================================
 Module: github.com/FastTLS/imitate
-Version: v0.1.2-0.20261030065723-c75c3bf7679f
+Version: v0.1.2-0.20261030131552-ebd18547d28a
 File: LICENSE
 ------------------------------------------------------------------------------
 
@@ -1636,7 +1636,7 @@ Additional reviewed development-source license materials.
 The native build-info identifies the actual artifact inputs; these records preserve the reviewed source bytes.
 
 ==============================================================================
-Reviewed source: fastls@4c07fe9e4059e682b4bd5b9a2138401ab91dd91c
+Reviewed source: fastls@13c745e861faaad743823d92745005f42a98d9e5
 File: LICENSE
 ------------------------------------------------------------------------------
 
@@ -1854,7 +1854,7 @@ patent, trademark and attribution notices. This notice does not relicense
 third-party works or assert ownership of their contributions.
 
 ==============================================================================
-Reviewed source: ftransport@d5afcd1a2db48a40850363b76e8a19eb339c757c
+Reviewed source: ftransport@d9812320808e775b531eca3340d1cc4fb32b7e01
 File: LICENSE
 ------------------------------------------------------------------------------
                                  Apache License
@@ -2072,7 +2072,7 @@ This product's test suite uses uTLS, also distributed under a BSD-style
 license. See third_party/utls.LICENSE.
 
 ==============================================================================
-Reviewed source: imitate@c75c3bf7679fddaad50e0189b575c3515e5e24ff
+Reviewed source: imitate@ebd18547d28a8a86c739816b5e7f45086e2b5449
 File: LICENSE
 ------------------------------------------------------------------------------
 

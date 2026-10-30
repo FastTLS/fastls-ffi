@@ -1,5 +1,7 @@
 # fastls Python SDK
 
+Python 0.5.0 增加完整 Spec 的 H2 首流编号和初始流窗口配置，省略时保留旧行为；需要 `http2.stream.v1` 和原生 `http2_stream_v1`。JA3/H2 转换、Bundle/Store 及异步入口保留这些字段，旧原生库明确拒绝。窗口额度及候选采用边界见 [中文契约](../FINGERPRINTS.zh-CN.md)。
+
 Python 0.2.0 起支持 Session `address_policy`、`profile_spec=ProfileSpec(...)` 和
 `http_version="h3"`，同步/异步入口共用契约。请求也可指定完整 Spec 或显式协议；
 策略只在创建 Session 时配置。较旧原生库缺能力时会明确报错。

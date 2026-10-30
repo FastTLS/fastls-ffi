@@ -233,7 +233,7 @@ class Session:
             required.add("transport_address_policy_v1")
         if profile_spec is not None:
             configuration["profile_spec"] = profile_spec.to_dict()
-            required.add("profile_spec_v1")
+            required.update(profile_spec._required_capabilities())
         if http_version == "h3":
             configuration["http_version"] = "h3"
             required.add("http3_v1")
@@ -288,7 +288,7 @@ class Session:
             raise ValueError("profile and profile_spec are mutually exclusive")
         required = set()
         if profile_spec is not None:
-            required.add("profile_spec_v1")
+            required.update(profile_spec._required_capabilities())
         if http_version is not None:
             if http_version not in ("auto", "h3"):
                 raise ValueError("http_version must be auto or h3")

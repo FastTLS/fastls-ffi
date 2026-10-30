@@ -1,5 +1,7 @@
 # Fastls Node.js SDK
 
+Node 0.14.0 增加完整 Spec 的 H2 首流编号与初始流窗口配置，并导出 `HTTP2StreamConfig` 类型。省略保持旧行为，需要 `http2.stream.v1` 和原生 `http2_stream_v1`；转换、Bundle/Store、Session/fetch 共用契约。旧原生库明确拒绝，窗口预算及候选采用边界见 [中文契约](https://github.com/FastTLS/fastls-ffi/blob/main/FINGERPRINTS.zh-CN.md)。
+
 Node 0.11.0 起支持 Session `addressPolicy`、`profileSpec: new ProfileSpec(...)` 和
 `httpVersion: "h3"`；Session/fetch 可选择完整 Spec 或显式协议。
 `addressPolicy` 只能创建可信 owner，不能由 `session.fetch()` 或请求替换。
