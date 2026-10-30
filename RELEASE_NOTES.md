@@ -6,6 +6,9 @@ numeric peer, while retaining origin/SNI/certificate identity. Alternate peers
 are rejected; new connections resolve afresh. Cancellation and owner closure
 release the sockets. The policy path does not enable migration, ECN/GSO or 0-RTT.
 
+The shared H1/H2/H3 policy also rejects unspecified destination addresses before
+dialing, preventing local-system interpretation under broad allow rules.
+
 Both SDKs negotiate `http3_address_policy_v1` before allocation, including
 per-request H3 on a policy owner. Python sync/async, Node Session/fetch and the
 shared C ABI use the same contract; older backends fail explicitly. C ABI,

@@ -149,6 +149,12 @@ class CapabilityAcceptance(FixtureCase):
             self.assertEqual(allowed.get(url + "/status?code=204").status_code, 204)
         with self.session(address_policy={"allow_cidrs": ["127.0.0.0/8"]}) as owner:
             self.assertEqual(owner.get(url, http_version="h3").http_version, "HTTP/3.0")
+        for version, scheme in (("h3", "https"), ("auto", "http")):
+            with self.session(http_version=version, address_policy={"deny_cidrs": ["127.0.0.0/8", "::1/128"]}) as owner:
+                for host in ("0.0.0.0", "[::]", "[::ffff:0.0.0.0]"):
+                    with self.assertRaises(FastlsError) as failure:
+                        owner.get(scheme + "://" + host + ":9/")
+                    self.assertEqual(failure.exception.code, "address_denied")
         async def exercise():
             async with self.session(async_=True, http_version="h3", address_policy={"allow_cidrs": ["127.0.0.0/8"]}) as owner:
                 response = await owner.post(url + "/echo", data=SLAB)

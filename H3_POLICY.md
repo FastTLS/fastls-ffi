@@ -59,3 +59,5 @@ new platform or service-protocol support is added. Unrestricted H3 is unchanged.
 See the [Go policy contract](https://github.com/FastTLS/fastls/blob/main/ADDRESS_POLICY.md)
 and [中文说明](H3_POLICY.zh-CN.md). Release assets and their source manifests
 determine publication and platform validation status.
+
+Unspecified destination addresses (`0.0.0.0`, `::` and mapped zero) are rejected before dialing, even under broad allow rules: Go can interpret them as the local system. This shared policy check also protects H1/H2.

@@ -120,6 +120,10 @@ p('test_h3_policy_combination_and_owner_isolation', async t => {
  const owner=session(t,{addressPolicy:{allow_cidrs:['127.0.0.0/8']}});
  assert.equal((await owner.get(fixture.https3,{httpVersion:'h3'})).httpVersion,'HTTP/3.0');
  assert.deepEqual((await allowed.post(fixture.https3+'/echo',{body:SLAB})).content,SLAB);
+ for (const [httpVersion,scheme] of [['h3','https'],['auto','http']]) {
+  const guarded=session(t,{httpVersion,addressPolicy:{deny_cidrs:['127.0.0.0/8','::1/128']}});
+  for(const host of ['0.0.0.0','[::]','[::ffff:0.0.0.0]']) await assert.rejects(guarded.get(scheme+'://'+host+':9/'),e=>e.code==='address_denied');
+ }
  const fetched=await sdk.fetch(fixture.https3+'/echo',{method:'POST',body:SLAB,httpVersion:'h3',addressPolicy:{allow_cidrs:['127.0.0.0/8']},caFile:fixture.ca_file});
  assert.deepEqual(Buffer.from(await fetched.arrayBuffer()),SLAB);
 });

@@ -31,3 +31,5 @@ connected UDP socket 在内核固定远端，PacketConn 同时拒绝其它写入
 策略拒绝使用 `FastlsError.code == "address_denied"`；缺能力为 `unsupported_capability`，非法配置和请求策略注入明确拒绝。代理、H1/H2 Spec、q 指纹选择器、请求 Trailer、WebSocket、H2 双工仍不与此路径组合。没有 TCP 回退、自动 Alt-Svc、浏览器 H3 指纹、新增平台或服务协议扩展；无策略 H3 保留原路径。
 
 更多见 [Go 地址策略](https://github.com/FastTLS/fastls/blob/main/ADDRESS_POLICY.md) 与 [English contract](H3_POLICY.md)。是否正式发布及平台验收范围以对应发行物与来源清单为准。
+
+即使允许范围很宽，也在拨号前拒绝未指定目标地址（`0.0.0.0`、`::` 及映射零地址）：Go 可能将其解释为本机。该共享策略校验同时覆盖 H1/H2。
