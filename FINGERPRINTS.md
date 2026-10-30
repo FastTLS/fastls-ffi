@@ -2,7 +2,7 @@
 
 Python 0.4.0 / Node 0.13.0 add a shared offline converter. C ABI remains v1 with
 the optional `fingerprint_adapter_v1` capability and owned-result function
-`char *fastls_profile_adapt(const char *json, size_t length)`. Release the returned
+`char *fastls_profile_adapt(char *json, size_t length)`. Release the returned
 envelope with `fastls_free`; the input envelope is schema 1 with `base`, `ja3`
 and `h2`. At least one compact parameter is required. No session or network I/O
 is created. Old libraries reject use with `unsupported_capability`; ordinary
@@ -94,3 +94,14 @@ publishing remain outside this batch.
 Protocol references: [JA3 definition](https://github.com/salesforce/ja3#readme),
 [HTTP/2 settings](https://www.rfc-editor.org/rfc/rfc9113.html#section-6.5.2),
 [priority parameters](https://www.rfc-editor.org/rfc/rfc7540.html#section-6.3).
+
+Go consumers must pin the core version containing this API; the older stable
+v0.1.2 does not export `AdaptProfile`. The Firefox data update is also pinned:
+
+```sh
+go get github.com/FastTLS/fastls@v0.1.3-0.20261030065220-4c07fe9e4059
+go get github.com/FastTLS/imitate@v0.1.2-0.20261030065723-c75c3bf7679f
+```
+
+Python/Node distributions already include their native library and fixed data;
+ordinary SDK installation does not require Go.

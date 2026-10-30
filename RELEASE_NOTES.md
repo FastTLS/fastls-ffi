@@ -1,4 +1,43 @@
-# Python 0.3.0 / Node 0.12.0
+# Python 0.4.0 / Node 0.13.0
+
+This minor release adds a shared Go-backed JA3/H2 converter that returns an
+explicit complete Spec. Python uses `ProfileSpec.from_fingerprints`, Node uses
+`ProfileSpec.fromFingerprints`, and Go uses `AdaptProfile`. Missing compact fields
+inherit a caller-supplied base; unknown, conflicting and unsupported inputs fail
+before networking. Custom results clear inherited browser verification evidence.
+The Python CLI can export the converted Spec as a pinned ProfileBundle.
+
+C ABI stays v1 with the optional `fingerprint_adapter_v1` capability. Older
+libraries explicitly reject conversion; existing session, async, fetch, profile
+store, authentication, retry, cancellation and protocol contracts are preserved.
+
+The generator now has a manual, read-only Firefox stable Windows x64 zh-CN
+discovery/download/capture/replay workflow. It verifies the official HTTPS
+SHA512SUMS, records source identities and full observations, and writes a semantic
+diff plus offline candidate without changing active configuration. Firefox 159.0
+Windows is updated from 15 independent fresh cold browser samples. Six selected
+TLS/header replay comparisons match; two H2 comparisons retain known stream ID
+and stream-window differences. This is not full browser equivalence.
+
+Review source identity, digest and limitations before manually importing and
+pinning a candidate. Hashes and HTTPS checksums do not independently authenticate
+the producer. No implicit network updates, schedules, PR creation, automatic
+activation or publishing are enabled by the update workflow. Other browser
+families/platforms, ESR, H3 fingerprints, UDP proxies, new platforms and WebSocket
+compression remain separate work.
+
+Runtime inputs use core `v0.1.3-0.20261030065220-4c07fe9e4059` and imitate
+`v0.1.2-0.20261030065723-c75c3bf7679f`; ftransport v0.1.1 and profile v0.1.0 are
+unchanged. No service is republished. Validation uses five source/installed
+platforms, independent wire observations, Linux race and a short resource
+campaign. No full performance certification or hour-long observation is repeated.
+Official publication uses checked artifacts and OIDC Trusted Publishing.
+
+[中文指南](https://fasttls.github.io/reference/browser-profiles) ·
+[English contract](https://fasttls.github.io/en/reference/browser-profiles)
+
+
+## Previous release: Python 0.3.0 / Node 0.12.0
 
 This minor release adds Python Basic/Bearer authentication and request-local
 Cookie mappings, opt-in business retries in Python sync/async and Node
