@@ -112,6 +112,18 @@ def context(env):
             after_version = json.loads((ROOT / 'node/package.json').read_text())['version']
             if before_version != after_version:
                 release, previous = after_version, before_version
+        # A follow-up test fix must not narrow an unreleased minor candidate to
+        # two platforms merely because its version bump was an earlier commit.
+        # Published versions retain ordinary patch scopes; docs stay docs-only.
+        source_changes = any(not (p.endswith(('.md', '.rst', '.txt')) or p in ('LICENSE', 'NOTICE')) for p in files)
+        if not release and env.get('GITHUB_REF') == 'refs/heads/main' and source_changes:
+            current_node = json.loads((ROOT / 'node/package.json').read_text())['version']
+            node_tags = [t[len('node-v'):] for t in git('tag', '--merged', 'HEAD').splitlines()
+                         if re.fullmatch(r'node-v\d+\.\d+\.\d+', t)]
+            if node_tags:
+                published_node = max(node_tags, key=version)
+                if version(current_node) > version(published_node):
+                    release, previous = current_node, published_node
     except (subprocess.CalledProcessError, ValueError):
         if release:
             version(release)  # Invalid release tags must fail, never silently downgrade.

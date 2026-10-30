@@ -158,6 +158,22 @@ class Selection(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     test_plan.context({'CERTIFICATION_SOAK_SECONDS': value})
 
+    def test_followup_fix_preserves_unreleased_minor_without_expanding_published_patch_or_docs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'node').mkdir()
+            (root/'node/package.json').write_text(json.dumps({'version':'0.14.0'}))
+            event=root/'event.json';event.write_text(json.dumps({'before':'a'*40}))
+            env={'GITHUB_EVENT_PATH':str(event),'GITHUB_REF':'refs/heads/main'}
+            for tag,files,tier,count in [('node-v0.13.0','tests/test_fingerprint_adapter.py','minor',5),
+                                         ('node-v0.14.0','tests/test_fingerprint_adapter.py','patch',2),
+                                         ('node-v0.13.0','README.md','docs',2)]:
+                def fake(*args):
+                    return tag if args[0]=='tag' else files
+                with patch.object(test_plan,'ROOT',root),patch.object(test_plan,'git',side_effect=fake):
+                    plan=test_plan.context(env)
+                self.assertEqual(plan['tier'],tier)
+                self.assertEqual(len(plan['matrix']),count)
+
 
 class Gate(unittest.TestCase):
     def results(self, plan):
