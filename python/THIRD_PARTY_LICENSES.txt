@@ -28,7 +28,7 @@ THE SOFTWARE.
 
 ==============================================================================
 Module: github.com/FastTLS/fastls
-Version: v0.1.3-0.20261029044750-32699153caa1
+Version: v0.1.3-0.20261030065220-4c07fe9e4059
 File: LICENSE
 ------------------------------------------------------------------------------
 
@@ -743,7 +743,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ==============================================================================
 Module: github.com/FastTLS/imitate
-Version: v0.1.1
+Version: v0.1.2-0.20261030065723-c75c3bf7679f
 File: LICENSE
 ------------------------------------------------------------------------------
 
@@ -1636,7 +1636,7 @@ Additional reviewed development-source license materials.
 The native build-info identifies the actual artifact inputs; these records preserve the reviewed source bytes.
 
 ==============================================================================
-Reviewed source: fastls@32699153caa15a9bbbe11e178465a315d3b59861
+Reviewed source: fastls@4c07fe9e4059e682b4bd5b9a2138401ab91dd91c
 File: LICENSE
 ------------------------------------------------------------------------------
 
@@ -2072,7 +2072,7 @@ This product's test suite uses uTLS, also distributed under a BSD-style
 license. See third_party/utls.LICENSE.
 
 ==============================================================================
-Reviewed source: imitate@fd10ea4393408e904ae2866ecbfe3efaaaa6ad8e
+Reviewed source: imitate@c75c3bf7679fddaad50e0189b575c3515e5e24ff
 File: LICENSE
 ------------------------------------------------------------------------------
 
