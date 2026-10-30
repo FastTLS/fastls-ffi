@@ -40,10 +40,14 @@ func wireFixture(cert tls.Certificate) (string, func(), error) {
 				_ = raw.SetDeadline(time.Now().Add(5 * time.Second))
 				var ciphers []uint16
 				var alpn []string
+				var groups []tls.CurveID
+				var signatures []tls.SignatureScheme
 				config := &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{"h2"}, MinVersion: tls.VersionTLS12}
 				config.GetConfigForClient = func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
 					ciphers = append([]uint16{}, hello.CipherSuites...)
 					alpn = append([]string{}, hello.SupportedProtos...)
+					groups = append([]tls.CurveID{}, hello.SupportedCurves...)
+					signatures = append([]tls.SignatureScheme{}, hello.SignatureSchemes...)
 					return nil, nil
 				}
 				connection := tls.Server(raw, config)
@@ -59,6 +63,8 @@ func wireFixture(cert tls.Certificate) (string, func(), error) {
 					return
 				}
 				settings := []map[string]uint32{}
+				flow := uint32(0)
+				priorities := []map[string]any{}
 				names := []string{}
 				decoder := hpack.NewDecoder(4096, func(field hpack.HeaderField) { names = append(names, field.Name) })
 				for {
@@ -67,6 +73,12 @@ func wireFixture(cert tls.Certificate) (string, func(), error) {
 						return
 					}
 					switch f := frame.(type) {
+					case *http2.WindowUpdateFrame:
+						if f.StreamID == 0 {
+							flow += f.Increment
+						}
+					case *http2.PriorityFrame:
+						priorities = append(priorities, map[string]any{"stream_id": f.StreamID, "dependency": f.StreamDep, "exclusive": f.Exclusive, "weight": uint16(f.Weight) + 1})
 					case *http2.SettingsFrame:
 						if !f.IsAck() {
 							_ = f.ForeachSetting(func(s http2.Setting) error {
@@ -103,7 +115,7 @@ func wireFixture(cert tls.Certificate) (string, func(), error) {
 						if decoder.Close() != nil {
 							return
 						}
-						body, _ := json.Marshal(map[string]any{"ciphers": ciphers, "alpn": alpn, "settings": settings, "headers": names})
+						body, _ := json.Marshal(map[string]any{"ciphers": ciphers, "alpn": alpn, "groups": groups, "signatures": signatures, "settings": settings, "headers": names, "connection_flow": flow, "priorities": priorities})
 						var block bytes.Buffer
 						encoder := hpack.NewEncoder(&block)
 						_ = encoder.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})

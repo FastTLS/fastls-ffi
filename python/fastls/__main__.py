@@ -15,6 +15,12 @@ def main():
     create.add_argument("spec")
     create.add_argument("output")
     create.add_argument("--source", required=True)
+    adapt = actions.add_parser("adapt")
+    adapt.add_argument("base")
+    adapt.add_argument("output")
+    adapt.add_argument("--ja3", default="")
+    adapt.add_argument("--h2", default="")
+    adapt.add_argument("--source", required=True)
     check = actions.add_parser("validate")
     check.add_argument("bundle")
     check.add_argument("--sha256", required=True)
@@ -28,7 +34,11 @@ def main():
         if action == "pin":
             sub.add_argument("sha256")
     args = parser.parse_args()
-    if args.action == "export":
+    if args.action == "adapt":
+        spec = ProfileSpec.from_fingerprints(ProfileSpec(_strict(_read(args.base))), ja3=args.ja3, h2=args.h2, library=args.library)
+        bundle = ProfileBundle.create(spec, source=args.source, library=args.library)
+        bundle.export(args.output)
+    elif args.action == "export":
         bundle = ProfileBundle.create(ProfileSpec(_strict(_read(args.spec))), source=args.source, library=args.library)
         bundle.export(args.output)
     elif args.action == "validate":

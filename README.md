@@ -12,10 +12,10 @@ Python 0.3.0 / Node 0.12.0 新增认证与请求 Cookie 接口、可选重试和
 
 ## Python：安装与使用
 
-需要 Python 3.10+；本版本为 `fastls==0.3.0`，发行名和导入名均为 `fastls`。
+需要 Python 3.10+；本版本为 `fastls==0.4.0`，发行名和导入名均为 `fastls`。
 
 ```sh
-python -m pip install --only-binary=:all: fastls==0.3.0
+python -m pip install --only-binary=:all: fastls==0.4.0
 ```
 
 ```python
@@ -32,10 +32,10 @@ print(response.status_code, response.text)
 
 ## Node.js：安装与使用
 
-需要 Node.js 22+。以下命令安装正式版 `@fastls/fastls@0.12.0`。
+需要 Node.js 22+。以下命令安装正式版 `@fastls/fastls@0.13.0`。
 
 ```sh
-npm install @fastls/fastls@0.12.0
+npm install @fastls/fastls@0.13.0
 ```
 
 ```js
@@ -102,3 +102,5 @@ try {
 
 
 [S4 development certification and long-observation scope](CERTIFICATION.md).
+
+Python 0.4.0 / Node 0.13.0 新增共享 JA3/H2 到完整 Spec 的离线转换、Firefox 手动配置候选流程及 159.0 Windows 配置。参见[中文说明](FINGERPRINTS.zh-CN.md) · [English contract](FINGERPRINTS.md)。已知 H2 兼容性限制保留，不自动更新或启用候选。

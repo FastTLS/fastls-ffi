@@ -16,3 +16,4 @@ import './parity-response-metadata.mjs';
 import './parity-sdk-sessions.mjs';
 import './parity-capabilities.mjs';
 import './parity-reliability.mjs';
+import './parity-fingerprint-adapter.mjs';

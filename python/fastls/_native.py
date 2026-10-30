@@ -78,6 +78,8 @@ class Native:
             signatures["fastls_transport_create"] = []
         if hasattr(self.lib, "fastls_transport_create_with_options"):
             signatures["fastls_transport_create_with_options"] = [C.c_char_p, C.c_size_t]
+        if hasattr(self.lib, "fastls_profile_adapt"):
+            signatures["fastls_profile_adapt"] = [C.c_char_p, C.c_size_t]
         if hasattr(self.lib, "fastls_features"):
             signatures["fastls_features"] = []
         if hasattr(self.lib, "fastls_ws_start"):

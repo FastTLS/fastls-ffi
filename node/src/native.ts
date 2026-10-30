@@ -116,6 +116,10 @@ export class Native {
       this.functions.read = lib.func("int fastls_read(uint64_t handle, _Out_ void *buffer, size_t capacity, _Out_ size_t *length)");
       this.functions.write = lib.func("int fastls_write(uint64_t handle, const void *buffer, size_t length, int end)");
       const features = new Set(this.call<string[]>("features"));
+      if (features.has("fingerprint_adapter_v1")) {
+        try { this.functions.profile_adapt = lib.func("void *fastls_profile_adapt(void *json, size_t length)"); }
+        catch { /* Reject use below; old HTTP operations remain available. */ }
+      }
       if (features.has("transport_options_v1")) {
         try {
           this.functions.transport_create_with_options = lib.func("void *fastls_transport_create_with_options(void *json, size_t length)");
@@ -174,6 +178,16 @@ export class Native {
       throw error;
     }
     return envelope.result;
+  }
+
+  adaptProfile(input: unknown): Record<string, unknown> {
+    this.requireCapabilities(["fingerprint_adapter_v1", "profile_spec_v1"]);
+    if (!this.functions.profile_adapt) {
+      const error = new FastlsError("native fingerprint adapter symbol is unavailable");
+      error.code = "unsupported_capability"; throw error;
+    }
+    const raw = encodeNativeJSON(input);
+    return this.call<Record<string, unknown>>("profile_adapt", raw, raw.length);
   }
 
   start(input: unknown): bigint {

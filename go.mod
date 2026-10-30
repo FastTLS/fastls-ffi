@@ -3,9 +3,9 @@ module github.com/FastTLS/fastls-ffi
 go 1.26.0
 
 require (
-	github.com/FastTLS/fastls v0.1.3-0.20261029044750-32699153caa1
+	github.com/FastTLS/fastls v0.1.3-0.20261030065220-4c07fe9e4059
 	github.com/FastTLS/fastls/profile v0.1.0
-	github.com/FastTLS/imitate v0.1.1
+	github.com/FastTLS/imitate v0.1.2-0.20261030065723-c75c3bf7679f
 	github.com/gorilla/websocket v1.5.3
 	github.com/quic-go/quic-go v0.57.1
 	golang.org/x/net v0.61.0

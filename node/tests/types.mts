@@ -135,3 +135,8 @@ async function consume(session: Session): Promise<void> {
   session.get('https://example.com', { headers: { X: 1 } });
 }
 void consume;
+
+const compactSpec = ProfileSpec.fromFingerprints(new ProfileSpec({ schema_version: 1 }), { h2: '2:0|0|0|m,a,s,p' });
+void compactSpec;
+// @ts-expect-error Compact parameters require strings.
+ProfileSpec.fromFingerprints(new ProfileSpec({}), { ja3: 771 });

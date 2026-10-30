@@ -8,7 +8,7 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-SUITES = ("python", "api", "python-compat", "reliability", "sdk-sessions", "capabilities", "stability", "network", "pooling", "cookies", "decode-timeouts",
+SUITES = ("python", "api", "python-compat", "reliability", "fingerprint-adapter", "sdk-sessions", "capabilities", "stability", "network", "pooling", "cookies", "decode-timeouts",
           "upload", "duplex", "sse", "notifications", "proxy", "request-options", "websocket", "websocket-cookies")
 
 

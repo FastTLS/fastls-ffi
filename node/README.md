@@ -21,7 +21,7 @@ const h3 = new Session({ httpVersion: 'h3' });
 try { await h3.get('https://example.com'); } finally { await h3.closeAsync(); }
 ```
 
-Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应 **0.12.0**。
+Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应 **0.13.0**。
 
 支持 HTTP/1.1、HTTP/2、流式上传下载、双工、SSE、WebSocket、会话 Cookie 和 HTTP/HTTPS/SOCKS 代理。网络请求由 Go 执行，通过 Koffi 在当前 Node 进程中调用；使用者无需 Python 或 RPC 服务。
 
@@ -37,7 +37,7 @@ Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明�
 安装指定版本：
 
 ```sh
-npm install @fastls/fastls@0.12.0
+npm install @fastls/fastls@0.13.0
 ```
 
 主包通过同版本的可选依赖自动安装当前平台的 Fastls 原生库。保留 optional dependencies；支持 Windows x64、Linux glibc x64/arm64、macOS x64/arm64。Linux musl 和其它架构没有内置包。具体系统最低版本见原生包的 `native/manifest.json`。
@@ -404,3 +404,5 @@ JavaScript无法强行中断任意Promise：取消会立即释放原生请求，
 ## 动态库选择与安装排错
 
 加载优先级：显式 SessionOptions.library → FASTLS_LIBRARY → 包内 manifest → 同版本平台可选依赖；源码目录可回退仓库 dist，已安装 thin 包不回退仓库。普通 npm 用户应保留 optionalDependencies，不必设置外部库路径。外部旧库可能覆盖新包，ABI 号相同也不保证扩展能力相同。Linux glibc 与 macOS 最低版本、摘要及动态依赖以 native/manifest.json 为准。更多排错见 [在线帮助](https://fasttls.github.io/help/)。
+
+`ProfileSpec.fromFingerprints(base, { ja3, h2 })` 使用 Go 共用的离线转换器，返回经校验的完整 Spec；支持现有 Session/fetch 和 ProfileStore。详细[中文说明](https://github.com/FastTLS/fastls-ffi/blob/main/FINGERPRINTS.zh-CN.md) · [English contract](https://github.com/FastTLS/fastls-ffi/blob/main/FINGERPRINTS.md)。

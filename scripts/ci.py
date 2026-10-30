@@ -275,6 +275,7 @@ def run(stage="all"):
             execute("capabilities-source", [sys.executable, "tests/test_capabilities.py"])
             execute("python-compat-source", [sys.executable, "tests/test_python_compat.py"])
             execute("reliability-source", [sys.executable, "tests/test_reliability.py"])
+            execute("fingerprint-adapter-source", [sys.executable, "tests/test_fingerprint_adapter.py"])
             execute("stability-source", [sys.executable, "tests/test_stability.py"])
             execute("network-source", [sys.executable, "tests/test_network.py"])
             execute("pooling-source", [sys.executable, "tests/test_pooling.py"])

@@ -82,6 +82,7 @@ class Selection(unittest.TestCase):
 
     def test_sdk_auth_retry_cookie_and_session_changes_raise_risk_floor(self):
         for filename in ('python/fastls/client.py', 'python/fastls/auth.py', 'python/fastls/cookies.py',
+                         'python/fastls/profiles.py', 'node/src/profiles.ts',
                          'python/fastls/redirects.py', 'python/fastls/retry.py', 'python/fastls/profile_store.py',
                          'node/src/session.ts', 'node/src/retry.ts', 'node/src/cookies.ts', 'node/src/profile-store.ts'):
             with self.subTest(filename=filename):
