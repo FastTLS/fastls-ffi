@@ -134,6 +134,49 @@ class CapabilityAcceptance(FixtureCase):
                     response.read()
             self.assertEqual(session.get(self.fixture["https3"] + "/status?code=204").status_code, 204)
 
+    def test_h3_policy_combination_and_owner_isolation(self):
+        url = self.fixture["https3"]
+        policy = {"allow_hosts": ["127.0.0.1"], "allow_cidrs": ["127.0.0.0/8"]}
+        with self.session(http_version="h3", address_policy=policy) as allowed, self.session(http_version="h3", address_policy={"deny_cidrs": ["127.0.0.0/8"]}) as denied:
+            policy["allow_hosts"][0] = "blocked.test"
+            response = allowed.get(url + "/echo")
+            self.assertEqual(response.http_version, "HTTP/3.0")
+            with self.assertRaises(FastlsError) as failure:
+                denied.get(url)
+            self.assertEqual(failure.exception.code, "address_denied")
+            with self.assertRaises(TypeError):
+                denied.get(url, address_policy={})
+            self.assertEqual(allowed.get(url + "/status?code=204").status_code, 204)
+        with self.session(address_policy={"allow_cidrs": ["127.0.0.0/8"]}) as owner:
+            self.assertEqual(owner.get(url, http_version="h3").http_version, "HTTP/3.0")
+        async def exercise():
+            async with self.session(async_=True, http_version="h3", address_policy={"allow_cidrs": ["127.0.0.0/8"]}) as owner:
+                response = await owner.post(url + "/echo", data=SLAB)
+                self.assertEqual(await response.aread(), SLAB)
+        asyncio.run(exercise())
+
+    def test_h3_policy_combined_capability_before_allocation(self):
+        with self.session() as monitor:
+            real = monitor._native
+            baseline = monitor.stats()["open_sessions"]
+            class LegacyView:
+                lib = real.lib
+                def __getattr__(self, name):
+                    return getattr(real, name)
+                def call(self, name, *args):
+                    value = real.call(name, *args)
+                    return [v for v in value if v != "http3_address_policy_v1"] if name == "fastls_features" else value
+            with patch("fastls.client.Native", return_value=LegacyView()):
+                with self.assertRaises(FastlsError) as failure:
+                    self.session(http_version="h3", address_policy={})
+                self.assertEqual(failure.exception.code, "unsupported_capability")
+                with self.session(address_policy={}) as owner:
+                    with self.assertRaises(FastlsError) as failure:
+                        owner.get(self.fixture["https3"], http_version="h3")
+                    self.assertEqual(failure.exception.code, "unsupported_capability")
+                    self.assertEqual(owner.stats()["open_requests"], 0)
+            self.assertEqual(monitor.stats()["open_sessions"], baseline)
+
     def test_unsupported_combinations_and_no_tcp_fallback(self):
         with self.session(http_version="h3", timeout=0.3) as session:
             for options in ({"profile": "chrome/156/windows"}, {"proxy": "http://127.0.0.1:1"}, {"http_version": "auto"}):
@@ -143,9 +186,6 @@ class CapabilityAcceptance(FixtureCase):
             with self.assertRaises(FastlsError):
                 session.get(self.fixture["https2"] + "/status?code=204")
             self.assertEqual(session.stats()["open_requests"], 0)
-        with self.assertRaises(FastlsError) as failure:
-            self.session(http_version="h3", address_policy={})
-        self.assertEqual(failure.exception.code, "unsupported_capability")
 
 
 if __name__ == "__main__":

@@ -37,7 +37,6 @@ func TestTransportConfigurationRejectsMalformedWithoutHandles(t *testing.T) {
 		`{"schema_version":1,"profile_spec":null}`, `{"schema_version":1,"http_version":"h2"}`,
 		`{"schema_version":1,"profile_spec":{}}`,
 		`{"schema_version":1,"http_version":"h3","profile":"chrome/156/windows"}`,
-		`{"schema_version":1,"http_version":"h3","address_policy":{}}`,
 		`{"schema_version":1}` + strings.Repeat(" ", MaxInput),
 		`{"schema_version":1,"profile_spec":` + strings.Repeat("[", 33) + `0` + strings.Repeat("]", 33) + `}`} {
 		if id, err := e.CreateTransportWithOptions([]byte(raw)); err == nil || id != 0 {

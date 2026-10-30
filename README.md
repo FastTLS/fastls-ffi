@@ -1,5 +1,7 @@
 # Fastls Python / Node.js SDK
 
+Python 0.6.0 / Node 0.15.0 支持显式 H3 与可信 Session 地址策略组合，需原生 `http3_address_policy_v1`；默认校验证书，旧库在分配资源前拒绝。详见 [组合契约](H3_POLICY.zh-CN.md)。
+
 [Historical G1 integration record](G1_INTEGRATION_STATUS.md).
 
 [English documentation](https://fasttls.github.io/en/guide/)
@@ -12,10 +14,10 @@ Python 0.3.0 / Node 0.12.0 新增认证与请求 Cookie 接口、可选重试和
 
 ## Python：安装与使用
 
-需要 Python 3.10+；本版本为 `fastls==0.4.0`，发行名和导入名均为 `fastls`。
+需要 Python 3.10+；本版本为 `fastls==0.6.0`，发行名和导入名均为 `fastls`。
 
 ```sh
-python -m pip install --only-binary=:all: fastls==0.4.0
+python -m pip install --only-binary=:all: fastls==0.6.0
 ```
 
 ```python
@@ -32,10 +34,10 @@ print(response.status_code, response.text)
 
 ## Node.js：安装与使用
 
-需要 Node.js 22+。以下命令安装正式版 `@fastls/fastls@0.13.0`。
+需要 Node.js 22+。以下命令安装正式版 `@fastls/fastls@0.15.0`。
 
 ```sh
-npm install @fastls/fastls@0.13.0
+npm install @fastls/fastls@0.15.0
 ```
 
 ```js

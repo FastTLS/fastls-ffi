@@ -188,6 +188,7 @@ class Session:
             raise ValueError("http_version must be auto or h3")
         self._profile_spec = profile_spec
         self._http_version = http_version
+        self._has_address_policy = address_policy is not None
         if proxy is not None and not isinstance(proxy, str):
             raise TypeError("proxy must be a URL string or None")
         self.proxy = proxy
@@ -237,6 +238,8 @@ class Session:
         if http_version == "h3":
             configuration["http_version"] = "h3"
             required.add("http3_v1")
+            if self._has_address_policy and http_version == "h3":
+                required.add("http3_address_policy_v1")
         if required:
             self._require_capabilities(required)
             if profile is not None:
@@ -293,6 +296,8 @@ class Session:
             if http_version not in ("auto", "h3"):
                 raise ValueError("http_version must be auto or h3")
             required.add("http3_v1")
+            if self._has_address_policy and http_version == "h3":
+                required.add("http3_address_policy_v1")
         if required:
             self._require_capabilities(required)
         selected_proxy = self.proxy if proxy is _INHERIT_PROXY else proxy

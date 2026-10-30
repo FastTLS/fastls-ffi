@@ -24,7 +24,7 @@ def create(lab):
     spec=ProfileSpec(value)
     return [Session(address_policy={'allow_cidrs':['127.0.0.0/8']},notifications='poll'),
             Session(profile_spec=spec,ca_file=lab['ca_file'],notifications='poll'),
-            Session(http_version='h3',ca_file=lab['ca_file'],notifications='poll')]
+            Session(http_version='h3',address_policy={'allow_cidrs':['127.0.0.0/8']},ca_file=lab['ca_file'],notifications='poll')]
 def sample():return dict(resources(),native=monitor.stats())
 try:
     lab=json.loads(fixture.stdout.readline());clients=create(lab)

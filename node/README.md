@@ -1,5 +1,7 @@
 # Fastls Node.js SDK
 
+Python 0.6.0 / Node 0.15.0 支持显式 H3 与可信 Session 地址策略组合，需原生 `http3_address_policy_v1`；默认校验证书，旧库在分配资源前拒绝。详见 [组合契约](https://github.com/FastTLS/fastls-ffi/blob/main/H3_POLICY.zh-CN.md)。
+
 Node 0.14.0 增加完整 Spec 的 H2 首流编号与初始流窗口配置，并导出 `HTTP2StreamConfig` 类型。省略保持旧行为，需要 `http2.stream.v1` 和原生 `http2_stream_v1`；转换、Bundle/Store、Session/fetch 共用契约。旧原生库明确拒绝，窗口预算及候选采用边界见 [中文契约](https://github.com/FastTLS/fastls-ffi/blob/main/FINGERPRINTS.zh-CN.md)。
 
 Node 0.11.0 起支持 Session `addressPolicy`、`profileSpec: new ProfileSpec(...)` 和
@@ -39,7 +41,7 @@ Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明�
 安装指定版本：
 
 ```sh
-npm install @fastls/fastls@0.13.0
+npm install @fastls/fastls@0.15.0
 ```
 
 主包通过同版本的可选依赖自动安装当前平台的 Fastls 原生库。保留 optional dependencies；支持 Windows x64、Linux glibc x64/arm64、macOS x64/arm64。Linux musl 和其它架构没有内置包。具体系统最低版本见原生包的 `native/manifest.json`。

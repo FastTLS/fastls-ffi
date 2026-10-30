@@ -1,5 +1,7 @@
 # C ABI v1
 
+显式 H3 与可信地址策略组合新增可选能力 `http3_address_policy_v1`，无新符号或所有权变更；详见 [组合契约](H3_POLICY.zh-CN.md)。
+
 新增能力的开发候选契约见 [CAPABILITIES.md](CAPABILITIES.md)：
 `fastls_transport_create_with_options(data, length)` 使用独立能力标识，
 校验成功后才返回传输 owner；可选符号缺失时不得回退忽略配置。

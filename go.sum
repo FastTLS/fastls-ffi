@@ -1,5 +1,9 @@
 github.com/FastTLS/fastls v0.1.3-0.20261030131347-13c745e861fa h1:M1rQvbo8ioK363kYn0frGKtq47Zcc3O5I7VRnyxU+7I=
 github.com/FastTLS/fastls v0.1.3-0.20261030131347-13c745e861fa/go.mod h1:Qeczuvzg+Oonj8MX14WSiNKlKlwns0KiEghW+FUbWkc=
+github.com/FastTLS/fastls v0.1.3-0.20261030150518-5d7edeb24616 h1:znH1KWGEb73KlZuwuOdCYpoBvzvu4j4ROKH4PwiZw1U=
+github.com/FastTLS/fastls v0.1.3-0.20261030150518-5d7edeb24616/go.mod h1:Qeczuvzg+Oonj8MX14WSiNKlKlwns0KiEghW+FUbWkc=
+github.com/FastTLS/fastls v0.1.3-0.20261030150900-f7ec5e44a795 h1:I7ksml/CqMLNH/97jjUEXZoBY2nCWOZk/uBXucmKK88=
+github.com/FastTLS/fastls v0.1.3-0.20261030150900-f7ec5e44a795/go.mod h1:Qeczuvzg+Oonj8MX14WSiNKlKlwns0KiEghW+FUbWkc=
 github.com/FastTLS/fastls/profile v0.1.1-0.20261030130219-e9e40f15c9ac h1:YQlCrDzxU+C/WmxrMlZR6V2O1J1HzQvcbSePAHLVTCQ=
 github.com/FastTLS/fastls/profile v0.1.1-0.20261030130219-e9e40f15c9ac/go.mod h1:dXt6QcpzDhLvBAqbNIpQ2g/vqgUXQRRuaxotdZB6EbU=
 github.com/FastTLS/ftransport v0.1.2-0.20261030131050-d9812320808e h1:u+U+/6pDjk5ijyeFnzu4W20nCyRo0jLHdm9NueHi/Ls=

@@ -1,3 +1,23 @@
+# Python 0.6.0 / Node 0.15.0
+
+This minor release adds explicit H3 with an immutable trusted address policy.
+Go validates every DNS answer and binds a connected UDP socket to an approved
+numeric peer, while retaining origin/SNI/certificate identity. Alternate peers
+are rejected; new connections resolve afresh. Cancellation and owner closure
+release the sockets. The policy path does not enable migration, ECN/GSO or 0-RTT.
+
+Both SDKs negotiate `http3_address_policy_v1` before allocation, including
+per-request H3 on a policy owner. Python sync/async, Node Session/fetch and the
+shared C ABI use the same contract; older backends fail explicitly. C ABI,
+transport schema, Spec and Bundle remain v1. Existing H2/browser inputs and
+unrestricted H3 keep their behavior. No proxy, Alt-Svc, browser H3 fingerprint,
+request Trailer or new platform support is added.
+
+See [English contract](H3_POLICY.md) and [中文契约](H3_POLICY.zh-CN.md).
+Production source, five-platform validation and publication status are recorded
+in the formal release manifests. Independent H3 peer and old-native-library
+checks are recorded separately from the shared-backend fixture.
+
 # Python 0.5.0 / Node 0.14.0
 
 This minor release adds optional first request stream IDs and initial per-stream

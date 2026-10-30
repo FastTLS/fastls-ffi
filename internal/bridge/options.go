@@ -256,7 +256,7 @@ func (e *Engine) CreateTransportWithOptions(raw []byte) (uint64, error) {
 	if c.spec != nil && c.selector != "" {
 		return 0, invalidConfig()
 	}
-	if c.version == fastls.HTTPVersion3 && (c.policy != nil || c.spec != nil || c.selector != "") {
+	if c.version == fastls.HTTPVersion3 && (c.spec != nil || c.selector != "") {
 		return 0, unsupported()
 	}
 	opts := fastls.Options{VerifyTLS: true, AddressPolicy: c.policy, HTTPVersion: c.version}
@@ -321,7 +321,7 @@ func applyTransport(in *Input, opts *fastls.Options, c *transportConfig, e *Engi
 			version = fastls.HTTPVersion3
 		}
 	}
-	if version == fastls.HTTPVersion3 && (c.policy != nil || spec != nil || selector != "" || in.Proxy != "" || in.Duplex || len(in.Trailers) > 0) {
+	if version == fastls.HTTPVersion3 && (spec != nil || selector != "" || in.Proxy != "" || in.Duplex || len(in.Trailers) > 0) {
 		return match, "", unsupported()
 	}
 	if version == fastls.HTTPVersion3 && !strings.HasPrefix(in.URL, "https://") {

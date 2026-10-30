@@ -1,3 +1,4 @@
+> Python 0.6.0 / Node 0.15.0 add `http3_address_policy_v1`: see [H3 policy](H3_POLICY.md) / [中文](H3_POLICY.zh-CN.md).
 > Python 0.3.0 / Node 0.12.0 保留本页能力，并增加 [认证、重试与离线配置](RELIABILITY.zh-CN.md)。
 > Full Spec / address policy / explicit H3 first shipped in Python 0.2.0 / Node 0.11.0.
 > The older baseline mentioned below records the original capability introduction.
@@ -31,7 +32,7 @@ that can create its own unrestricted owner.
 The compiled policy is immutable and belongs to all pools of that owner.
 Each SDK redirect retains the owner; native checks bind DNS results, actual
 peer and origin. No request policy replacement exists. Unsupported proxies,
-H3 and WebSocket combinations fail explicitly. Syntax/combination prechecks
+q-selector H3 and WebSocket combinations fail explicitly. Explicit H3 without a selector supports policies only with `http3_address_policy_v1`. Syntax/combination prechecks
 perform no DNS/dial; a DNS-dependent address decision may resolve but never
 connects to a denied peer. Default owners retain existing behavior.
 
@@ -65,7 +66,7 @@ this candidate instead of silently using a selector.
 
 `http_version="h3"` / `httpVersion: "h3"` requires direct HTTPS over QUIC
 on every hop, without TCP fallback. Implicit SDK browser defaults are omitted;
-explicit conflicting selectors, Spec, proxies, policies, request trailers,
+explicit conflicting selectors, Spec, proxies, request trailers,
 WebSocket and H2 duplex are rejected. A forced-H3 owner cannot be changed to
 auto per request. Auto retains existing H1/H2 behavior without Alt-Svc discovery.
 Cancellation, body closure and Session closure follow existing SDK ownership.

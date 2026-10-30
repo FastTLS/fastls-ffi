@@ -17,7 +17,7 @@
     "test_websocket_cookies.py": "f88adbf0e134795ecc183a008461fbe581e453f8ecb13c1d52f9db086f08995c",
     "test_response_metadata.py": "de73969b2b693655c0000760bd39347c2b32b2485c6ece4feba78cd34dc30c39",
     "test_sdk_sessions.py": "21c43ea4882d9b28fecdb29a57c92bbf72e0dc0f0908a8a0184ffe364d6c7343",
-    "test_capabilities.py": "20e4643b026e7cd880c2690b21de5d06d8eb5ca8c243a9ad43e25cfcd89de146",
+    "test_capabilities.py": "9ab7f7e2d2035a031e0606986ae9f6bd9610f0191f5e784adbd951c7e5c4d323",
     "test_reliability.py": "67318d865243ead750a0c6445f6d066b471534eeeb2ff0c6072ed99665da8da2",
     "test_fingerprint_adapter.py": "c76309fcc42e7470513c4a2acb90894be84dd38d2391b3f652a9f167fa0b9f47"
   },

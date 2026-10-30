@@ -107,5 +107,32 @@ p('test_unsupported_combinations_and_no_tcp_fallback', async t => {
   }
   await assert.rejects(s.get(fixture.https2 + '/status?code=204'));
   assert.equal(s.stats().open_requests, 0);
-  assert.throws(() => session(t, { httpVersion: 'h3', addressPolicy: {} }), error => error.code === 'unsupported_capability');
+});
+
+p('test_h3_policy_combination_and_owner_isolation', async t => {
+ const policy={allow_hosts:['127.0.0.1'],allow_cidrs:['127.0.0.0/8']};
+ const allowed=session(t,{httpVersion:'h3',addressPolicy:policy}),denied=session(t,{httpVersion:'h3',addressPolicy:{deny_cidrs:['127.0.0.0/8']}});
+ policy.allow_hosts[0]='blocked.test';
+ assert.equal((await allowed.get(fixture.https3+'/echo')).httpVersion,'HTTP/3.0');
+ await assert.rejects(denied.get(fixture.https3),e=>e.code==='address_denied');
+ await assert.rejects(denied.get(fixture.https3,{addressPolicy:{}}));
+ assert.equal((await allowed.get(fixture.https3+'/status?code=204')).status,204);
+ const owner=session(t,{addressPolicy:{allow_cidrs:['127.0.0.0/8']}});
+ assert.equal((await owner.get(fixture.https3,{httpVersion:'h3'})).httpVersion,'HTTP/3.0');
+ assert.deepEqual((await allowed.post(fixture.https3+'/echo',{body:SLAB})).content,SLAB);
+ const fetched=await sdk.fetch(fixture.https3+'/echo',{method:'POST',body:SLAB,httpVersion:'h3',addressPolicy:{allow_cidrs:['127.0.0.0/8']},caFile:fixture.ca_file});
+ assert.deepEqual(Buffer.from(await fetched.arrayBuffer()),SLAB);
+});
+
+p('test_h3_policy_combined_capability_before_allocation', async t => {
+ const monitor=session(t),native=monitor.native,original=native.call;
+ const baseline=monitor.stats().open_sessions;
+ native.call=function(name,...args){const value=original.call(this,name,...args);return name==='features'?value.filter(v=>v!=='http3_address_policy_v1'):value;};
+ try {
+  assert.throws(()=>session(t,{httpVersion:'h3',addressPolicy:{}}),e=>e.code==='unsupported_capability');
+  const owner=session(t,{addressPolicy:{}});
+  await assert.rejects(owner.get(fixture.https3,{httpVersion:'h3'}),e=>e.code==='unsupported_capability');
+  assert.equal(owner.stats().open_requests,0);await owner.closeAsync();
+ } finally {native.call=original;}
+ assert.equal(monitor.stats().open_sessions,baseline);
 });

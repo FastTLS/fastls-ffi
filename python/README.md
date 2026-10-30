@@ -1,5 +1,7 @@
 # fastls Python SDK
 
+Python 0.6.0 / Node 0.15.0 支持显式 H3 与可信 Session 地址策略组合，需原生 `http3_address_policy_v1`；默认校验证书，旧库在分配资源前拒绝。详见 [组合契约](../H3_POLICY.zh-CN.md)。
+
 Python 0.5.0 增加完整 Spec 的 H2 首流编号和初始流窗口配置，省略时保留旧行为；需要 `http2.stream.v1` 和原生 `http2_stream_v1`。JA3/H2 转换、Bundle/Store 及异步入口保留这些字段，旧原生库明确拒绝。窗口额度及候选采用边界见 [中文契约](../FINGERPRINTS.zh-CN.md)。
 
 Python 0.2.0 起支持 Session `address_policy`、`profile_spec=ProfileSpec(...)` 和
@@ -26,7 +28,7 @@ with Session(http_version="h3") as session:
 需要 Python 3.10+。推荐在虚拟环境中安装：
 
 ```shell
-python -m pip install --only-binary=:all: fastls==0.4.0
+python -m pip install --only-binary=:all: fastls==0.6.0
 ```
 
 平台 wheel 已包含动态库，无需 Go、C 编译器或额外下载 DLL。`--only-binary=:all:` 确保没有匹配平台时明确失败，避免误装不含动态库的源码包。

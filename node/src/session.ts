@@ -121,6 +121,7 @@ export class Session {
   }
   readonly notificationMode: "async-events" | "poll";
   readonly cookies: Cookies;
+  private readonly hasAddressPolicy: boolean;
   private readonly native: Native;
   private readonly handle: bigint;
   private readonly profile: string;
@@ -142,6 +143,7 @@ export class Session {
 
   constructor(options: SessionOptions = {}) {
     if (options.retry !== undefined && !(options.retry instanceof RetryPolicy)) throw new TypeError("retry must be RetryPolicy");
+    this.hasAddressPolicy = options.addressPolicy !== undefined;
     this.retry = options.retry;
     this.proxy = proxyValue(options.proxy);
     this.proxyCaPem = proxyTrust(options.proxyCaFile);
@@ -179,6 +181,7 @@ export class Session {
     if (options.httpVersion === "h3") {
       configuration.http_version = "h3";
       required.push("http3_v1");
+      if (this.hasAddressPolicy && options.httpVersion === "h3") required.push("http3_address_policy_v1");
     }
     if (required.length) {
       this.native.requireCapabilities(required);
@@ -287,6 +290,7 @@ export class Session {
     if (options.httpVersion !== undefined) {
       if (!["auto", "h3"].includes(options.httpVersion)) throw new TypeError("httpVersion must be auto or h3");
       required.push("http3_v1");
+      if (this.hasAddressPolicy && options.httpVersion === "h3") required.push("http3_address_policy_v1");
     }
     if (required.length) this.native.requireCapabilities(required);
     const handle = this.native.start({

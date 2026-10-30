@@ -46,7 +46,7 @@ func fastls_transport_create() *C.char {
 //export fastls_features
 func fastls_features() *C.char {
 	return result(func() (any, error) {
-		return []string{"http2_stream_v1", "fingerprint_adapter_v1", "transport_options_v1", "transport_address_policy_v1", "profile_spec_v1", "http3_v1", "transport_context_v1", "websocket_cookie_control_v1", "websocket_cookies", "websocket_cookies_v1", "websocket_v1", "https_proxy_tls", "proxy_tunnels", "session_notifications", "duplex_h2", "stream_upload", "write_timeout", "stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers", "request_trailers", "response_metadata"}, nil
+		return []string{"http3_address_policy_v1", "http2_stream_v1", "fingerprint_adapter_v1", "transport_options_v1", "transport_address_policy_v1", "profile_spec_v1", "http3_v1", "transport_context_v1", "websocket_cookie_control_v1", "websocket_cookies", "websocket_cookies_v1", "websocket_v1", "https_proxy_tls", "proxy_tunnels", "session_notifications", "duplex_h2", "stream_upload", "write_timeout", "stream_decode", "phase_timeouts", "session_cookies", "multivalue_headers", "request_trailers", "response_metadata"}, nil
 	})
 }
 
