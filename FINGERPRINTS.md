@@ -88,8 +88,21 @@ Its read-only manual workflow outputs a semantic diff, provenance, restrictions
 and ProfileBundle v1 candidate. Review the producer/source and digest before
 installing with ProfileStore; import, session creation and requests do not fetch
 updates. Known unsupported H2 stream details stay explicit in the report. Other
-families/platforms, ESR, browser H3 fingerprints, schedules and automatic PRs or
+platforms, ESR, browser H3 fingerprints, schedules and automatic PRs or
 publishing remain outside this batch.
+
+The subsequent [Chrome/Edge maintenance tools](https://github.com/FastTLS/imitate/blob/v2/tools/chromium/README.md)
+share `python tools/browser_update.py --browser chrome` or `--browser edge`,
+followed by explicit source paths and a new output directory. They cover Windows
+x64 en-US minimized headed cold navigation, five independent samples in each of
+three TLS/H1/H2 scenarios per product. Chrome uses the current pinned stable
+official signed enterprise MSI; Edge additionally binds the official MSI hash.
+Both verify installer/browser signatures and full versions, extract without
+installing, and reject unsigned replacements. Chrome's recorded archive SHA256
+is local evidence, not a vendor-published checksum. New maintenance tools do not
+replace the data bundled in Python 0.4.0 / Node 0.13.0; candidates require explicit
+review, import and pin. Randomized extension orders remain raw evidence alongside
+membership/parameter comparison, not a distributional-equivalence claim.
 
 Protocol references: [JA3 definition](https://github.com/salesforce/ja3#readme),
 [HTTP/2 settings](https://www.rfc-editor.org/rfc/rfc9113.html#section-6.5.2),

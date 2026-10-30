@@ -28,7 +28,9 @@ python -m fastls profile adapt base-spec.json candidate.json --h2 '2:0;4:131072|
 
 浏览器更新通过 [imitate 手动工具](https://github.com/FastTLS/imitate/blob/v2/tools/firefox/README.md) 单独执行。当前覆盖 Firefox 普通稳定版、Windows x64、zh-CN、无头冷连接，每次三个场景各五个新进程，共 15 个样本；官方 HTTPS 下载及 SHA512SUMS 校验后，由独立服务端采集并执行在线/离线回放。
 
-工作流只有读取权限，生成来源、语义差异、兼容性限制与 ProfileBundle v1 候选；不会修改活动配置、创建 PR 或自动发布。调用方审核来源与摘要后使用已有 ProfileStore 导入、固定、回滚。导入、会话创建和请求均不隐式联网。已知 H2 初始流编号及流级窗口等差异保留，不能写成完整等价。其它浏览器/平台、ESR、H3 指纹和定时更新继续保留后续。
+后续[Chrome／Edge 维护工具](https://github.com/FastTLS/imitate/blob/v2/tools/chromium/README.md)共用 `python tools/browser_update.py --browser chrome` 或 `--browser edge` 入口，再传入源码路径与新输出目录。仅 Windows x64、en-US、有界面最小化冷导航，每产品三个场景各五个独立样本。Chrome 使用当前固定稳定版的官方签名企业 MSI；Edge 核对官方 MSI 摘要。两者都核验 MSI/浏览器签名与完整版本，仅解包，不安装；不接受无签名文件替代。Chrome 的本地归档 SHA256 不代表厂商提供的摘要。
+
+工作流只有读取权限，生成来源、语义差异、兼容性限制与 ProfileBundle v1 候选；不会修改活动配置、创建 PR 或自动发布。调用方审核来源与摘要后使用已有 ProfileStore 导入、固定、回滚。导入、会话创建和请求均不隐式联网。已知 H2 初始流编号及流级窗口等差异保留，不能写成完整等价。新增维护工具不改变 Python 0.4.0 / Node 0.13.0 内置的固定配置；本次候选需显式采用。其它平台、ESR、H3 指纹和定时更新继续保留后续。
 
 Go 用户需固定含 `AdaptProfile` 的核心版本；旧稳定版 v0.1.2 没有该接口。Firefox 实测数据也使用固定生成器版本：
 

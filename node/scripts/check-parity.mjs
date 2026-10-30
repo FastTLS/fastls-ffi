@@ -13,7 +13,9 @@ const pythonSpecific=['test_api.py','test_python_compat.py'];
 // request behavior. SDK suites still require explicit Node scenario mappings.
 // Continuous workloads and sampler fault injection test the benchmark host,
 // rather than adding SDK capabilities requiring new Node parity scenarios.
-const infrastructure=['test_release_reuse.py','test_ci_plan.py','test_ci.py','test_ci_artifact.py','test_pypi.py','test_benchmarks.py','test_regression.py','test_windows_cpu_probe.py','test_c_wait.py','test_c_websocket.py','test_continuous_regression.py','test_observation.py','test_windows_snapshot.py'];
+// Source-license gates and metadata-promotion scheduling do not add request API
+// scenarios. Both run in dependencies before the platform matrix is provisioned.
+const infrastructure=['test_license_preflight.py','test_python_stages.py','test_release_reuse.py','test_ci_plan.py','test_ci.py','test_ci_artifact.py','test_pypi.py','test_benchmarks.py','test_regression.py','test_windows_cpu_probe.py','test_c_wait.py','test_c_websocket.py','test_continuous_regression.py','test_observation.py','test_windows_snapshot.py'];
 const unreviewed=readdirSync(resolve(root,'tests')).filter(file=>/^test_.*\.py$/.test(file)&&![...sources,...deferred,...infrastructure,...pythonSpecific].includes(file));
 if(unreviewed.length)throw Error(`Review new Python suites before claiming parity: ${unreviewed.join(', ')}`);
 const python=new Set();
