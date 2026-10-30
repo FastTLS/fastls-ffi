@@ -64,10 +64,11 @@ def module_licenses():
     return result
 
 
-def reviewed_source_notices():
+def reviewed_source_notices(info=None):
     captured = json.loads((ROOT / "ci/reviewed-source-licenses.json").read_text(encoding="utf-8"))
     info_path = ROOT / "dist/build-info.json"
-    info = json.loads(info_path.read_text(encoding="utf-8")) if info_path.is_file() else {}
+    if info is None:
+        info = json.loads(info_path.read_text(encoding="utf-8")) if info_path.is_file() else {}
     parts = ["", "Additional reviewed development-source license materials.",
              "The native build-info identifies the actual artifact inputs; these records preserve the reviewed source bytes."]
     for name, record in sorted(captured["sources"].items()):
@@ -86,7 +87,7 @@ def reviewed_source_notices():
     return parts
 
 
-def render_notices():
+def render_notices(info=None):
     parts = [
         "Fastls FFI native-library third-party license materials",
         "Published module dependency notices and separately identified reviewed development-source materials. Do not edit by hand.",
@@ -95,14 +96,14 @@ def render_notices():
         parts.extend(["", "=" * 78, f"Module: {name}", f"Version: {version}"])
         for path in files:
             parts.extend([f"File: {path.name}", "-" * 78, path.read_text(encoding="utf-8", errors="replace").rstrip()])
-    parts.extend(reviewed_source_notices())
+    parts.extend(reviewed_source_notices(info))
     return "\n".join(parts) + "\n"
 
 
-def materials(write):
+def materials(write, info=None):
     if (ROOT / "LICENSE").read_bytes() != (PYTHON / "LICENSE").read_bytes():
         raise RuntimeError("repository and Python package LICENSE files differ")
-    expected = render_notices()
+    expected = render_notices(info)
     if write:
         NOTICE.write_text(expected, encoding="utf-8", newline="\n")
     elif not NOTICE.is_file() or NOTICE.read_text(encoding="utf-8") != expected:

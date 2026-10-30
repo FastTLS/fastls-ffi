@@ -153,6 +153,7 @@ def context(env):
                     node_delivery = None
                 if node_delivery:
                     plan.update(node=False, candidates=False, node_delivery_reuse=node_delivery)
+                    plan['python_source_run_id'] = str(node_delivery['run_id'])
                     plan['reasons'].append('Node registry packages use the verified same-commit main artifacts; this tag publishes only fresh Python/C ABI artifacts')
     return plan
 

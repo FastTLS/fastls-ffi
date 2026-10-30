@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import platform
 import shutil
+import shlex
 import subprocess
 import sys
 
@@ -74,6 +75,11 @@ def main():
         env["GOWORK"] = "off"
     from module_inputs import capture, source_commits
     formal = capture(ROOT, env) if not args.local else None
+    from license_preflight import check as check_licenses
+    sources = source_commits(formal) if formal is not None else {
+        name: subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=path, text=True).strip()
+        for name, path in [('fastls', fastls), ('ftransport', ftransport), ('imitate', imitate)]}
+    check_licenses(sources, formal)
     name = "fastls.dll" if sys.platform == "win32" else "libfastls.dylib" if sys.platform == "darwin" else "libfastls.so"
     out = ROOT / "dist"
     out.mkdir(exist_ok=True)
@@ -94,6 +100,11 @@ def main():
         "package_version": package_version(),
         "go": subprocess.check_output(["go", "version"], text=True).strip(),
         "cc": env.get("CC", "gcc"), "abi": 1,
+        "build_configuration": json.loads(subprocess.check_output([
+            'go', 'env', '-json', 'GOOS', 'GOARCH', 'GOAMD64', 'GOARM64', 'GOEXPERIMENT',
+            'CGO_ENABLED', 'CGO_CFLAGS', 'CGO_CPPFLAGS', 'CGO_CXXFLAGS', 'CGO_LDFLAGS', 'GOFLAGS'],
+            env=env, text=True, encoding='utf-8')),
+        "cc_version": subprocess.check_output(shlex.split(env.get('CC', 'gcc')) + ['--version'], env=env, text=True, encoding='utf-8'),
         "workspace_source": before,
         "sources": {name: subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=path, text=True).strip()
                     for name, path in (("fastls-ffi", ROOT), ("fastls", fastls),

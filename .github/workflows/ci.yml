@@ -30,6 +30,7 @@ jobs:
       plan: ${{ steps.plan.outputs.plan }}
       soak_seconds: ${{ steps.plan.outputs.soak_seconds }}
       extended_enabled: ${{ steps.plan.outputs.extended_enabled }}
+      python_source_run_id: ${{ steps.plan.outputs.python_source_run_id }}
     steps:
     - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       with:
@@ -52,6 +53,8 @@ jobs:
       run: |
         python -m unittest discover -s tests -p test_ci_plan.py -v
         python -m unittest discover -s tests -p test_release_reuse.py -v
+        python -m unittest discover -s tests -p test_license_preflight.py -v
+        python -m unittest discover -s tests -p test_python_stages.py -v
     - name: Check patch whitespace
       run: git diff --check HEAD^ HEAD
     - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
@@ -73,6 +76,10 @@ jobs:
         FTRANSPORT_REF: ${{ inputs.ftransport_ref }}
         IMITATE_REF: ${{ inputs.imitate_ref }}
       run: python scripts/ci.py resolve
+      if: steps.plan.outputs.native == 'true'
+    - name: Verify source licenses before platform compilation
+      # Resolve and audit source notices before any platform compiler is started.
+      run: python scripts/license_preflight.py
       if: steps.plan.outputs.native == 'true'
     - name: Test package publication boundaries
       run: python tests/test_pypi.py
@@ -223,9 +230,27 @@ jobs:
       with:
         name: inputs-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
         path: workspace/fastls-ffi
-    - name: Verify inputs and execute all Python stages once
-      run: python -c "import subprocess,sys; [subprocess.run([sys.executable,'scripts/ci.py','run','--stage',stage],check=True)
-        for stage in ('contracts','source','wheel','release')]"
+    - name: Retrieve selected source receipt (absence falls back to full checks)
+      if: needs.dependencies.outputs.python_source_run_id != ''
+      continue-on-error: true
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: source-receipt-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+        path: workspace/fastls-ffi/build/source-receipt
+        github-token: ${{ github.token }}
+        run-id: ${{ needs.dependencies.outputs.python_source_run_id }}
+    - name: Verify inputs and execute required Python stages once
+      env:
+        FASTLS_SOURCE_RUN_ID: ${{ needs.dependencies.outputs.python_source_run_id }}
+      run: python scripts/python_stages.py
+    - name: Retain successful source receipt for same-revision metadata promotion
+      if: github.ref_type != 'tag'
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: source-receipt-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+        path: workspace/fastls-ffi/build/source-validation/receipt.json
+        if-no-files-found: error
+        retention-days: 14
     - name: Retain certified candidate
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
       with:
@@ -268,6 +293,8 @@ jobs:
       with:
         name: evidence-source-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
         path: 'workspace/fastls-ffi/build/ci-*/source/
+
+          workspace/fastls-ffi/build/source-reuse-decision.json
 
           workspace/fastls-ffi/build/stability-*.json
 
