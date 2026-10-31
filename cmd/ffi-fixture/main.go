@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -90,6 +91,15 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Test-Protocol", r.Proto)
 	w.Header().Set("X-Test-Connection", fmt.Sprint(r.Context().Value(connectionKey{})))
 	switch r.URL.Path {
+	case "/h3-config-headers":
+		w.Header().Set("X-Large", strings.Repeat("z", 4096))
+		io.WriteString(w, "ok")
+		return
+	case "/h3-config-trailers":
+		w.Header().Set("Trailer", "X-Large")
+		io.WriteString(w, "ok")
+		w.Header().Set("X-Large", strings.Repeat("z", 4096))
+		return
 	case "/sse-vectors", "/sse-bad":
 		w.Header().Set("Content-Type", "Text/Event-Stream; charset=iso-8859-1")
 		w.Header().Set("X-Test-Accept", r.Header.Get("Accept"))

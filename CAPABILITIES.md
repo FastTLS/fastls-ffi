@@ -1,3 +1,5 @@
+> Python 0.7.0 / Node 0.16.0 add http3_config_v1 and both query symbols; [controlled H3 configuration](H3_CONFIG.md) requires explicit H3 and an immutable owner. Missing feature/symbol rejects before allocation.
+
 > Python 0.6.0 / Node 0.15.0 add `http3_address_policy_v1`: see [H3 policy](H3_POLICY.md) / [中文](H3_POLICY.zh-CN.md).
 > Python 0.3.0 / Node 0.12.0 保留本页能力，并增加 [认证、重试与离线配置](RELIABILITY.zh-CN.md)。
 > Full Spec / address policy / explicit H3 first shipped in Python 0.2.0 / Node 0.11.0.

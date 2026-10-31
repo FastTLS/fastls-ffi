@@ -74,6 +74,7 @@ function pinLibrary(path: string): void {
 export class Native {
   private functions: Record<string, NativeFunction> = {};
   readonly transportOptionsAvailable: boolean = false;
+  readonly http3ConfigAvailable: boolean = false;
   readonly notificationsAvailable: boolean;
   readonly websocketAvailable: boolean;
   readonly path: string;
@@ -119,6 +120,13 @@ export class Native {
       if (features.has("fingerprint_adapter_v1")) {
         try { this.functions.profile_adapt = lib.func("void *fastls_profile_adapt(void *json, size_t length)"); }
         catch { /* Reject use below; old HTTP operations remain available. */ }
+      }
+      if (features.has("http3_config_v1")) {
+        try {
+          this.functions.http3_capabilities = lib.func("void *fastls_http3_capabilities(void)");
+          this.functions.transport_http3_config = lib.func("void *fastls_transport_http3_config(uint64_t handle)");
+          this.http3ConfigAvailable = true;
+        } catch { /* Configuration remains unavailable unless both symbols bind. */ }
       }
       if (features.has("transport_options_v1")) {
         try {

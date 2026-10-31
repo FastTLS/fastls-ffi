@@ -1,3 +1,5 @@
+> Python 0.7.0 / Node 0.16.0: optional http3_config_v1 adds fastls_http3_capabilities(void) and fastls_transport_http3_config(uint64_t handle), both returning owned JSON released by fastls_free. Creation-only http3_config fields are strict bytes/integer-ms values; ABI/schema remain1. See [H3 configuration](H3_CONFIG.md).
+
 # C ABI v1
 
 显式 H3 与可信地址策略组合新增可选能力 `http3_address_policy_v1`，无新符号或所有权变更；详见 [组合契约](H3_POLICY.zh-CN.md)。

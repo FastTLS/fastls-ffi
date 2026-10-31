@@ -3,7 +3,7 @@ import json,os,subprocess,sys,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'python'))
-from fastls import Session,ProfileSpec
+from fastls import Session,ProfileSpec,HTTP3Config,FastlsError
 from test_stability import resources,SLAB
 
 duration=os.environ.get('FASTLS_EXTENDED_SOAK_SECONDS','300')
@@ -24,11 +24,12 @@ def create(lab):
     spec=ProfileSpec(value)
     return [Session(address_policy={'allow_cidrs':['127.0.0.0/8']},notifications='poll'),
             Session(profile_spec=spec,ca_file=lab['ca_file'],notifications='poll'),
-            Session(http_version='h3',address_policy={'allow_cidrs':['127.0.0.0/8']},ca_file=lab['ca_file'],notifications='poll')]
+            Session(http_version='h3',address_policy={'allow_cidrs':['127.0.0.0/8']},ca_file=lab['ca_file'],notifications='poll'),
+            Session(http_version='h3',http3_config=HTTP3Config(initial_stream_receive_window=16384,max_stream_receive_window=65536,initial_connection_receive_window=32768,max_connection_receive_window=131072,keep_alive_period_ms=0,max_response_header_bytes=1024),address_policy={'allow_cidrs':['127.0.0.0/8']},ca_file=lab['ca_file'],notifications='poll')]
 def sample():return dict(resources(),native=monitor.stats())
 try:
     lab=json.loads(fixture.stdout.readline());clients=create(lab)
-    urls=[lab['http'],lab['https2'],lab['https3']]
+    urls=[lab['http'],lab['https2'],lab['https3'],lab['https3']]
     def cycle():
         global requests
         for index,(client,url) in enumerate(zip(clients,urls)):
@@ -36,6 +37,15 @@ try:
             response=client.get(url+'/?n='+str(size))
             assert response.content==SLAB*(size//len(SLAB))
             requests+=1
+            if index==3:
+                assert client.effective_http3_config()['max_response_header_bytes']==1024
+                try:client.get(url+'/h3-config-headers')
+                except FastlsError:pass
+                else:raise AssertionError('configured header cap accepted oversized headers')
+                with client.stream('GET',url+'/hold?id=resource-h3-config') as held:
+                    assert next(held.iter_bytes())==b'first'
+                    held.cancel()
+                requests+=2
     for _ in range(30):cycle()
     baseline=sample();started=time.monotonic();next_sample=started;rounds=0
     while time.monotonic()-started<duration:

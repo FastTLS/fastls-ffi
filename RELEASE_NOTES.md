@@ -1,3 +1,24 @@
+# Python 0.7.0 / Node 0.16.0
+
+Adds immutable HTTP3Config to Python sync/async Sessions and one-shot calls,
+Node Sessions and standalone fetch. Seven bounded receive-window, idle,
+keepalive and response-header fields require explicit H3. Input times are
+integer milliseconds; omitted periodic keepalive and zero/off are distinct.
+Discovery and effective owner snapshots are read-only and do not dial.
+
+Optional native http3_config_v1 and its two query symbols are negotiated before
+allocation; old libraries keep existing calls and reject new configuration.
+C ABI and transport JSON stay v1. Go is pinned to v0.2.0, including graceful
+cleanup of backend-evicted header-error connections after active siblings finish.
+Other dependencies remain pinned. Certificate/SNI and trusted address policy
+retain their original boundaries; timeouts and body/decoded limits are separate.
+
+See [English contract](H3_CONFIG.md) and [中文契约](H3_CONFIG.zh-CN.md) for units,
+zero/default values, limits and exact header/trailer coverage. No arbitrary
+QUIC/TLS callback, browser H3 fingerprint, UDP proxy, new platform or service
+request field is added. Formal manifests bind tested source, original packages,
+platform installation and publication identities.
+
 # Python 0.6.0 / Node 0.15.0
 
 This minor release adds explicit H3 with an immutable trusted address policy.

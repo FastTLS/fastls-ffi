@@ -142,3 +142,16 @@ const streamConfig: import('@fastls/fastls').HTTP2StreamConfig = { first_stream_
 void streamConfig;
 // @ts-expect-error Compact parameters require strings.
 ProfileSpec.fromFingerprints(new ProfileSpec({}), { ja3: 771 });
+
+
+async function controlledH3Types() {
+  const { HTTP3Config, http3Capabilities } = await import('@fastls/fastls');
+  const config = new HTTP3Config({ maxIdleTimeoutMs: 30000, keepAlivePeriodMs: 0, maxResponseHeaderBytes: 65536 });
+  const owner = new Session({ httpVersion: 'h3', http3Config: config });
+  const value: number | undefined = owner.effectiveHTTP3Config()?.maxResponseHeaderBytes;
+  void value; void http3Capabilities().fields;
+  // @ts-expect-error Plain objects cannot replace a typed immutable configuration.
+  new Session({ httpVersion: 'h3', http3Config: { maxResponseHeaderBytes: 65536 } });
+  // @ts-expect-error H3 configuration belongs to Session creation.
+  await owner.get('https://example.com', { http3Config: config });
+}

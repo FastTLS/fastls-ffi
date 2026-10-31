@@ -1,8 +1,11 @@
 import { Readable } from "node:stream";
 import { Session, type SessionOptions, type RequestOptions } from "./session.js";
+import type { HTTP3Config } from "./http3.js";
 import type { ProfileSpec, AddressPolicy } from "./profiles.js";
 
 export interface FetchOptions extends RequestInit {
+  /** Only standalone fetch can create a new H3 configuration owner. */
+  http3Config?: HTTP3Config;
   retry?: RequestOptions["retry"];
   bodyFactory?: RequestOptions["bodyFactory"];
   profileSpec?: ProfileSpec;
@@ -32,7 +35,8 @@ export async function fetchWithSession(session: Session, input: string | URL | R
     for (const key of ["cache", "credentials", "integrity", "keepalive", "mode", "referrer", "referrerPolicy"] as const) {
       if (init[key] !== undefined) throw new TypeError(`Fastls fetch does not support ${key}`);
     }
-    const allowed = new Set(["method", "headers", "body", "redirect", "signal", "duplex", "profile", "profileSpec", "httpVersion", "addressPolicy", "proxy", "proxyCaFile", "caFile", "library", "timeoutMs", "maxRedirects", "retry", "bodyFactory"]);
+    const allowed = new Set(["method", "headers", "body", "redirect", "signal", "duplex", "profile", "profileSpec", "httpVersion", "addressPolicy", "proxy", "proxyCaFile", "caFile", "library", "timeoutMs", "maxRedirects", "retry", "bodyFactory", "http3Config"]);
+    if (!owned && Object.hasOwn(init, "http3Config")) throw new TypeError("http3Config is a Session creation option");
     if (!owned && init.addressPolicy !== undefined) throw new TypeError("addressPolicy is a Session creation option");
     for (const key of Object.keys(init)) if (!allowed.has(key)) throw new TypeError(`Fastls fetch does not support ${key}`);
     // Request performs the platform's normal URL/method/header validation and
@@ -91,7 +95,7 @@ export async function fetchWithSession(session: Session, input: string | URL | R
 /** Fetch-compatible entry point. No persistent cookie jar is created. */
 export async function fetch(input: string | URL | Request, init: FetchOptions = {}): Promise<FetchResponse> {
   const options: SessionOptions = { cookies: false, profile: init.profile, proxy: init.proxy,
-    profileSpec: init.profileSpec, httpVersion: init.httpVersion, addressPolicy: init.addressPolicy,
+    profileSpec: init.profileSpec, httpVersion: init.httpVersion, http3Config: init.http3Config, addressPolicy: init.addressPolicy,
     proxyCaFile: init.proxyCaFile, caFile: init.caFile, library: init.library, timeoutMs: init.timeoutMs };
   return fetchWithSession(new Session(options), input, init, true);
 }

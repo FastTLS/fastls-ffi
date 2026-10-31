@@ -140,3 +140,57 @@ p('test_h3_policy_combined_capability_before_allocation', async t => {
  } finally {native.call=original;}
  assert.equal(monitor.stats().open_sessions,baseline);
 });
+
+
+p('test_h3_config_validation_and_legacy_before_allocation', async t => {
+ for(const options of [{maxIdleTimeoutMs:true},{maxIdleTimeoutMs:1.5},{maxIdleTimeoutMs:null},{keepAlivePeriodMs:-1},{maxStreamReceiveWindow:2**64},{maxResponseHeaderBytes:1023},{initialStreamReceiveWindow:8388608},{maxIdleTimeoutMs:100,keepAlivePeriodMs:51},{unknown:1},{toString:1}]) assert.throws(()=>new sdk.HTTP3Config(options));
+ assert.throws(()=>session(t,{http3Config:new sdk.HTTP3Config()}));
+ const monitor=session(t),native=monitor.native,original=native.call,symbol=native.http3ConfigAvailable,baseline=monitor.stats().open_sessions;
+ try {
+  native.call=function(name,...args){const v=original.call(this,name,...args);return name==='features'?v.filter(f=>f!=='http3_config_v1'):v;};
+  assert.throws(()=>session(t,{httpVersion:'h3',http3Config:new sdk.HTTP3Config()}),e=>e.code==='unsupported_capability');
+  native.call=original;native.http3ConfigAvailable=false;
+  assert.throws(()=>session(t,{httpVersion:'h3',http3Config:new sdk.HTTP3Config()}),e=>e.code==='unsupported_capability');
+ } finally {native.call=original;native.http3ConfigAvailable=symbol;}
+ assert.equal(monitor.stats().open_sessions,baseline);
+});
+
+p('test_h3_config_snapshot_discovery_and_real_parameters', async t => {
+ const capability=sdk.http3Capabilities();assert.equal(capability.fields.length,7);assert.ok(Object.isFrozen(capability.defaults));
+ const input={initialStreamReceiveWindow:16384,maxStreamReceiveWindow:65536,initialConnectionReceiveWindow:32768,maxConnectionReceiveWindow:131072,maxIdleTimeoutMs:12345,keepAlivePeriodMs:0,maxResponseHeaderBytes:2048};
+ const config=new sdk.HTTP3Config(input),owner=session(t,{httpVersion:'h3',http3Config:config});input.maxIdleTimeoutMs=1;config.toJSON().max_idle_timeout_ms=1;
+ const effective=owner.effectiveHTTP3Config();assert.deepEqual(effective,{...input,maxIdleTimeoutMs:12345});assert.ok(Object.isFrozen(effective));
+ const peer=(await owner.get(fixture.https3+'/h3-config-state')).json();
+ assert.equal(peer.initial_stream_receive_window,effective.initialStreamReceiveWindow);assert.equal(peer.initial_connection_receive_window,effective.initialConnectionReceiveWindow);assert.equal(peer.max_idle_timeout_ms,effective.maxIdleTimeoutMs);
+ assert.deepEqual((await owner.get(fixture.https3+'/?n=2097152')).content,Buffer.concat(Array(32).fill(SLAB)));
+ await assert.rejects(owner.get(fixture.https3,{http3Config:config}));await owner.closeAsync();assert.throws(()=>owner.effectiveHTTP3Config());
+ assert.equal(session(t).effectiveHTTP3Config(),undefined);
+ assert.equal(session(t,{httpVersion:'h3',http3Config:new sdk.HTTP3Config({maxIdleTimeoutMs:101})}).effectiveHTTP3Config().keepAlivePeriodMs,50.5);
+});
+
+p('test_h3_config_header_limits_policy_and_recovery', async t => {
+ for(const addressPolicy of [undefined,{allow_cidrs:['127.0.0.0/8']}]) {
+  const small=session(t,{httpVersion:'h3',addressPolicy,http3Config:new sdk.HTTP3Config({maxResponseHeaderBytes:1024})});
+  const large=session(t,{httpVersion:'h3',addressPolicy,http3Config:new sdk.HTTP3Config({maxResponseHeaderBytes:8192})});
+  for(const path of ['/h3-config-headers','/h3-config-trailers']) {await assert.rejects(small.get(fixture.https3+path));assert.deepEqual((await large.get(fixture.https3+path)).content,Buffer.from('ok'));}
+  assert.equal((await small.get(fixture.https3+'/status?code=204')).status,204);assert.equal(small.stats().open_requests,0);
+ }
+ const denied=session(t,{httpVersion:'h3',http3Config:new sdk.HTTP3Config(),addressPolicy:{deny_cidrs:['127.0.0.0/8']}});
+ await assert.rejects(denied.get(fixture.https3),e=>e.code==='address_denied');
+});
+
+p('test_h3_config_async_cancel_upload_and_sibling', async t => {
+ const s=session(t,{httpVersion:'h3',http3Config:new sdk.HTTP3Config({initialStreamReceiveWindow:32768,maxStreamReceiveWindow:131072,initialConnectionReceiveWindow:65536,maxConnectionReceiveWindow:262144,keepAlivePeriodMs:10})});
+ assert.deepEqual((await s.post(fixture.https3+'/echo',{body:Buffer.concat([SLAB,SLAB])})).content,Buffer.concat([SLAB,SLAB]));
+ const held=await s.stream('GET',fixture.https3+'/hold?id=h3-config-cancel');assert.deepEqual((await held.body[Symbol.asyncIterator]().next()).value,Buffer.from('first'));
+ assert.equal((await s.get(fixture.https3+'/status?code=204')).status,204);held.cancel();await held.closeAsync();
+ assert.equal((await s.get(fixture.https3+'/status?code=204')).status,204);assert.equal(s.stats().open_requests,0);
+});
+
+p('test_h3_config_one_shot_and_request_injection', async t => {
+ const config=new sdk.HTTP3Config({initialStreamReceiveWindow:32768,maxStreamReceiveWindow:65536});
+ const response=await sdk.fetch(fixture.https3+'/h3-config-state',{httpVersion:'h3',http3Config:config,caFile:fixture.ca_file});assert.equal((await response.json()).initial_stream_receive_window,32768);
+ const owner=session(t),before=owner.stats().open_requests;
+ assert.throws(()=>owner.native.start({session:owner.handle,url:fixture.https3,http3_config:{}}),e=>e.code==='invalid_configuration');
+ await assert.rejects(owner.fetch(fixture.https3,{http3Config:config}));assert.equal(owner.stats().open_requests,before);
+});

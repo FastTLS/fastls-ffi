@@ -183,12 +183,15 @@ type transportInput struct {
 	ProfileSpec   json.RawMessage `json:"profile_spec"`
 	Profile       string          `json:"profile"`
 	HTTPVersion   string          `json:"http_version"`
+	HTTP3Config   json.RawMessage `json:"http3_config"`
 }
 type transportConfig struct {
 	policy             *fastls.AddressPolicy
 	spec               *profile.Spec
 	specJSON, selector string
 	version            fastls.HTTPVersion
+	http3              *fastls.HTTP3Config
+	http3JSON          string
 }
 
 func parseSpec(raw []byte) (*profile.Spec, string, error) {
@@ -228,6 +231,16 @@ func (e *Engine) CreateTransportWithOptions(raw []byte) (uint64, error) {
 	if in.HTTPVersion == "h3" {
 		c.version = fastls.HTTPVersion3
 	}
+	if in.HTTP3Config != nil {
+		if c.version != fastls.HTTPVersion3 {
+			return 0, invalidConfig()
+		}
+		var err error
+		c.http3, c.http3JSON, err = parseHTTP3Config(in.HTTP3Config)
+		if err != nil {
+			return 0, err
+		}
+	}
 	if in.AddressPolicy != nil {
 		var p policyInput
 		if err := strictJSON(in.AddressPolicy, &p, MaxInput, 16384); err != nil {
@@ -259,7 +272,7 @@ func (e *Engine) CreateTransportWithOptions(raw []byte) (uint64, error) {
 	if c.version == fastls.HTTPVersion3 && (c.spec != nil || c.selector != "") {
 		return 0, unsupported()
 	}
-	opts := fastls.Options{VerifyTLS: true, AddressPolicy: c.policy, HTTPVersion: c.version}
+	opts := fastls.Options{VerifyTLS: true, AddressPolicy: c.policy, HTTPVersion: c.version, HTTP3: c.http3}
 	if c.spec != nil {
 		if _, err := use.Apply(&opts, *c.spec); err != nil {
 			return 0, invalidConfig()
@@ -327,7 +340,7 @@ func applyTransport(in *Input, opts *fastls.Options, c *transportConfig, e *Engi
 	if version == fastls.HTTPVersion3 && !strings.HasPrefix(in.URL, "https://") {
 		return match, "", invalidConfig()
 	}
-	opts.AddressPolicy, opts.HTTPVersion = c.policy, version
+	opts.AddressPolicy, opts.HTTPVersion, opts.HTTP3 = c.policy, version, c.http3
 	if c.policy != nil && in.Proxy != "" {
 		return match, "", unsupported()
 	}
@@ -345,6 +358,6 @@ func applyTransport(in *Input, opts *fastls.Options, c *transportConfig, e *Engi
 	if err != nil {
 		return match, "", invalidConfig()
 	}
-	identity, _ := json.Marshal([]string{selector, snapshot, string(version), in.CAPEM, in.Proxy, in.ProxyCAPEM})
+	identity, _ := json.Marshal([]string{selector, snapshot, string(version), c.http3JSON, in.CAPEM, in.Proxy, in.ProxyCAPEM})
 	return match, string(identity), nil
 }

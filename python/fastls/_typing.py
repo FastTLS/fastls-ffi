@@ -4,6 +4,7 @@ from os import PathLike
 from typing import Any, BinaryIO, Literal, TypedDict, Union
 from .timeout import Timeout
 from .profiles import ProfileSpec
+from .http3 import HTTP3Config
 from .auth import BasicAuth, BearerAuth
 from .retry import RetryPolicy
 from typing import Callable
@@ -44,6 +45,7 @@ class SyncRequestOptions(RequestOptions, total=False):
 
 
 class SessionOptions(TypedDict, total=False):
+    http3_config: Union[HTTP3Config, None]
     auth: Union[BasicAuth, BearerAuth, tuple[str, str], None]
     retry: Union[RetryPolicy, None]
     profile: Union[str, None]

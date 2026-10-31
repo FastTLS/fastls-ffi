@@ -51,3 +51,16 @@ if TYPE_CHECKING:
     fastls.head("https://example.com/", allow_redirects=False)
     fastls.request("CUSTOM", "https://example.com/", data=b"hello")
     fastls.post("https://example.com/", files={"file": ("data.bin", b"payload", "application/octet-stream")})
+
+
+from fastls import HTTP3Config, http3_capabilities
+
+def controlled_h3_types() -> None:
+    config = HTTP3Config(max_idle_timeout_ms=30000, keep_alive_period_ms=0, max_response_header_bytes=65536)
+    with fastls.Session(http_version="h3", http3_config=config) as owner:
+        values = owner.effective_http3_config()
+        if values is not None:
+            value: int | float = values["keep_alive_period_ms"]
+            assert value >= 0
+    fastls.get("https://example.com", http_version="h3", http3_config=config)
+    assert len(http3_capabilities()["fields"]) == 7

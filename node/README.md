@@ -1,5 +1,7 @@
 # Fastls Node.js SDK
 
+Python 0.7.0 / Node 0.16.0 add immutable H3 configuration and effective owner snapshots: see [the shared contract](https://github.com/FastTLS/fastls-ffi/blob/node-v0.16.0/H3_CONFIG.md). Native capability: http3_config_v1; core: Go v0.2.0.
+
 Python 0.6.0 / Node 0.15.0 支持显式 H3 与可信 Session 地址策略组合，需原生 `http3_address_policy_v1`；默认校验证书，旧库在分配资源前拒绝。详见 [组合契约](https://github.com/FastTLS/fastls-ffi/blob/main/H3_POLICY.zh-CN.md)。
 
 Node 0.14.0 增加完整 Spec 的 H2 首流编号与初始流窗口配置，并导出 `HTTP2StreamConfig` 类型。省略保持旧行为，需要 `http2.stream.v1` 和原生 `http2_stream_v1`；转换、Bundle/Store、Session/fetch 共用契约。旧原生库明确拒绝，窗口预算及候选采用边界见 [中文契约](https://github.com/FastTLS/fastls-ffi/blob/main/FINGERPRINTS.zh-CN.md)。
@@ -25,7 +27,7 @@ const h3 = new Session({ httpVersion: 'h3' });
 try { await h3.get('https://example.com'); } finally { await h3.closeAsync(); }
 ```
 
-Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应 **0.13.0**。
+Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应 **0.16.0**。
 
 支持 HTTP/1.1、HTTP/2、流式上传下载、双工、SSE、WebSocket、会话 Cookie 和 HTTP/HTTPS/SOCKS 代理。网络请求由 Go 执行，通过 Koffi 在当前 Node 进程中调用；使用者无需 Python 或 RPC 服务。
 
@@ -41,7 +43,7 @@ Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明�
 安装指定版本：
 
 ```sh
-npm install @fastls/fastls@0.15.0
+npm install @fastls/fastls@0.16.0
 ```
 
 主包通过同版本的可选依赖自动安装当前平台的 Fastls 原生库。保留 optional dependencies；支持 Windows x64、Linux glibc x64/arm64、macOS x64/arm64。Linux musl 和其它架构没有内置包。具体系统最低版本见原生包的 `native/manifest.json`。

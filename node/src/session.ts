@@ -14,6 +14,7 @@ import { prepare, type QueryParams, type JSONValue, type FormFields, type Multip
 import { WebSocket, wsBudget, type WebSocketOptions } from "./websocket.js";
 import { fetchWithSession, type FetchOptions, type FetchResponse } from "./fetch.js";
 import { ProfileSpec, type AddressPolicy } from "./profiles.js";
+import { HTTP3Config, requireHTTP3, effectiveHTTP3, type HTTP3EffectiveConfig } from "./http3.js";
 import { RetryPolicy, replayable, retryWait } from "./retry.js";
 
 export interface RequestOptions {
@@ -47,6 +48,7 @@ export interface RequestOptions {
 export type DuplexOptions = Omit<RequestOptions, "body" | "duplex" | "json" | "form" | "files">;
 
 export interface SessionOptions {
+  http3Config?: HTTP3Config;
   retry?: RetryPolicy;
   addressPolicy?: AddressPolicy;
   profileSpec?: ProfileSpec;
@@ -153,6 +155,10 @@ export class Session {
     if (options.profileSpec !== undefined && !(options.profileSpec instanceof ProfileSpec)) throw new TypeError("profileSpec must be a ProfileSpec");
     if (options.profile !== undefined && options.profileSpec !== undefined) throw new TypeError("profile and profileSpec are mutually exclusive");
     if (options.httpVersion !== undefined && !["auto", "h3"].includes(options.httpVersion)) throw new TypeError("httpVersion must be auto or h3");
+    if (options.http3Config !== undefined) {
+      if (!(options.http3Config instanceof HTTP3Config)) throw new TypeError("http3Config must be HTTP3Config");
+      if (options.httpVersion !== "h3") throw new TypeError("http3Config requires explicit httpVersion=h3");
+    }
     this.profile = options.profile ?? (options.profileSpec !== undefined || options.httpVersion === "h3" ? "" : "chrome/156/windows");
     this.timeouts = timeoutFields(options.timeoutMs ?? 30000);
     this.decodeContent = options.decodeContent ?? true;
@@ -169,6 +175,11 @@ export class Session {
     if (!this.native.call<string[]>("features").includes("transport_context_v1")) throw new FastlsError("SDK-owned sessions require the Fastls 0.1.4 native library or newer");
     const configuration: Record<string, unknown> = { schema_version: 1 };
     const required: string[] = [];
+    if (options.http3Config !== undefined) {
+      requireHTTP3(this.native);
+      configuration.http3_config = options.http3Config.toJSON();
+      required.push("http3_config_v1");
+    }
     if (options.addressPolicy !== undefined) {
       if (!options.addressPolicy || typeof options.addressPolicy !== "object" || Array.isArray(options.addressPolicy)) throw new TypeError("addressPolicy must be an object");
       configuration.address_policy = options.addressPolicy;
@@ -193,6 +204,12 @@ export class Session {
       this.handle = asHandle(this.native.call("transport_create_with_options", raw, raw.length));
     } else this.handle = asHandle(this.native.call("transport_create"));
     this.cookies = new Cookies(() => this.ensureOpen(), options.cookies !== false);
+  }
+
+  effectiveHTTP3Config(): HTTP3EffectiveConfig | undefined {
+    this.ensureOpen(); requireHTTP3(this.native);
+    const value = this.native.call<Record<string, number> | null>("transport_http3_config", this.handle);
+    return value === null ? undefined : effectiveHTTP3(value);
   }
 
   private ensureOpen(): void {
@@ -230,6 +247,7 @@ export class Session {
   }
 
   private begin(method: string, url: string, options: RequestOptions, manual = false, completeHeaders = false): { transfer: Transfer; body: UploadBody | undefined; streaming: boolean } {
+    if (Object.hasOwn(options, "http3Config")) throw new TypeError("http3Config is a Session creation option");
     this.ensureOpen();
     if ("addressPolicy" in options) throw new TypeError("addressPolicy is a Session creation option");
     if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) {

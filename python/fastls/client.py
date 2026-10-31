@@ -22,6 +22,8 @@ from .timeout import Timeout
 from .redirects import Redirects
 from .request_options import Multipart, prepare, response_encoding
 from .profiles import ProfileSpec
+from .http3 import HTTP3Config, require_http3
+from types import MappingProxyType
 from .auth import INHERIT, authorization
 from .retry import RetryPolicy
 
@@ -171,7 +173,7 @@ class Session:
     """Configuration, request ownership and isolated reusable connection pools."""
     def __init__(self, *, profile=None, headers=None, timeout=30, library=None, ca_file=None, cookies=True,
                  decode_content=True, max_decoded_bytes=256 * 1024 * 1024, notifications="auto", proxy=None, proxy_ca_file=None,
-                 address_policy=None, profile_spec: ProfileSpec | None=None, http_version="auto", auth=None, retry=None):
+                 address_policy=None, profile_spec: ProfileSpec | None=None, http_version="auto", http3_config: HTTP3Config | None=None, auth=None, retry=None):
         self._auth = authorization(auth)
         if retry is not None and not isinstance(retry, RetryPolicy):
             raise TypeError("retry must be RetryPolicy or None")
@@ -186,6 +188,11 @@ class Session:
             raise ValueError("profile and profile_spec are mutually exclusive")
         if http_version not in ("auto", "h3"):
             raise ValueError("http_version must be auto or h3")
+        if http3_config is not None:
+            if not isinstance(http3_config, HTTP3Config):
+                raise TypeError("http3_config must be HTTP3Config")
+            if http_version != "h3":
+                raise ValueError("http3_config requires explicit http_version=h3")
         self._profile_spec = profile_spec
         self._http_version = http_version
         self._has_address_policy = address_policy is not None
@@ -227,6 +234,10 @@ class Session:
             raise FastlsError("SDK-owned sessions require the Fastls 0.1.4 native library or newer")
         configuration = {"schema_version": 1}
         required = set()
+        if http3_config is not None:
+            require_http3(self._native)
+            configuration["http3_config"] = http3_config.to_dict()
+            required.add("http3_config_v1")
         if address_policy is not None:
             if not isinstance(address_policy, Mapping):
                 raise TypeError("address_policy must be a mapping")
@@ -257,6 +268,15 @@ class Session:
         available = set(self._native.call("fastls_features"))
         if not set(required).issubset(available) or not hasattr(self._native.lib, "fastls_transport_create_with_options"):
             raise FastlsError("native transport capability is unavailable", code="unsupported_capability")
+
+    def effective_http3_config(self) -> Mapping[str, int | float] | None:
+        """Return an immutable local snapshot, or None for an auto owner."""
+        with self._lock:
+            if self._closed:
+                raise FastlsError("session is closed")
+            require_http3(self._native)
+            value = self._native.call("fastls_transport_http3_config", self._session)
+            return None if value is None else MappingProxyType(value)
 
     def close_idle_connections(self):
         with self._lock:

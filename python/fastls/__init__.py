@@ -5,6 +5,7 @@ from .headers import Headers
 from .cookies import Cookies
 from .timeout import Timeout
 from .profiles import ProfileSpec
+from .http3 import HTTP3Config, http3_capabilities
 from .auth import BasicAuth, BearerAuth
 from .retry import RetryPolicy
 from .profile_store import ProfileBundle, ProfileStore
@@ -17,6 +18,6 @@ from .websocket import WebSocket, AsyncWebSocket, WebSocketClosed
 __all__ += ["WebSocket", "AsyncWebSocket", "WebSocketClosed"]
 __all__ += ["request", "get", "post", "put", "patch", "delete", "head", "options"]
 __all__ += ["ClientSession", "ClientResponse"]
-__all__ += ["ProfileSpec"]
+__all__ += ["ProfileSpec", "HTTP3Config", "http3_capabilities"]
 __all__ += ["BasicAuth", "BearerAuth", "RetryPolicy"]
 __all__ += ["ProfileBundle", "ProfileStore"]

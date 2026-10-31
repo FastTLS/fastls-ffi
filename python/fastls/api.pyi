@@ -6,6 +6,7 @@ from typing import Any, BinaryIO, Callable, Literal, TypeAlias
 from .client import Response
 from .timeout import Timeout
 from .profiles import ProfileSpec
+from .http3 import HTTP3Config
 from .auth import BasicAuth, BearerAuth
 from .retry import RetryPolicy
 
@@ -39,6 +40,7 @@ def request(
     profile_spec: ProfileSpec | None = None,
     http_version: Literal["auto", "h3"] | None = None,
     address_policy: Mapping[str, Any] | None = None,
+    http3_config: HTTP3Config | None = None,
     timeout: float | Timeout | None = None,
     allow_redirects: bool = True,
     max_redirects: int = 30,
@@ -71,6 +73,7 @@ def get(
     profile_spec: ProfileSpec | None = None,
     http_version: Literal["auto", "h3"] | None = None,
     address_policy: Mapping[str, Any] | None = None,
+    http3_config: HTTP3Config | None = None,
     timeout: float | Timeout | None = None,
     allow_redirects: bool = True,
     max_redirects: int = 30,
@@ -103,6 +106,7 @@ def post(
     profile_spec: ProfileSpec | None = None,
     http_version: Literal["auto", "h3"] | None = None,
     address_policy: Mapping[str, Any] | None = None,
+    http3_config: HTTP3Config | None = None,
     timeout: float | Timeout | None = None,
     allow_redirects: bool = True,
     max_redirects: int = 30,
@@ -135,6 +139,7 @@ def put(
     profile_spec: ProfileSpec | None = None,
     http_version: Literal["auto", "h3"] | None = None,
     address_policy: Mapping[str, Any] | None = None,
+    http3_config: HTTP3Config | None = None,
     timeout: float | Timeout | None = None,
     allow_redirects: bool = True,
     max_redirects: int = 30,
@@ -167,6 +172,7 @@ def patch(
     profile_spec: ProfileSpec | None = None,
     http_version: Literal["auto", "h3"] | None = None,
     address_policy: Mapping[str, Any] | None = None,
+    http3_config: HTTP3Config | None = None,
     timeout: float | Timeout | None = None,
     allow_redirects: bool = True,
     max_redirects: int = 30,
@@ -199,6 +205,7 @@ def delete(
     profile_spec: ProfileSpec | None = None,
     http_version: Literal["auto", "h3"] | None = None,
     address_policy: Mapping[str, Any] | None = None,
+    http3_config: HTTP3Config | None = None,
     timeout: float | Timeout | None = None,
     allow_redirects: bool = True,
     max_redirects: int = 30,
@@ -231,6 +238,7 @@ def head(
     profile_spec: ProfileSpec | None = None,
     http_version: Literal["auto", "h3"] | None = None,
     address_policy: Mapping[str, Any] | None = None,
+    http3_config: HTTP3Config | None = None,
     timeout: float | Timeout | None = None,
     allow_redirects: bool = True,
     max_redirects: int = 30,
@@ -263,6 +271,7 @@ def options(
     profile_spec: ProfileSpec | None = None,
     http_version: Literal["auto", "h3"] | None = None,
     address_policy: Mapping[str, Any] | None = None,
+    http3_config: HTTP3Config | None = None,
     timeout: float | Timeout | None = None,
     allow_redirects: bool = True,
     max_redirects: int = 30,

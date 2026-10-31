@@ -6,7 +6,8 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 from test_stability import FixtureCase, FastlsError, SLAB
-from fastls import ProfileSpec
+from fastls import ProfileSpec, HTTP3Config, http3_capabilities
+import fastls
 
 SPEC_FILE = Path(__file__).parent / "fixtures" / "profile_spec.json"
 
@@ -192,6 +193,100 @@ class CapabilityAcceptance(FixtureCase):
             with self.assertRaises(FastlsError):
                 session.get(self.fixture["https2"] + "/status?code=204")
             self.assertEqual(session.stats()["open_requests"], 0)
+
+    def test_h3_config_validation_and_legacy_before_allocation(self):
+        for options in ({"max_idle_timeout_ms": True}, {"max_idle_timeout_ms": 1.5}, {"max_idle_timeout_ms": None},
+                        {"keep_alive_period_ms": -1}, {"max_stream_receive_window": 2**64},
+                        {"max_response_header_bytes": 1023}, {"initial_stream_receive_window": 8388608},
+                        {"max_idle_timeout_ms": 100, "keep_alive_period_ms": 51}):
+            with self.assertRaises((TypeError, ValueError)):
+                HTTP3Config(**options)
+        with self.assertRaises(TypeError):
+            HTTP3Config(unknown=1)
+        with self.assertRaises(ValueError):
+            self.session(http3_config=HTTP3Config())
+        with self.session() as monitor:
+            baseline = monitor.stats()["open_sessions"]
+            real = monitor._native
+            for missing_symbol in (False, True):
+                class LibraryView:
+                    def __getattr__(self, name):
+                        if missing_symbol and name == "fastls_transport_http3_config": raise AttributeError(name)
+                        return getattr(real.lib, name)
+                class LegacyView:
+                    lib = LibraryView()
+                    def call(self, name, *args):
+                        value = real.call(name, *args)
+                        return [v for v in value if v != "http3_config_v1"] if name == "fastls_features" and not missing_symbol else value
+                with patch("fastls.client.Native", return_value=LegacyView()):
+                    with self.assertRaises(FastlsError) as failure:
+                        self.session(http_version="h3", http3_config=HTTP3Config())
+                    self.assertEqual(failure.exception.code, "unsupported_capability")
+            self.assertEqual(monitor.stats()["open_sessions"], baseline)
+
+    def test_h3_config_snapshot_discovery_and_real_parameters(self):
+        capability = http3_capabilities()
+        self.assertEqual(len(capability["fields"]), 7)
+        capability["defaults"]["max_response_header_bytes"] = 0
+        self.assertEqual(http3_capabilities()["defaults"]["max_response_header_bytes"], 10485760)
+        config = HTTP3Config(initial_stream_receive_window=16384, max_stream_receive_window=65536,
+                             initial_connection_receive_window=32768, max_connection_receive_window=131072,
+                             max_idle_timeout_ms=12345, keep_alive_period_ms=0, max_response_header_bytes=2048)
+        values = config.to_dict()
+        with self.session(http_version="h3", http3_config=config) as owner:
+            values["max_idle_timeout_ms"] = 1
+            effective = owner.effective_http3_config()
+            self.assertEqual(dict(effective), config.to_dict())
+            with self.assertRaises(TypeError): effective["max_idle_timeout_ms"] = 1
+            peer = owner.get(self.fixture["https3"] + "/h3-config-state").json()
+            for name in ("initial_stream_receive_window", "initial_connection_receive_window", "max_idle_timeout_ms"):
+                self.assertEqual(peer[name], effective[name])
+            self.assertEqual(owner.get(self.fixture["https3"] + "/?n=2097152").content, SLAB * 32)
+            with self.assertRaises(TypeError): owner.get(self.fixture["https3"], http3_config=config)
+        with self.assertRaises(FastlsError): owner.effective_http3_config()
+        with self.session() as owner: self.assertIsNone(owner.effective_http3_config())
+        with self.session(http_version="h3", http3_config=HTTP3Config(max_idle_timeout_ms=101)) as odd:
+            self.assertEqual(odd.effective_http3_config()["keep_alive_period_ms"], 50.5)
+
+    def test_h3_config_header_limits_policy_and_recovery(self):
+        for policy in (None, {"allow_cidrs": ["127.0.0.0/8"]}):
+            with self.session(http_version="h3", address_policy=policy, http3_config=HTTP3Config(max_response_header_bytes=1024)) as small, self.session(http_version="h3", address_policy=policy, http3_config=HTTP3Config(max_response_header_bytes=8192)) as large:
+                for path in ("/h3-config-headers", "/h3-config-trailers"):
+                    with self.assertRaises(FastlsError): small.get(self.fixture["https3"] + path)
+                    self.assertEqual(large.get(self.fixture["https3"] + path).content, b"ok")
+                self.assertEqual(small.get(self.fixture["https3"] + "/status?code=204").status_code, 204)
+                self.assertEqual(small.stats()["open_requests"], 0)
+        with self.session(http_version="h3", http3_config=HTTP3Config(), address_policy={"deny_cidrs":["127.0.0.0/8"]}) as denied:
+            with self.assertRaises(FastlsError) as failure: denied.get(self.fixture["https3"])
+            self.assertEqual(failure.exception.code, "address_denied")
+
+    def test_h3_config_async_cancel_upload_and_sibling(self):
+        async def exercise():
+            config = HTTP3Config(initial_stream_receive_window=32768, max_stream_receive_window=131072,
+                                 initial_connection_receive_window=65536, max_connection_receive_window=262144,
+                                 keep_alive_period_ms=10)
+            async with self.session(async_=True, http_version="h3", http3_config=config) as owner:
+                response = await owner.post(self.fixture["https3"] + "/echo", data=SLAB * 2)
+                self.assertEqual(await response.aread(), SLAB * 2)
+                async with owner.stream("GET", self.fixture["https3"] + "/hold?id=h3-config-cancel") as held:
+                    iterator = held.aiter_bytes()
+                    self.assertEqual(await anext(iterator), b"first")
+                    self.assertEqual((await owner.get(self.fixture["https3"] + "/status?code=204")).status_code, 204)
+                    held.cancel()
+                self.assertEqual((await owner.get(self.fixture["https3"] + "/status?code=204")).status_code, 204)
+                self.assertEqual(owner.stats()["open_requests"], 0)
+        asyncio.run(exercise())
+
+    def test_h3_config_one_shot_and_request_injection(self):
+        config = HTTP3Config(initial_stream_receive_window=32768, max_stream_receive_window=65536)
+        response = fastls.get(self.fixture["https3"] + "/h3-config-state", http_version="h3", http3_config=config, ca_file=self.fixture["ca_file"])
+        self.assertEqual(response.json()["initial_stream_receive_window"], 32768)
+        with self.session() as owner:
+            before = owner.stats()["open_requests"]
+            raw = json.dumps({"session": owner._session, "url": self.fixture["https3"], "http3_config": {}}).encode()
+            with self.assertRaises(FastlsError) as failure: owner._native.call("fastls_start", raw, len(raw))
+            self.assertEqual(failure.exception.code, "invalid_configuration")
+            self.assertEqual(owner.stats()["open_requests"], before)
 
 
 if __name__ == "__main__":

@@ -21,3 +21,6 @@ export type { QueryScalar, QueryParams, FormFields, JSONValue, MultipartReader, 
 export type { TimeoutPhase } from "./errors.js";
 export type { TimeoutPolicy, Timeout } from "./timeout.js";
 export type { UploadBody, ByteSource } from "./upload.js";
+
+export { HTTP3Config, http3Capabilities } from "./http3.js";
+export type { HTTP3ConfigOptions, HTTP3EffectiveConfig } from "./http3.js";

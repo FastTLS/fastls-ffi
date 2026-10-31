@@ -78,6 +78,10 @@ class Native:
             signatures["fastls_transport_create"] = []
         if hasattr(self.lib, "fastls_transport_create_with_options"):
             signatures["fastls_transport_create_with_options"] = [C.c_char_p, C.c_size_t]
+        if hasattr(self.lib, "fastls_http3_capabilities"):
+            signatures["fastls_http3_capabilities"] = []
+        if hasattr(self.lib, "fastls_transport_http3_config"):
+            signatures["fastls_transport_http3_config"] = [C.c_uint64]
         if hasattr(self.lib, "fastls_profile_adapt"):
             signatures["fastls_profile_adapt"] = [C.c_char_p, C.c_size_t]
         if hasattr(self.lib, "fastls_features"):
