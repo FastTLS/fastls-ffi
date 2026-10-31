@@ -97,6 +97,37 @@ test('post-upload propagation uses the existing time budget without more read at
   assert.equal(shortClock, 4000);
 });
 
+test('canonical package documents distinguish absent versions and verify exact new metadata', async () => {
+  const item = { name: '@fastls/fastls', version: '0.16.0', url: 'https://registry.npmjs.org/%40fastls%2Ffastls' };
+  const version = { name: item.name, version: item.version, dist: { integrity: 'original' } };
+  let uploaded = false, verified = false, calls = 0;
+  const read = recovery({ sleep: noWait, request: async url => {
+    calls++;
+    assert.equal(new URL(url).pathname, '/%40fastls%2Ffastls');
+    return reply(200, { name: item.name, versions: uploaded ? { [item.version]: version } : {} });
+  } });
+  await publishSet([item], { read, publish: async () => { uploaded = true; return { status: 0 }; },
+    verify: async (_item, metadata) => { assert.deepEqual(metadata, version); verified = true; } });
+  assert.equal(verified, true); assert.equal(calls, 2);
+  for (const body of [{ name: 'other', versions: {} }, { name: item.name }, { name: item.name, versions: [] }]) {
+    await assert.rejects(recovery({ request: async () => reply(200, body) })(item.url,
+      { missing: true, packageName: item.name, packageVersion: item.version }), /document rejected/);
+  }
+  for (const metadata of [null, [], {}, { name: item.name, version: 'other' }]) {
+    await assert.rejects(recovery({ request: async () => reply(200, { name: item.name, versions: { [item.version]: metadata } }) })(item.url,
+      { missing: true, packageName: item.name, packageVersion: item.version }), /version document rejected/);
+  }
+});
+
+test('missing exact version in a canonical document remains bounded', async () => {
+  let clock = 0, calls = 0;
+  const read = recovery({ now: () => clock, budget: 4000,
+    sleep: async ms => { clock += ms; }, request: async () => { calls++; return reply(200, { name: 'p', versions: {} }); } });
+  await assert.rejects(read('https://registry.npmjs.org/p',
+    { waitMissing: true, packageName: 'p', packageVersion: '1.0.0' }), /version absent in package document/);
+  assert.equal(calls, 1); assert.equal(clock, 4000);
+});
+
 function fixture() {
   const item = { name: '@fastls/fastls', version: '0.15.0' }, bytes = Buffer.from('original archive');
   const metadata = { ...item, dist: { integrity: 'sha512-' + createHash('sha512').update(bytes).digest('base64'),

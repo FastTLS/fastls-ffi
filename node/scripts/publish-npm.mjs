@@ -30,7 +30,7 @@ const items = report.publish_order.map(item => {
   if (basename(item.file) !== item.file || item.version !== report.version) throw Error('Invalid release manifest');
   const file = resolve(directory, item.file), bytes = readFileSync(file);
   if (createHash('sha256').update(bytes).digest('hex') !== item.sha256) throw Error(`Archive changed: ${item.name}`);
-  return { ...item, file, bytes, url: `https://registry.npmjs.org/${encodeURIComponent(item.name)}/${encodeURIComponent(item.version)}` };
+  return { ...item, file, bytes, url: `https://registry.npmjs.org/${encodeURIComponent(item.name)}` };
 });
 await checkTrust();
 const read = recovery();

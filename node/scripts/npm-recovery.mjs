@@ -11,7 +11,7 @@ const transient = new Set([408, 429, 500, 502, 503, 504]);
 export function recovery({ request = fetch, now = Date.now, sleep = ms => new Promise(r => setTimeout(r, ms)),
     budget = 480000, maxAttempts = 5 } = {}) {
   const deadline = now() + budget;
-  return async function read(url, { missing = false, waitMissing = false } = {}) {
+  return async function read(url, { missing = false, waitMissing = false, packageName, packageVersion } = {}) {
     let last = 'no response';
     for (let attempt = 0; attempt < maxAttempts && now() < deadline; attempt++) {
       let response;
@@ -29,7 +29,27 @@ export function recovery({ request = fetch, now = Date.now, sleep = ms => new Pr
         if (!(error instanceof TypeError || ['TimeoutError','AbortError'].includes(error.name))) throw error;
         last = error.name + (error.cause?.code ? `/${error.cause.code}` : '');
       }
-      if (response?.ok) return response.json();
+      if (response?.ok) {
+        const value = await response.json();
+        if (packageVersion === undefined) return value;
+        // Read the canonical package document used by npm itself. A separate
+        // /package/version lookup can retain a pre-upload negative response.
+        if (value?.name !== packageName || !value.versions || typeof value.versions !== 'object' || Array.isArray(value.versions)) {
+          throw new RecoveryError('Registry package document rejected');
+        }
+        if (Object.hasOwn(value.versions, packageVersion)) {
+          const metadata = value.versions[packageVersion];
+          if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata) ||
+              metadata.name !== packageName || metadata.version !== packageVersion) {
+            throw new RecoveryError('Registry version document rejected');
+          }
+          return metadata;
+        }
+        if (missing && !waitMissing) return null;
+        if (!waitMissing) throw new RecoveryError('Registry version absent');
+        last = 'version absent in package document';
+        response = undefined;
+      }
       if (response) {
         last = `HTTP ${response.status}`;
         await response.body?.cancel();
@@ -93,7 +113,7 @@ export async function verifyRegistryProvenance(item, metadata, bytes, read, cert
 export async function publishSet(items, { read, verify, publish, record = () => {} }) {
   const pending = [];
   for (const item of items) {
-    const metadata = await read(item.url, { missing: true });
+    const metadata = await read(item.url, { missing: true, packageName: item.name, packageVersion: item.version });
     if (metadata === null) pending.push(item);
     else record({ name: item.name, state: 'verified-existing', proof: await verify(item, metadata) });
   }
@@ -101,7 +121,7 @@ export async function publishSet(items, { read, verify, publish, record = () => 
     const result = await publish(item);
     // A conflict/network failure needs proof of exact bytes and trusted source;
     // never blindly retry a mutation or treat 409 as success.
-    const metadata = await read(item.url, { waitMissing: true });
+    const metadata = await read(item.url, { waitMissing: true, packageName: item.name, packageVersion: item.version });
     const proof = await verify(item, metadata);
     record({ name: item.name, state: 'verified-published', upload_status: result.status, proof });
   }
