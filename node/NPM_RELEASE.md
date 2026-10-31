@@ -1,6 +1,6 @@
 # npm 分发与发布
 
-所有命令从仓库根目录执行。当前正式版本为 `0.10.1`，正式发布使用 `latest`；历史开发版为 `0.10.1-dev.0`；版本或发布状态以 `node/package.json`、npm registry 和成功工作流为准。用户 API 见 [README.md](README.md)，测试范围见 [PARITY.md](PARITY.md)。
+所有命令从仓库根目录执行。当前正式版本为 `0.15.0`（2026-10-31 核对），正式发布使用 `latest`；历史开发版为 `0.10.1-dev.0`；版本或发布状态以 `node/package.json`、npm registry 和成功工作流为准。用户 API 见 [README.md](README.md)，测试范围见 [PARITY.md](PARITY.md)。
 
 主包是 `@fastls/fastls`，原生库通过同版本的可选依赖分发：
 
@@ -38,11 +38,11 @@ python node/scripts/test-npm-release.py
 
 将改动合并至 main 并等待完整 CI 成功。在 GitHub Actions 运行 `Prepare or publish npm packages`，填写该提交成功的主 CI run ID，首次保持 `publish=false`。
 
-`run_id` 必须是 `.github/workflows/ci.yml` 的 main push 运行，状态为 completed/success，且 head SHA 等于当前工作流的源码 SHA；不能使用 PR 运行或其它提交的历史绿色结果。工作流要求自身与 CI 属于 main 的同一提交，从候选收集五个原生包和一个主包，不重新编译。它验证包摘要、完整回归证据、包名/版本/平台及原生内容，生成 `npm-release` artifact 和 `npm-release-manifest.json`。
+`run_id` 必须是 `.github/workflows/ci.yml` 的 main push 运行，状态为 completed/success，且 head SHA 为当前提交或严格证明等价的祖先生产者；不能使用 PR 运行或其它提交的历史绿色结果。正常路径使用同一提交；受控工具维护使用下述来源差异证明，从候选收集五个原生包和一个主包，不重新编译。仅发布工具变化时，也允许经 `promotion_source.py` 重新证明输入未变的可信祖先生产者；清楚记录 producer/publisher SHA，不能重标原字节。它验证包摘要、完整回归证据、包名/版本/平台及原生内容，生成 `npm-release` artifact 和 `npm-release-manifest.json`。
 
 普通 `npm pack ./node` 产出的 thin 包，以及 `node-release.yml` 的 GitHub 内置候选，都不是此六包组。既有 GitHub `node-v0.10.1-dev.0` 使用历史包名 `@fasttls/fastls`；本次 registry 包使用 `@fastls/fastls`，不要混用。
 
-预发布版本使用 next 标签，稳定版本使用 latest。版本发布后不能替换；发布脚本会先检查全部归档与 registry，遇到同版本不同内容立即停止。网络中断后的重试可以跳过已发布且 SHA-512 完全一致的包，依旧保证原生包先于主包。
+预发布版本使用 next 标签，稳定版本使用 latest。版本发布后不能替换；发布脚本会先检查全部归档与 registry，遇到同版本不同内容立即停止。网络中断后的重试可以跳过已发布且 SHA-512、签名来源与发布者输入均通过核验的包，依旧保证原生包先于主包。
 
 ## 账号操作与首次发布
 
@@ -90,13 +90,24 @@ node --input-type=module -e "import {Session} from '@fastls/fastls'; const s=new
 
 再验证 CJS、TypeScript 类型和一次本地测试服务的真实请求，确认入口与原生库均来自消费项目的 node_modules；不设置 FASTLS_LIBRARY，也不回退到源码。跨平台的安装结果按实际执行的平台分别记录。正式稳定版本使用 latest，安装时去掉 @next。
 
-如果部分包已发布，保留原始六包组并重新执行同一发布命令。脚本仅跳过 SHA-512 完全一致的已发布版本；出现同版本不同内容必须停止，确认来源并选择新版本，不能覆盖已有版本。新的源码或重新构建产物不可冒充原归档恢复上传。
+如果部分包已发布，保留原始六包组并重新执行同一发布命令。脚本仅跳过 SHA-512 完全一致的已发布版本；出现同版本不同内容必须停止并诊断；不能覆盖版本或自动升版绕过失败。新的源码或重新构建产物不可冒充原归档恢复上传。
 
-GitHub 候选签发与 npm registry provenance 是独立结果。初次本机上传不声明 GitHub OIDC provenance；后续通过已配置的 Trusted Publisher 工作流发布时由 npm 生成来源证明。
+GitHub 候选签发与 npm registry provenance 是独立结果。0.15.0 六包已有成功的 GitHub Actions OIDC 来源证明；下方 0.10.1 记录仅描述历史，不构成以后使用本机登录的授权。
 
-官方参考：[npm 登录](https://docs.npmjs.com/cli/v11/commands/npm-login/)、[公开 scoped 包](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/)、[Trusted Publisher](https://docs.npmjs.com/trusted-publishers/)。
+官方参考：[公开 scoped 包](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/)、[Trusted Publisher](https://docs.npmjs.com/trusted-publishers/)。
 
 
 ## 0.10.1 正式发布记录
 
 2026-10-27，六个 npm 包正式发布，latest 均为 0.10.1。来源提交 `19c6c57bee4f5663757eda241081d469f62af456`，完整 CI 运行 40373864723，准备运行 40376125121，授权待审为空。上传使用认证原始归档，registry SHA-512 全部匹配；全新 Windows x64 安装与真实本地 TLS/HTTP2、Cookie、ESM/CJS 调用复验通过。首次 OIDC 上传因权限配置失败，后经本机账号验证上传，本次不声明 npm OIDC provenance。
+
+
+## 有界恢复与验证证明
+
+发布只允许 `FastTLS/fastls-ffi` main 的 `npm-publish.yml` 与 `npm` Environment。准备和上传任务均核对六包实际 OIDC 配置；不回退到本机账户或长期 Token。上传前验证全部本地 SHA-256，逐包核对精确名称/版本、SHA-512、Sigstore 证书/日志、GitHub 仓库/工作流/main/托管 runner 以及已签发布提交与当前生产输入的关系。
+
+读取对 408/429/5xx、网络中断及预期传播 404 退避，最多五次，整个读取窗口八分钟；单次上传最长一分钟，发布工作流总超时十分钟。401/403 与签名/摘要/来源冲突立即失败。未知上传结果或 409 只在重新读取并认证原字节后接受；不会盲目重复写入。每包进度按 run/attempt 归档，主包仍在五个平台包之后处理。
+
+若包上传完成而 `Sign original archive promotion provenance` 仅因透明日志读取出现指定 404/408/429/5xx，可手动运行 `Recover transient npm signing failure`，填写原 run id。默认只分类；`execute=true` 仅重排失败任务，源提交须仍为当前 main，同一运行最多三次尝试。权限、上传、未知签名错误或源码改变不属于自动恢复范围。原始失败保留，重新上传步骤必须先验证全部既有包及可信来源。该工具不自动新建版本、不移动标签，也不会因工具测试新增正式发布。
+
+本地故障测试：`node --test node/scripts/test-npm-recovery.mjs node/scripts/test-npm-oidc.mjs` 与 `python -m unittest discover -s node/scripts -p test_npm_recovery.py -v`。这些演练不等于一次新的真实 OIDC 上传；真实发布需独立记录六包 registry 摘要、来源与安装结果。

@@ -6,6 +6,11 @@ import subprocess
 import sys
 
 PUBLISHING_TOOLS = {
+    'scripts/promote_tag.py',
+    'node/scripts/npm-recovery.mjs', 'node/scripts/test-npm-recovery.mjs',
+    'node/scripts/recover_npm_run.py', 'node/scripts/test_npm_recovery.py',
+    '.github/workflows/npm-recovery.yml', 'node/NPM_RELEASE.md',
+    'tests/publish_promotion_checks.py',
     '.github/workflows/npm-publish.yml', 'node/scripts/check-npm-oidc.mjs',
     'node/scripts/test-npm-oidc.mjs', 'node/scripts/promotion_source.py',
     'node/scripts/test-npm-promotion.py', 'node/scripts/assemble-npm.py',

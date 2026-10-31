@@ -35,7 +35,7 @@ def workflow_inputs_unchanged(before, after):
         prefix_b, jobs_b, events_b = split(after)
     except ValueError:
         return False
-    return (prefix_a == prefix_b and jobs_a.keys() == jobs_b.keys()
+    return (prefix_a == prefix_b and set(jobs_a) - {'publication-tools'} == set(jobs_b) - {'publication-tools'}
         and PRODUCTION_JOBS <= jobs_a.keys()
         and all(jobs_a[name] == jobs_b[name] for name in PRODUCTION_JOBS)
         and events_b.replace(INPUT, '').replace(PUSH, '  push: null\n') == events_a.replace(INPUT, '').replace(PUSH, '  push: null\n'))

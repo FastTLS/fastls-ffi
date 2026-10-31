@@ -1,0 +1,41 @@
+name: Recover transient npm signing failure
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Exact failed npm-publish run at current main (at most three attempts)
+        required: true
+        type: string
+      execute:
+        description: Retry only failed jobs after strict read-only classification
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+jobs:
+  recover:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Verify recovery rejection cases
+        run: python -m unittest discover -s node/scripts -p test_npm_recovery.py -v
+      - name: Classify failure and optionally retry failed jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECOVER_RUN_ID: ${{ inputs.run_id }}
+          RECOVER_EXECUTE: ${{ inputs.execute }}
+        run: python node/scripts/recover_npm_run.py
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: always()
+        with:
+          name: npm-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: npm-recovery.json
+          if-no-files-found: warn

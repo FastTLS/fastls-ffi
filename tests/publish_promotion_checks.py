@@ -35,6 +35,13 @@ class PublicationWorkflowChecks(unittest.TestCase):
         self.assertFalse(workflow_inputs_unchanged('unknown', self.after))
         self.assertFalse(workflow_inputs_unchanged(self.before, 'unknown'))
 
+    def test_separate_publication_tests_do_not_change_native_jobs(self):
+        addition='  publication-tools:\n    run: offline recovery tests\n'
+        after=self.after.replace("\n'on':\n",'\n'+addition+"'on':\n")
+        self.assertTrue(workflow_inputs_unchanged(self.before,after))
+        self.assertFalse(workflow_inputs_unchanged(self.before,after.replace('publication-tools:','unknown-job:')))
+        self.assertFalse(workflow_inputs_unchanged(self.before,after.replace('run: frozen','run: changed',1)))
+
     def test_planner_reuses_only_proven_publication_workflow_changes(self):
         import test_plan
         with tempfile.TemporaryDirectory() as directory:

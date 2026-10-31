@@ -95,6 +95,31 @@ jobs:
       run: node --test node/scripts/test-npm-oidc.mjs
       if: steps.plan.outputs.native == 'true'
     if: github.event_name != 'workflow_dispatch' || inputs.pypi_run_id == ''
+  publication-tools:
+    name: Publication recovery / ${{ matrix.os }}
+    needs: dependencies
+    if: fromJSON(needs.dependencies.outputs.plan).tier != 'docs'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      with:
+        persist-credentials: false
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      with:
+        node-version: '24'
+    - name: Verify registry recovery and trusted publisher rejection
+      run: node --test node/scripts/test-npm-recovery.mjs node/scripts/test-npm-oidc.mjs
+    - name: Verify signing recovery and immutable producer promotion
+      run: |
+        python -m unittest discover -s node/scripts -p test_npm_recovery.py -v
+        python node/scripts/test-npm-promotion.py
+        python node/scripts/test-npm-release.py
+
   native:
     needs: dependencies
     name: Build / ${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
