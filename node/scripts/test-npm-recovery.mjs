@@ -44,6 +44,41 @@ test('real local HTTP registry fixture exposes an expected temporary 404', async
   assert.equal(requests, 3);
 });
 
+test('post-upload reads bypass a cached preflight 404 without weakening verification', async () => {
+  const original = 'https://registry.npmjs.org/%40fastls%2Ffastls/0.16.0';
+  let uploaded = false;
+  const seen = [];
+  const read = recovery({ now: () => 123, sleep: noWait, request: async url => {
+    seen.push(String(url));
+    if (String(url) === original) return reply(404);
+    const fresh = new URL(url);
+    assert.equal(fresh.origin + fresh.pathname, new URL(original).origin + new URL(original).pathname);
+    assert.equal(fresh.searchParams.get('fastls_readback'), '123-0');
+    assert.ok(uploaded);
+    return reply(200, { name: 'expected', version: '0.16.0' });
+  } });
+  let verified = false;
+  await publishSet([{ name: 'expected', url: original }], { read,
+    publish: async () => { uploaded = true; return { status: 0 }; },
+    verify: async (_item, metadata) => { assert.equal(metadata.name, 'expected'); verified = true; } });
+  assert.equal(verified, true);
+  assert.equal(seen.length, 2);
+});
+
+test('failure diagnostics retain phase and final status while failed bodies are released', async () => {
+  let cancelled = 0;
+  const read = recovery({ sleep: noWait, maxAttempts: 2, request: async () => ({
+    ok: false, status: 503, body: { cancel: async () => { cancelled++; } },
+  }) });
+  await assert.rejects(read('https://registry.npmjs.org/', { waitMissing: true }),
+    error => error.name === 'RecoveryError' && /readback; HTTP 503/.test(error.message));
+  assert.equal(cancelled, 2);
+  let calls = 0;
+  await assert.rejects(recovery({ sleep: noWait, request: async () => { calls++; return reply(401); } })(
+    'https://registry.npmjs.org/', { waitMissing: true }), /rejected \(401\)/);
+  assert.equal(calls, 1);
+});
+
 function fixture() {
   const item = { name: '@fastls/fastls', version: '0.15.0' }, bytes = Buffer.from('original archive');
   const metadata = { ...item, dist: { integrity: 'sha512-' + createHash('sha512').update(bytes).digest('base64'),

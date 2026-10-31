@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 
-export class RecoveryError extends Error {}
+export class RecoveryError extends Error {
+  constructor(message) { super(message); this.name = 'RecoveryError'; }
+}
 export const publisherIdentity = 'https://github.com/FastTLS/fastls-ffi/.github/workflows/npm-publish.yml@refs/heads/main';
 const transient = new Set([408, 429, 500, 502, 503, 504]);
 
@@ -10,22 +12,35 @@ export function recovery({ request = fetch, now = Date.now, sleep = ms => new Pr
     budget = 480000, maxAttempts = 5 } = {}) {
   const deadline = now() + budget;
   return async function read(url, { missing = false, waitMissing = false } = {}) {
+    let last = 'no response';
     for (let attempt = 0; attempt < maxAttempts && now() < deadline; attempt++) {
       let response;
       try {
-        response = await request(url, { redirect: 'error', headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+        let target = url;
+        // Preflight can cache a missing version. Never read that negative cache
+        // after upload; signatures and exact archive digests are still mandatory.
+        if (waitMissing && String(url).startsWith('https://registry.npmjs.org/')) {
+          target = new URL(url);
+          target.searchParams.set('fastls_readback', `${now()}-${attempt}`);
+        }
+        response = await request(target, { redirect: 'error', headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
           signal: AbortSignal.timeout(Math.max(1, Math.min(15000, deadline - now()))) });
       } catch (error) {
         if (!(error instanceof TypeError || ['TimeoutError','AbortError'].includes(error.name))) throw error;
+        last = error.name + (error.cause?.code ? `/${error.cause.code}` : '');
       }
       if (response?.ok) return response.json();
+      if (response) {
+        last = `HTTP ${response.status}`;
+        await response.body?.cancel();
+      }
       if (response?.status === 404 && missing && !waitMissing) return null;
       if (response && !(transient.has(response.status) || response.status === 404 && waitMissing)) {
         throw new RecoveryError(`Registry read rejected (${response.status})`);
       }
       if (attempt + 1 < maxAttempts) await sleep(Math.max(0, Math.min(1000 * 2 ** attempt, 8000, deadline - now())));
     }
-    throw new RecoveryError('Registry propagation/network retry budget exhausted');
+    throw new RecoveryError(`Registry propagation/network retry budget exhausted (${waitMissing ? 'readback' : 'preflight'}; ${last})`);
   };
 }
 
