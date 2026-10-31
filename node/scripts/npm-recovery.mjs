@@ -38,7 +38,11 @@ export function recovery({ request = fetch, now = Date.now, sleep = ms => new Pr
       if (response && !(transient.has(response.status) || response.status === 404 && waitMissing)) {
         throw new RecoveryError(`Registry read rejected (${response.status})`);
       }
-      if (attempt + 1 < maxAttempts) await sleep(Math.max(0, Math.min(1000 * 2 ** attempt, 8000, deadline - now())));
+      // A newly uploaded version can remain 404 longer than a transient read
+      // failure. Use the existing budget and attempt cap instead of spending
+      // all five readback attempts within a few seconds of a successful upload.
+      const interval = waitMissing ? Math.min(5000 * 2 ** attempt, 30000) : Math.min(1000 * 2 ** attempt, 8000);
+      if (attempt + 1 < maxAttempts) await sleep(Math.max(0, Math.min(interval, deadline - now())));
     }
     throw new RecoveryError(`Registry propagation/network retry budget exhausted (${waitMissing ? 'readback' : 'preflight'}; ${last})`);
   };

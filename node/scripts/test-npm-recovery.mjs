@@ -79,6 +79,24 @@ test('failure diagnostics retain phase and final status while failed bodies are 
   assert.equal(calls, 1);
 });
 
+test('post-upload propagation uses the existing time budget without more read attempts', async () => {
+  let clock = 0, calls = 0;
+  const waits = [];
+  const read = recovery({ now: () => clock,
+    sleep: async ms => { waits.push(ms); clock += ms; },
+    request: async () => { calls++; return clock < 30000 ? reply(404) : reply(200, { visible: true }); },
+  });
+  assert.equal((await read('https://registry.npmjs.org/package/1.0.0', { waitMissing: true })).visible, true);
+  assert.deepEqual(waits, [5000, 10000, 20000]);
+  assert.equal(calls, 4);
+  assert.ok(clock <= 480000);
+  let shortClock = 0;
+  await assert.rejects(recovery({ now: () => shortClock, budget: 4000,
+    sleep: async ms => { shortClock += ms; }, request: async () => reply(404),
+  })('https://registry.npmjs.org/package/1.0.0', { waitMissing: true }), /budget/);
+  assert.equal(shortClock, 4000);
+});
+
 function fixture() {
   const item = { name: '@fastls/fastls', version: '0.15.0' }, bytes = Buffer.from('original archive');
   const metadata = { ...item, dist: { integrity: 'sha512-' + createHash('sha512').update(bytes).digest('base64'),
