@@ -7,6 +7,17 @@ import re
 import urllib.request
 
 
+class NoCredentialRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self,request,fp,code,message,headers,newurl):
+        if not newurl.startswith('https://'):
+            raise ValueError('Recovery logs redirect must retain HTTPS')
+        redirected=super().redirect_request(request,fp,code,message,headers,newurl)
+        if redirected is not None:
+            for header in ('Authorization','Cookie','Proxy-Authorization'):
+                redirected.remove_header(header)
+        return redirected
+
+
 def recovery_plan(run, jobs, log, head):
     if not (run.get('repository',{}).get('full_name')=='FastTLS/fastls-ffi'
             and run.get('event')=='workflow_dispatch' and run.get('head_branch')=='main'
@@ -38,7 +49,7 @@ def main():
         request=urllib.request.Request('https://api.github.com/repos/'+repository+path,
             headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json',
                      'User-Agent':'bounded-publication-recovery'},method=method)
-        with urllib.request.urlopen(request,timeout=30) as response:
+        with urllib.request.build_opener(NoCredentialRedirect()).open(request,timeout=30) as response:
             body=response.read()
             return body.decode('utf-8') if raw else json.loads(body) if body else None
     run=api('/actions/runs/'+run_id)

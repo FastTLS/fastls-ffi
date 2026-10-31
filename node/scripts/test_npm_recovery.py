@@ -1,6 +1,7 @@
 import copy
 import unittest
-from recover_npm_run import recovery_plan
+import urllib.request
+from recover_npm_run import recovery_plan,NoCredentialRedirect
 
 
 class Recover(unittest.TestCase):
@@ -15,6 +16,13 @@ class Recover(unittest.TestCase):
 
     def test_classified_failure_retries_failed_job_only(self):
         self.assertEqual(recovery_plan(self.run,self.jobs,self.log,self.sha)['retry'],'failed-jobs-only')
+
+    def test_signed_log_redirect_cannot_forward_credentials_or_downgrade_https(self):
+        request=urllib.request.Request('https://api.github.com/logs',headers={'Authorization':'Bearer fixture','Cookie':'fixture'})
+        redirected=NoCredentialRedirect().redirect_request(request,None,302,'Found',{},'https://logs.example/temporary-signed-log')
+        self.assertIsNone(redirected.get_header('Authorization'))
+        self.assertIsNone(redirected.get_header('Cookie'))
+        with self.assertRaises(ValueError):NoCredentialRedirect().redirect_request(request,None,302,'Found',{},'http://logs.example/log')
 
     def test_untrusted_changed_or_exhausted_runs_are_rejected(self):
         for key,value in [('repository',dict(full_name='attacker/repo')),('head_sha','b'*40),('head_branch','dev'),
