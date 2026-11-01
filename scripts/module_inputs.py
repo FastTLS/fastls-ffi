@@ -59,7 +59,8 @@ def validate(selected, downloaded, reviewed):
 def capture(root, env):
     if env.get('GOWORK') != 'off': raise RuntimeError('formal native build requires GOWORK=off')
     def run(*args):return subprocess.check_output(args, cwd=root, env=env, text=True, encoding='utf-8')
-    if run('git', 'status', '--porcelain').strip(): raise RuntimeError('commit formal native sources before building')
+    dirty = run('git', 'status', '--porcelain').strip()
+    if dirty: raise RuntimeError('commit formal native sources before building: ' + dirty)
     downloaded = list(json_stream(run('go', 'mod', 'download', '-json', 'all')))
     # Bulk download can omit Origin. Individual cached metadata may retain a
     # branch used for the original commit lookup, so preserve it and separately
@@ -87,6 +88,9 @@ def capture(root, env):
     run('go', 'mod', 'verify')
     selected = list(json_stream(run('go', 'list', '-m', '-json', 'all')))
     reviewed = json.loads((root / 'ci/dependencies.json').read_text(encoding='utf-8'))
+    dirty = run('git', 'status', '--porcelain').strip()
+    if dirty:
+        raise RuntimeError('module capture changed source/checksum inputs; commit the complete verified graph before compiling: ' + dirty)
     return validate(selected, {(m['Path'], m.get('Version')): m for m in downloaded}, reviewed)
 
 
