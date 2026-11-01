@@ -216,7 +216,8 @@ def main():
     output['resource_matrix'] = {'include': [dict(runner='ubuntu-24.04', target='linux-amd64', go='1.26.10',
         python='3.11', node='24', race=True, kind=kind) for kind in plan.get('resource_scope', {}).get('kinds', RESOURCE_KINDS)]}
     if os.environ.get('GITHUB_ACTIONS') == 'true':
-        Path('validation-plan.json').write_text(json.dumps(dict(plan, revision=os.environ['GITHUB_SHA'],
+        Path('build').mkdir(exist_ok=True)
+        Path('build/validation-plan.json').write_text(json.dumps(dict(plan, revision=os.environ['GITHUB_SHA'],
             ref=os.environ['GITHUB_REF']), indent=2) + '\n', encoding='utf-8')
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as stream:

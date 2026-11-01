@@ -148,6 +148,19 @@ class Selection(unittest.TestCase):
             self.assertEqual(output['native'], 'false')
             self.assertEqual(json.loads(output['plan'])['tier'], 'docs')
 
+    def test_coverage_receipt_is_separate_from_the_clean_source_tree(self):
+        from contextlib import chdir
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            env=dict(GITHUB_ACTIONS='true',GITHUB_SHA='a'*40,GITHUB_REF='refs/heads/main')
+            with chdir(root),patch.dict(os.environ,env,clear=True),patch.object(sys,'argv',['test_plan.py']),\
+                 patch.object(test_plan,'context',return_value=test_plan.choose(['README.md'])),patch('sys.stdout',new_callable=io.StringIO):
+                test_plan.main()
+            self.assertFalse((root/'validation-plan.json').exists())
+            receipt=json.loads((root/'build/validation-plan.json').read_text())
+            self.assertEqual(receipt['revision'],'a'*40)
+            self.assertEqual(receipt['ref'],'refs/heads/main')
+
     def test_node_version_bump_requires_all_published_platforms(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory);(root / 'node').mkdir()
