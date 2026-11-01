@@ -41,6 +41,34 @@ class ReleaseReuse(unittest.TestCase):
             with self.subTest(name=name),self.assertRaises(ValueError):
                 release_reuse.verify(run,jobs,'FastTLS/fastls-ffi','a'*40,resource_only=True)
 
+    def test_cancelled_overall_run_cannot_cancel_or_replace_successful_individual_proofs(self):
+        run=dict(self.run,conclusion='cancelled')
+        release_reuse.verify(run,self.jobs,'FastTLS/fastls-ffi','a'*40,resource_only=True)
+        with self.assertRaises(ValueError):release_reuse.verify(run,self.jobs,'FastTLS/fastls-ffi','a'*40)
+        for name in ['dependencies','Build / windows-amd64-go1.26.10-py3.11','race / linux-amd64','Resource recovery / generic']:
+            jobs=[dict(j,conclusion='cancelled') if j['name']==name else j for j in self.jobs]
+            with self.subTest(name=name),self.assertRaises(ValueError):
+                release_reuse.verify(run,jobs,'FastTLS/fastls-ffi','a'*40,resource_only=True)
+
+    def test_stale_ancestor_record_does_not_hide_exact_successful_main(self):
+        import io
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'ci').mkdir()
+            (root/'ci/resource-reuse.json').write_text(json.dumps({'schema':1,'source':'b'*40,'run_id':99}))
+            def response(request,timeout):
+                url=request.full_url
+                if url.endswith('/actions/runs/99'):
+                    data=dict(self.run,id=99,head_sha='b'*40,event='pull_request')
+                elif '/jobs?' in url:data={'jobs':self.jobs}
+                elif '/actions/workflows/ci.yml/runs?' in url:data={'workflow_runs':[self.run]}
+                else:raise AssertionError(url)
+                return io.BytesIO(json.dumps(data).encode())
+            with patch.object(release_reuse,'ROOT',root),patch.object(release_reuse,'equivalent_resource_inputs',return_value=[]),\
+                 patch.object(release_reuse.urllib.request,'urlopen',side_effect=response):
+                result=release_reuse.find(dict(GITHUB_REPOSITORY='FastTLS/fastls-ffi',GITHUB_SHA='a'*40,GH_TOKEN='fixture'))
+            self.assertEqual(result['run_id'],12)
+
     def test_narrow_coverage_requires_every_selected_class_and_rejects_unknown_scope(self):
         jobs=[j for j in self.jobs if not j['name'].startswith('Resource recovery /') or j['name'].endswith(('generic','sse'))]
         release_reuse.verify(self.run,jobs,'FastTLS/fastls-ffi','a'*40,resource_kinds=['generic','sse'])

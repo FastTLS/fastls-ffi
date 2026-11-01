@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "80bf739e5aa28fb7a83791326b23f5286d3b8b1a",
-  "run_id": 41261274992,
-  "reason": "Only Node packaging-test inventory classification and resource-reuse scheduling differ. Every named native build, race and resource prerequisite must have completed successfully. Prior Node failures remain failed; fresh Node checks, platform identity and actual installs remain required."
+  "source": "c38c4b72c85cc4866dbbec2327b21c538b5f36cd",
+  "run_id": 41262076864,
+  "reason": "Only independent-evidence recovery guards and this receipt differ from the completed successful producer. All runtime, dependency, compiler and resource inputs are unchanged; fresh artifact identity and installs remain required."
 }

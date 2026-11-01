@@ -24,7 +24,7 @@ def equivalent_resource_inputs(base, revision):
 def verify(run, jobs, repository, revision, *, resource_only=False, platform_only=False, resource_kinds=None):
     if resource_only and platform_only:
         raise ValueError('Independent evidence scopes cannot be combined')
-    accepted_state = run.get('status') == 'completed' and run.get('conclusion') in (('success', 'failure') if resource_only else ('success',))
+    accepted_state = run.get('status') == 'completed' and run.get('conclusion') in (('success', 'failure', 'cancelled') if resource_only else ('success',))
     if resource_only and run.get('status') == 'in_progress' and run.get('conclusion') is None:
         accepted_state = True  # Every named prerequisite below must already be completed/successful.
     if not (accepted_state
@@ -94,9 +94,16 @@ def find(env, *, platform_only=False, resource_kinds=None):
             changed = equivalent_resource_inputs(record['source'], revision)
             if changed is not None:
                 run = api(f"/actions/runs/{record['run_id']}")
-                reused = verify(run, jobs_for(run), repository, record['source'], resource_only=True)
-                reused.update(consumer_revision=revision, unchanged_except=changed)
-                return reused
+                try:
+                    reused = verify(run, jobs_for(run), repository, record['source'], resource_only=True)
+                except ValueError:
+                    # A stale optional ancestor cannot hide an exact successful
+                    # main candidate below. Every requested prerequisite still
+                    # needs its own completed/successful job evidence.
+                    pass
+                else:
+                    reused.update(consumer_revision=revision, unchanged_except=changed)
+                    return reused
 
     runs = api('/actions/workflows/ci.yml/runs?branch=main&event=push&head_sha=' + revision + '&per_page=20')
     for run in runs['workflow_runs']:
