@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "48a94192c1056fc91a21a9df3eebf96529b8f421",
-  "run_id": 40851118341,
-  "reason": "Only release-test infrastructure changes, including a Python-only proxy lab unused by the resource jobs. Production, dependencies, build, Go fixture and resource scenarios must match this source. Individual resource prerequisites must succeed. The original Node inventory and Python proxy failures remain failed and require fresh platform checks."
+  "source": "80bf739e5aa28fb7a83791326b23f5286d3b8b1a",
+  "run_id": 41261274992,
+  "reason": "Only Node packaging-test inventory classification and resource-reuse scheduling differ. Every named native build, race and resource prerequisite must have completed successfully. Prior Node failures remain failed; fresh Node checks, platform identity and actual installs remain required."
 }

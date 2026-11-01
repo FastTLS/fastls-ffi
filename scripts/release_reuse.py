@@ -24,7 +24,10 @@ def equivalent_resource_inputs(base, revision):
 def verify(run, jobs, repository, revision, *, resource_only=False, platform_only=False, resource_kinds=None):
     if resource_only and platform_only:
         raise ValueError('Independent evidence scopes cannot be combined')
-    if not (run.get('status') == 'completed' and run.get('conclusion') in (('success', 'failure') if resource_only else ('success',))
+    accepted_state = run.get('status') == 'completed' and run.get('conclusion') in (('success', 'failure') if resource_only else ('success',))
+    if resource_only and run.get('status') == 'in_progress' and run.get('conclusion') is None:
+        accepted_state = True  # Every named prerequisite below must already be completed/successful.
+    if not (accepted_state
             and run.get('head_sha') == revision and run.get('head_branch') == 'main'
             and run.get('event') == 'push' and run.get('path') == '.github/workflows/ci.yml'
             and run.get('repository', {}).get('full_name') == repository):

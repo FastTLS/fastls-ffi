@@ -31,6 +31,16 @@ class ReleaseReuse(unittest.TestCase):
     def test_exact_success_is_reusable(self):
         self.assertEqual(self.verify()['run_id'], 12)
 
+    def test_individual_resources_do_not_wait_for_unrelated_running_suites(self):
+        run=dict(self.run,status='in_progress',conclusion=None)
+        release_reuse.verify(run,self.jobs,'FastTLS/fastls-ffi','a'*40,resource_only=True)
+        for platform_only in [False,True]:
+            with self.assertRaises(ValueError):release_reuse.verify(run,self.jobs,'FastTLS/fastls-ffi','a'*40,platform_only=platform_only)
+        for name in ['dependencies','Build / windows-amd64-go1.26.10-py3.11','race / linux-amd64','soak / linux-amd64','Resource recovery / generic']:
+            jobs=[dict(j, status='in_progress', conclusion=None) if j['name']==name else j for j in self.jobs]
+            with self.subTest(name=name),self.assertRaises(ValueError):
+                release_reuse.verify(run,jobs,'FastTLS/fastls-ffi','a'*40,resource_only=True)
+
     def test_narrow_coverage_requires_every_selected_class_and_rejects_unknown_scope(self):
         jobs=[j for j in self.jobs if not j['name'].startswith('Resource recovery /') or j['name'].endswith(('generic','sse'))]
         release_reuse.verify(self.run,jobs,'FastTLS/fastls-ffi','a'*40,resource_kinds=['generic','sse'])
