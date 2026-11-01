@@ -46,6 +46,22 @@ class Selection(unittest.TestCase):
         for flags in [{'uncertain':True}, {'override':True}, {'requested':'major'}]:
             self.assertEqual(test_plan.choose(['node/src/websocket.ts'], **flags)['resource_scope']['kinds'], list(test_plan.RESOURCE_KINDS))
 
+    def test_unreleased_patch_keeps_prior_native_risk_when_followup_only_fixes_ci(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'node').mkdir()
+            (root/'node/package.json').write_text('{"version":"0.16.1"}')
+            event=root/'event.json';event.write_text(json.dumps({'before':'a'*40}))
+            def git(*args):
+                if args[0]=='diff':return 'go.mod\nnode/package.json\nscripts/test_plan.py' if 'node-v0.16.0' in args else 'scripts/test_plan.py'
+                if args[0]=='tag':return 'node-v0.16.0'
+                raise AssertionError(args)
+            with patch.object(test_plan,'ROOT',root),patch.object(test_plan,'git',side_effect=git):
+                plan=test_plan.context(dict(GITHUB_REF='refs/heads/main',GITHUB_EVENT_PATH=str(event)))
+            self.assertEqual(plan['tier'],'minor')
+            self.assertTrue(plan['node_soak'])
+            self.assertEqual(plan['extended'],['race','soak'])
+            self.assertIn('go.mod',plan['files'])
+
     def test_python_patch_uses_two_platforms_without_resource_or_performance_campaign(self):
         plan = test_plan.choose(['python/fastls/api.py'])
         self.assertEqual(plan['tier'], 'patch')

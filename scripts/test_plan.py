@@ -145,6 +145,12 @@ def context(env):
                 published_node = max(node_tags, key=version)
                 if version(current_node) > version(published_node):
                     release, previous = current_node, published_node
+                    # The version floor alone is insufficient for a patch:
+                    # an earlier, still-unreleased native/dependency change
+                    # must remain in scope when a later fix only touches CI.
+                    candidate_files = git('diff', '--name-only', '--no-renames',
+                                          'node-v' + published_node, 'HEAD').splitlines()
+                    files = sorted(set(files) | set(candidate_files))
     except (subprocess.CalledProcessError, ValueError):
         if release:
             version(release)  # Invalid release tags must fail, never silently downgrade.
