@@ -1,5 +1,7 @@
 # fastls Python SDK
 
+Python **0.7.1** / Node **0.16.1** pin Go **v0.2.1** with bounded H3 error-connection retirement and immutable native-byte promotion. See [the delivery contract](https://github.com/FastTLS/fastls-ffi/blob/v0.7.1/DELIVERY_LIFECYCLE.md).
+
 Python 0.7.0 / Node 0.16.0 add immutable H3 configuration and effective owner snapshots: see [the shared contract](https://github.com/FastTLS/fastls-ffi/blob/v0.7.0/H3_CONFIG.md). Native capability: http3_config_v1; core: Go v0.2.0.
 
 Python 0.6.0 / Node 0.15.0 支持显式 H3 与可信 Session 地址策略组合，需原生 `http3_address_policy_v1`；默认校验证书，旧库在分配资源前拒绝。详见 [组合契约](../H3_POLICY.zh-CN.md)。
@@ -23,14 +25,14 @@ with Session(http_version="h3") as session:
     response = session.get("https://example.com")  # 必须由目标支持 H3
 ```
 
-通过原生 Fastls 动态库发送带浏览器配置的 HTTP 请求，支持同步、asyncio、流式上传下载、HTTP/2 全双工、SSE 和 WebSocket。Python 发行包名与导入名均为 `fastls`，仓库名为 `fastls-ffi`。本文对应 Python **0.7.0**，发行文件与版本状态以 PyPI 为准。
+通过原生 Fastls 动态库发送带浏览器配置的 HTTP 请求，支持同步、asyncio、流式上传下载、HTTP/2 全双工、SSE 和 WebSocket。Python 发行包名与导入名均为 `fastls`，仓库名为 `fastls-ffi`。本文对应 Python **0.7.1**，发行文件与版本状态以 PyPI 为准。
 
 ## 安装与平台
 
 需要 Python 3.10+。推荐在虚拟环境中安装：
 
 ```shell
-python -m pip install --only-binary=:all: fastls==0.7.0
+python -m pip install --only-binary=:all: fastls==0.7.1
 ```
 
 平台 wheel 已包含动态库，无需 Go、C 编译器或额外下载 DLL。`--only-binary=:all:` 确保没有匹配平台时明确失败，避免误装不含动态库的源码包。

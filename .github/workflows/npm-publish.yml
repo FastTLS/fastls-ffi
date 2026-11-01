@@ -10,6 +10,14 @@ on:
         description: Publish the verified package set to npm (false prepares only)
         type: boolean
         default: false
+      resume_run_id:
+        description: Exact previous publication run; preserves its deadline and mutation state
+        type: string
+        default: ''
+      confirm_only:
+        description: Read-only registry confirmation using prior publication progress
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -90,13 +98,14 @@ jobs:
           path: npm-trust-verification.json
           if-no-files-found: error
   publish:
-    if: inputs.publish
+    if: inputs.publish || inputs.confirm_only
     needs: [prepare, verify-trust]
     runs-on: ubuntu-24.04
     environment: npm
     timeout-minutes: 10
     permissions:
       contents: write
+      actions: read
       id-token: write
       attestations: write
       artifact-metadata: write
@@ -113,7 +122,15 @@ jobs:
         with:
           name: npm-release
           path: npm-release
+      - name: Restore bounded publication progress
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          CONFIRM_ONLY: ${{ inputs.confirm_only }}
+        run: python node/scripts/restore-publication.py
       - name: Publish native packages first and main package last
+        env:
+          CONFIRM_ONLY: ${{ inputs.confirm_only }}
         run: npm run publish:npm --prefix node
       - name: Bind exact archives and producer metadata
         run: |
@@ -134,7 +151,9 @@ jobs:
           BUNDLE_PATH: ${{ steps.promotion.outputs.bundle-path }}
         run: |
           cp "$BUNDLE_PATH" npm-release/provenance.sigstore.json
-          gh release create "node-v${VERSION}" npm-release/* --verify-tag --title "@fastls/fastls ${VERSION}" --notes-file npm-release/RELEASE_NOTES.md
+          gh release create "node-v${VERSION}" npm-release/*.tgz npm-release/npm-release-manifest.json npm-release/RELEASE_NOTES.md npm-release/SHA256SUMS npm-release/provenance.sigstore.json --draft --verify-tag --title "@fastls/fastls ${VERSION}" --notes-file npm-release/RELEASE_NOTES.md
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/node-v${VERSION}" | python node/scripts/release_assets.py npm-release
+          gh release edit "node-v${VERSION}" --draft=false
       - name: Preserve per-attempt publication progress
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f

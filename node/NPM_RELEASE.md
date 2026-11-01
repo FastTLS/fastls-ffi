@@ -111,3 +111,10 @@ GitHub 候选签发与 npm registry provenance 是独立结果。0.15.0 六包�
 若包上传完成而 `Sign original archive promotion provenance` 仅因透明日志读取出现指定 404/408/429/5xx，可手动运行 `Recover transient npm signing failure`，填写原 run id。默认只分类；`execute=true` 仅重排失败任务，源提交须仍为当前 main，同一运行最多三次尝试。权限、上传、未知签名错误或源码改变不属于自动恢复范围。原始失败保留，重新上传步骤必须先验证全部既有包及可信来源。该工具不自动新建版本、不移动标签，也不会因工具测试新增正式发布。
 
 本地故障测试：`node --test node/scripts/test-npm-recovery.mjs node/scripts/test-npm-oidc.mjs` 与 `python -m unittest discover -s node/scripts -p test_npm_recovery.py -v`。这些演练不等于一次新的真实 OIDC 上传；真实发布需独立记录六包 registry 摘要、来源与安装结果。
+
+
+## 0.16.1 发布状态与恢复
+
+上传、待确认、验证失败与验证完成分别记录。`resume_run_id` 指向精确前次运行；`confirm_only=true` 仅确认，不执行 npm publish。恢复要求同一 main 发布提交、同一 manifest 与六包摘要，沿用首次八分钟绝对读取截止时间和最多三次尝试；每次读取仍最多五次，每端点/阶段跨三次累计最多十五次。额度耗尽即停止，不能重新调度以重置。只允许结构化 registry 传播失败或已有透明日志暂态分类；权限、来源及摘要冲突继续阻断。辅助进度只留 Actions；Release 先创建草稿，核对精确十文件清单与摘要后公开。
+
+Python 0.7.1 可复用同提交认证原生字节，原 build-info/Go buildinfo 不改；外层包身份通过 package-info 绑定。参见[完整契约](../DELIVERY_LIFECYCLE.zh-CN.md)。旧八分钟按每次 job 重新开始的行为不再用于新恢复。

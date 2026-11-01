@@ -4,7 +4,7 @@ permissions:
   actions: read
 env:
   FASTLS_EXTENDED_SOAK_SECONDS: ${{ inputs.certification_soak_seconds || '300' }}
-  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.7.0.dev{0}', github.run_number)
+  FASTLS_PACKAGE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('0.7.1.dev{0}', github.run_number)
     }}
   FASTLS_RELEASE_MODE: ${{ github.ref_type == 'tag' && 'true' || 'false' }}
 concurrency:
@@ -31,6 +31,7 @@ jobs:
       soak_seconds: ${{ steps.plan.outputs.soak_seconds }}
       extended_enabled: ${{ steps.plan.outputs.extended_enabled }}
       python_source_run_id: ${{ steps.plan.outputs.python_source_run_id }}
+      resource_matrix: ${{ steps.plan.outputs.resource_matrix }}
     steps:
     - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       with:
@@ -49,12 +50,19 @@ jobs:
         IMITATE_REF: ${{ inputs.imitate_ref }}
         CERTIFICATION_SOAK_SECONDS: ${{ inputs.certification_soak_seconds }}
       run: python scripts/test_plan.py
+    - name: Retain source-bound coverage and skip reasons
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      with:
+        name: validation-plan
+        path: validation-plan.json
+        if-no-files-found: error
     - name: Test scope selection and failure handling
       run: |
         python -m unittest discover -s tests -p test_ci_plan.py -v
         python -m unittest discover -s tests -p test_release_reuse.py -v
         python -m unittest discover -s tests -p test_license_preflight.py -v
         python -m unittest discover -s tests -p test_python_stages.py -v
+        python -m unittest discover -s tests -p test_native_promotion.py -v
     - name: Check patch whitespace
       run: git diff --check HEAD^ HEAD
     - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
@@ -174,7 +182,27 @@ jobs:
     - name: Install pinned Linux wheel audit tools
       if: runner.os == 'Linux'
       run: python -m pip install auditwheel==6.8.2 patchelf==0.19.1.0
+    - name: Retrieve certified native producer inputs
+      if: needs.dependencies.outputs.python_source_run_id != ''
+      continue-on-error: true
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: inputs-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+        path: workspace/fastls-ffi/build/producer-inputs
+        github-token: ${{ github.token }}
+        run-id: ${{ needs.dependencies.outputs.python_source_run_id }}
+    - name: Retrieve certified producer source receipt
+      if: needs.dependencies.outputs.python_source_run_id != ''
+      continue-on-error: true
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: source-receipt-${{ matrix.config.target }}-go${{ matrix.config.go }}-py${{ matrix.config.python }}
+        path: workspace/fastls-ffi/build/source-receipt
+        github-token: ${{ github.token }}
+        run-id: ${{ needs.dependencies.outputs.python_source_run_id }}
     - name: Build native library, fixture and bundled wheel
+      env:
+        FASTLS_SOURCE_RUN_ID: ${{ needs.dependencies.outputs.python_source_run_id }}
       run: python scripts/ci.py run --stage build
     - name: Share immutable platform inputs
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
@@ -621,43 +649,7 @@ jobs:
   node-soak:
     strategy:
       fail-fast: false
-      matrix:
-        include:
-        - runner: ubuntu-24.04
-          target: linux-amd64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: true
-          kind: generic
-        - runner: ubuntu-24.04
-          target: linux-amd64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: true
-          kind: duplex
-        - runner: ubuntu-24.04
-          target: linux-amd64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: true
-          kind: sse
-        - runner: ubuntu-24.04
-          target: linux-amd64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: true
-          kind: proxy
-        - runner: ubuntu-24.04
-          target: linux-amd64
-          go: 1.26.10
-          python: '3.11'
-          node: '24'
-          race: true
-          kind: ws
+      matrix: ${{ fromJSON(needs.dependencies.outputs.resource_matrix) }}
     runs-on: ${{ matrix.runner }}
     env:
       CGO_ENABLED: '1'

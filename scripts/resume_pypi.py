@@ -79,7 +79,10 @@ def verify_files(directory, version, commit, checksums):
                 raise RuntimeError("wheel platform tag mismatch")
             build = json.loads(wheel.read("fastls/_lib/build-info.json"))
             sources = build.get("sources", {})
-            if build.get("abi") != 1 or build.get("package_version") != version or sources.get("fastls-ffi") != commit:
+            from native_identity import validate
+            proof = json.loads(wheel.read('fastls/_lib/package-info.json')) if 'fastls/_lib/package-info.json' in wheel.namelist() else None
+            validate(build, version, proof, target)
+            if build.get("abi") != 1 or sources.get("fastls-ffi") != commit:
                 raise RuntimeError("native build information differs from the certified source")
             if baseline is not None and baseline != sources:
                 raise RuntimeError("native builds have different source inputs")

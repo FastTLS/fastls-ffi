@@ -2,10 +2,49 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { recovery, publishSet, verifyRegistryProvenance, publisherIdentity } from './npm-recovery.mjs';
+import { recovery, publishSet, verifyRegistryProvenance, publisherIdentity, publicationState } from './npm-recovery.mjs';
 
 const reply = (status, body = {}) => new Response(JSON.stringify(body), { status });
 const noWait = async () => {};
+test('pending uploads resume read-only without resetting absolute time or republishing', async () => {
+  const items = [{ name: 'native', version: '1.0.0', sha256: 'a'.repeat(64), url: 'native' }];
+  const identity = { producer: 'a'.repeat(40), publisher: 'b'.repeat(40) };
+  const state = publicationState(items, identity, undefined, { now: () => 100, attempt: '1/1' });
+  let uploads = 0;
+  await assert.rejects(publishSet(items, { state, now: () => 100, read: async (_url, options) => {
+    if (options.missing) return null;
+    throw Object.assign(Error('pending'), { code: 'registry-readback-pending' });
+  }, publish: async () => { uploads++; return { status: 0 }; }, verify: async () => ({ verified: true }) }));
+  assert.equal(state.items[0].state, 'uploaded-pending');
+  const resumed = publicationState(items, identity, state, { now: () => 200, attempt: '1/2' });
+  assert.equal(resumed.deadline, state.deadline);
+  await publishSet(items, { state: resumed, confirmOnly: true,
+    read: async () => ({}), publish: async () => { uploads++; throw Error('read-only mutation'); },
+    verify: async () => ({ verified: true }) });
+  assert.equal(uploads, 1);
+  assert.equal(resumed.items[0].state, 'verified');
+  assert.throws(() => publicationState(items, identity, resumed, { now: () => state.deadline, attempt: '1/3' }), /deadline/);
+  assert.throws(() => publicationState(items, { producer: 'changed' }, state, { now: () => 200, attempt: '1/2' }), /identity/);
+  assert.throws(() => publicationState(items, identity, resumed, { now: () => 200, attempt: '1/2' }), /attempt/);
+});
+
+test('three-attempt and read budgets survive fresh recovery instances', async () => {
+  const item = { name: 'native', sha256: 'a'.repeat(64), version: '1.0.0' };
+  let state = publicationState([item], {}, undefined, { now: () => 0, attempt: '1/1' });
+  let requests = 0;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (attempt > 1) state = publicationState([item], {}, state, { now: () => 0, attempt: `1/${attempt}` });
+    const read = recovery({ state, now: () => 0, sleep: noWait, request: async () => { requests++; return reply(404); } });
+    await assert.rejects(read('https://registry.npmjs.org/native', { waitMissing: true }), /budget/);
+  }
+  assert.equal(requests, 15);
+  await assert.rejects(recovery({ state, now: () => 0, sleep: noWait, request: async () => { requests++; return reply(200); } })(
+    'https://registry.npmjs.org/native', { waitMissing: true }), /budget/);
+  assert.equal(requests, 15);
+  assert.throws(() => publicationState([item], {}, state, { now: () => 0, attempt: '2/1' }), /attempt/);
+  assert.throws(() => publicationState([item], {}, { ...state, deadline: state.deadline + 1 },
+    { now: () => 0, attempt: '2/1' }), /identity/);
+});
 test('bounded read retries propagation, network failures and temporary server errors', async () => {
   for (const fault of [404,408,429,500,502,503,504,'network']) {
     let calls = 0;

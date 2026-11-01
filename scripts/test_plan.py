@@ -8,8 +8,22 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 TIERS = ('docs', 'patch', 'minor', 'major')
+RESOURCE_KINDS = ('generic', 'duplex', 'sse', 'proxy', 'ws')
+
+
+def resource_scope(files, *, uncertain=False, major=False):
+    """Narrow only isolated adapters with known ownership; shared inputs keep all."""
+    isolated = {'python/fastls/sse.py': 'sse', 'node/src/sse.ts': 'sse',
+                'python/fastls/websocket.py': 'ws', 'node/src/websocket.ts': 'ws'}
+    production = [p for p in files if not (p.endswith('.md') or p.startswith(('tests/', 'node/tests/')))]
+    if uncertain or major or not production or any(p not in isolated for p in production):
+        return dict(kinds=list(RESOURCE_KINDS), reason='shared, dependency, build, unknown or full-compatibility inputs require all resource classes')
+    selected = {'generic'} | {isolated[p] for p in production}
+    return dict(kinds=[k for k in RESOURCE_KINDS if k in selected],
+                reason='only isolated SSE/WebSocket adapters changed; shared native/session/dependency inputs unchanged')
 PUBLISHING_TOOLS = {
     'scripts/promote_tag.py',
+    'node/scripts/restore-publication.py', 'node/scripts/release_assets.py',
     'node/scripts/npm-recovery.mjs', 'node/scripts/test-npm-recovery.mjs',
     'node/scripts/recover_npm_run.py', 'node/scripts/test_npm_recovery.py',
     '.github/workflows/npm-recovery.yml', 'node/NPM_RELEASE.md',
@@ -47,6 +61,7 @@ def choose(files, *, requested='auto', release=None, previous=None, uncertain=Fa
     reasons = ['documentation only' if docs else 'ordinary change']
     fixture = any(p.startswith('cmd/ffi-fixture/') for p in files)
     sdk_state = {'python/fastls/client.py', 'python/fastls/auth.py', 'python/fastls/cookies.py',
+                 'python/fastls/sse.py', 'node/src/sse.ts',
                  'python/fastls/profiles.py', 'node/src/profiles.ts',
                  'python/fastls/redirects.py', 'python/fastls/retry.py', 'python/fastls/profile_store.py',
                  'node/src/session.ts', 'node/src/retry.ts', 'node/src/cookies.ts', 'node/src/profile-store.ts'}
@@ -83,7 +98,8 @@ def choose(files, *, requested='auto', release=None, previous=None, uncertain=Fa
     candidates = node and (tier in ('minor', 'major') or bool(release))
     extended = ['race', 'soak'] if tier in ('minor', 'major') else ['race'] if release else []
     node_targets = [dict(t, node='22' if t['go'] == '1.27.3' else '24', race=t['target'] == 'linux-amd64' and t['go'] == '1.26.10') for t in targets]
-    return dict(tier=tier, reasons=reasons, files=files, native=tier != 'docs', node=node,
+    scope = resource_scope(files, uncertain=uncertain or override, major=tier == 'major')
+    return dict(tier=tier, reasons=reasons, files=files, native=tier != 'docs', node=node, resource_scope=scope,
                 matrix=targets, node_matrix=node_targets, extended=extended,
                 node_soak=tier in ('minor', 'major'), candidates=candidates,
                 pypi=bool(release) or tier in ('minor', 'major'),
@@ -156,7 +172,7 @@ def context(env):
                 ('FASTLS_REF', 'FTRANSPORT_REF', 'IMITATE_REF', 'CERTIFICATION_SOAK_SECONDS'))):
         from release_reuse import find
         try:
-            reused = find(env)
+            reused = find(env, resource_kinds=plan.get('resource_scope', {}).get('kinds', list(RESOURCE_KINDS)))
         except (OSError, ValueError, KeyError) as error:
             print('Resource evidence unavailable; retaining full checks: ' + type(error).__name__, file=sys.stderr)
             reused = None
@@ -197,6 +213,11 @@ def main():
         return
     plan = context(os.environ)
     output = {**plan, 'plan': plan, 'extended_enabled': bool(plan['extended']), 'extended_matrix': plan['extended'] or ['race']}
+    output['resource_matrix'] = {'include': [dict(runner='ubuntu-24.04', target='linux-amd64', go='1.26.10',
+        python='3.11', node='24', race=True, kind=kind) for kind in plan.get('resource_scope', {}).get('kinds', RESOURCE_KINDS)]}
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        Path('validation-plan.json').write_text(json.dumps(dict(plan, revision=os.environ['GITHUB_SHA'],
+            ref=os.environ['GITHUB_REF']), indent=2) + '\n', encoding='utf-8')
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as stream:
             for key, value in output.items():

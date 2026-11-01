@@ -1,3 +1,9 @@
+# Python 0.7.1 / Node 0.16.1
+
+Pins Go v0.2.1 with independent H3 connection-generation retirement, profile v0.1.1 and ftransport/imitate v0.1.2. Preserves ABI v1 and existing public H3 fields. Promotes certified same-source native bytes into formal Python packaging with separate outer-package/producer identity; missing or unequal inputs retain fresh builds and checks. npm publication records pending confirmation and restores the original absolute budget, verifies all native packages before uploading main, and keeps progress outside the signed Release asset set. Resource selection records exact scope and retains full checks for shared/dependency/build/unknown inputs.
+
+See [delivery contract](DELIVERY_LIFECYCLE.md) and [中文说明](DELIVERY_LIFECYCLE.zh-CN.md). The following is the historical feature release.
+
 # Python 0.7.0 / Node 0.16.0
 
 Adds immutable HTTP3Config to Python sync/async Sessions and one-shot calls,

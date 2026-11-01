@@ -64,6 +64,8 @@ class NativeBuild(build_py):
             shutil.copy2(source, destination / expected)
             (destination / "build-info.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
             shutil.copy2(source.with_name("native-audit.json"), destination / "native-audit.json")
+            if source.with_name('package-info.json').is_file():
+                shutil.copy2(source.with_name('package-info.json'), destination / 'package-info.json')
 
 
 commands = {"build_py": NativeBuild}

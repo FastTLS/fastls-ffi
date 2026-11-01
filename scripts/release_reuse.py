@@ -21,7 +21,7 @@ def equivalent_resource_inputs(base, revision):
     return changed if set(changed) <= INFRASTRUCTURE_ONLY else None
 
 
-def verify(run, jobs, repository, revision, *, resource_only=False, platform_only=False):
+def verify(run, jobs, repository, revision, *, resource_only=False, platform_only=False, resource_kinds=None):
     if resource_only and platform_only:
         raise ValueError('Independent evidence scopes cannot be combined')
     if not (run.get('status') == 'completed' and run.get('conclusion') in (('success', 'failure') if resource_only else ('success',))
@@ -30,9 +30,12 @@ def verify(run, jobs, repository, revision, *, resource_only=False, platform_onl
             and run.get('repository', {}).get('full_name') == repository):
         raise ValueError('Resource reuse requires successful same-commit main CI')
     required = {'dependencies'}
+    kinds = ('generic', 'duplex', 'sse', 'proxy', 'ws') if resource_kinds is None else resource_kinds
+    if not kinds or len(set(kinds)) != len(kinds) or set(kinds) - {'generic', 'duplex', 'sse', 'proxy', 'ws'}:
+        raise ValueError('Unknown or empty resource coverage cannot authorize reuse')
     if not platform_only:
         required.update(('race / linux-amd64', 'soak / linux-amd64'))
-        required.update('Resource recovery / ' + name for name in ('generic', 'duplex', 'sse', 'proxy', 'ws'))
+        required.update('Resource recovery / ' + name for name in kinds)
     if not resource_only:
         required.add('All native tests')
     from ci import TARGETS
@@ -55,7 +58,7 @@ def verify(run, jobs, repository, revision, *, resource_only=False, platform_onl
                       'Source-level Linux race and resource scenarios; new native bytes are built and installed separately.')}
 
 
-def find(env, *, platform_only=False):
+def find(env, *, platform_only=False, resource_kinds=None):
     repository, revision = env['GITHUB_REPOSITORY'], env['GITHUB_SHA']
     # This optimization is deliberately restricted to this repository's CI identity.
     if repository != 'FastTLS/fastls-ffi':
@@ -97,7 +100,7 @@ def find(env, *, platform_only=False):
         if run['status'] != 'completed' or run['conclusion'] != 'success':
             continue
         try:
-            return verify(run, jobs_for(run), repository, revision, platform_only=platform_only)
+            return verify(run, jobs_for(run), repository, revision, platform_only=platform_only, resource_kinds=resource_kinds)
         except ValueError:
             continue
     return None

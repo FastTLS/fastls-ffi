@@ -70,8 +70,14 @@ def fastls_input(source):
         package=Path(distribution.locate_file("fastls")).resolve()
         library=package/"_lib"/filename
         info=json.loads((library.parent/"build-info.json").read_text(encoding="utf-8"))
-        if info.get("package_version")!=distribution.version:
-            raise RuntimeError("installed SDK/native package version mismatch")
+        import runpy
+        proof_path=library.parent/'package-info.json'
+        proof=json.loads(proof_path.read_text(encoding='utf-8')) if proof_path.is_file() else None
+        try:
+            target=('windows' if os.name=='nt' else 'darwin' if sys.platform=='darwin' else 'linux')+'-'+{'x86_64':'amd64','amd64':'amd64','aarch64':'arm64','arm64':'arm64'}.get(platform.machine().lower(),'unknown')
+            runpy.run_path(str(ROOT/'scripts/native_identity.py'))['validate'](info,distribution.version,proof,target)
+        except (ValueError,TypeError) as error:
+            raise RuntimeError("installed SDK/native package version mismatch") from error
         if info.get("library_sha256")!=hashlib.sha256(library.read_bytes()).hexdigest():
             raise RuntimeError("installed native library does not match build-info SHA256")
         return dict(source=source,python_path=str(package.parent),library=str(library),

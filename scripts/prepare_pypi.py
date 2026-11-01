@@ -46,10 +46,17 @@ def verify_candidate(directory, target, version, formal):
     if set(files) != {expected_wheel, expected_sdist, "build-info.json", "native-audit.json"}:
         raise RuntimeError("unexpected package name, version or platform tag")
     build = json.loads((directory / "build-info.json").read_text(encoding="utf-8"))
-    if build.get("package_version") != version or build.get("abi") != 1 or build.get("sources") != sources:
+    from native_identity import validate
+    validate(build, version, manifest.get('native_producer'), target)
+    if build.get("abi") != 1 or build.get("sources") != sources:
         raise RuntimeError("build information does not match the certified manifest")
     library = "fastls.dll" if target.startswith("windows") else "libfastls.dylib" if target.startswith("darwin") else "libfastls.so"
     with zipfile.ZipFile(directory / expected_wheel) as wheel:
+        embedded_proof = json.loads(wheel.read('fastls/_lib/package-info.json')) if 'fastls/_lib/package-info.json' in wheel.namelist() else None
+        if embedded_proof != manifest.get('native_producer'):
+            raise RuntimeError('Wheel producer identity differs from manifest')
+        if json.loads(wheel.read('fastls/_lib/build-info.json')) != build:
+            raise RuntimeError('Wheel native metadata differs from manifest')
         info = f"fastls-{version}.dist-info"
         metadata = Parser().parsestr(wheel.read(info + "/METADATA").decode())
         descriptor = wheel.read(info + "/WHEEL").decode()

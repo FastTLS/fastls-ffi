@@ -7,6 +7,7 @@ import sys
 
 PUBLISHING_TOOLS = {
     'scripts/promote_tag.py',
+    'node/scripts/restore-publication.py', 'node/scripts/release_assets.py',
     'node/scripts/npm-recovery.mjs', 'node/scripts/test-npm-recovery.mjs',
     'node/scripts/recover_npm_run.py', 'node/scripts/test_npm_recovery.py',
     '.github/workflows/npm-recovery.yml', 'node/NPM_RELEASE.md',

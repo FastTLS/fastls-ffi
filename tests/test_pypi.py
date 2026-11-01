@@ -51,6 +51,8 @@ class Publication(unittest.TestCase):
             "library_sha256": hashlib.sha256(library).hexdigest(),
         }))
         (directory / "native-audit.json").write_text("{}")
+        with zipfile.ZipFile(directory / wheel_name, "a") as wheel:
+            wheel.writestr("fastls/_lib/build-info.json", (directory / "build-info.json").read_bytes())
         files = {p.name: {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "size": p.stat().st_size}
                  for p in directory.iterdir()}
         (directory / ("release-manifest.json" if formal else "development-snapshot.json")).write_text(json.dumps({

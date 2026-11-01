@@ -43,6 +43,16 @@ class BenchmarkContract(unittest.TestCase):
                 (native/"build-info.json").write_text(json.dumps(info))
                 with self.assertRaisesRegex(RuntimeError,"version mismatch"):
                     fastls_input("installed")
+                info.update(package_version='0.1.4.dev1',sources={'fastls-ffi':'a'*40})
+                (native/'build-info.json').write_text(json.dumps(info))
+                proof=dict(schema=1,package_version='0.1.4',producer_package_version='0.1.4.dev1',
+                    producer_revision='a'*40,producer_run_id='123',target=('windows' if os.name=='nt' else 'darwin' if sys.platform=='darwin' else 'linux')+'-'+{'amd64':'amd64','x86_64':'amd64','arm64':'arm64','aarch64':'arm64'}[__import__('platform').machine().lower()],
+                    library_sha256=info['library_sha256'],receipt_sha256='b'*64)
+                (native/'package-info.json').write_text(json.dumps(proof))
+                self.assertEqual(fastls_input('installed')['package_version'],'0.1.4')
+                proof['producer_revision']='c'*40
+                (native/'package-info.json').write_text(json.dumps(proof))
+                with self.assertRaisesRegex(RuntimeError,'version mismatch'):fastls_input('installed')
 
     def test_wrong_ca_requires_a_certificate_failure(self):
         require_certificate_error(Exception("x509: certificate signed by unknown authority"))

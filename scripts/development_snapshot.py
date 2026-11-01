@@ -36,8 +36,10 @@ def create_manifest(root=ROOT, environ=None):
     wheel = one(dist, "*.whl", "wheel")
     sdist = one(dist, "*.tar.gz", "sdist")
     build_info = json.loads((dist / "build-info.json").read_text(encoding="utf-8"))
-    if build_info.get("package_version") != version:
-        raise RuntimeError("native build metadata belongs to a different package version")
+    from native_identity import validate
+    proof_path = dist / 'package-info.json'
+    proof = json.loads(proof_path.read_text(encoding='utf-8')) if proof_path.is_file() else None
+    validate(build_info, version, proof, inputs['target'])
     files = {}
     for path in (wheel, sdist, dist / "build-info.json", dist / "native-audit.json"):
         files[path.name] = {"sha256": sha256(path), "size": path.stat().st_size}
@@ -51,6 +53,8 @@ def create_manifest(root=ROOT, environ=None):
         "sources": inputs["sources"],
         "files": files,
     }
+    if proof is not None:
+        manifest['native_producer'] = proof
     destination = dist / ("release-manifest.json" if formal else "development-snapshot.json")
     destination.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return destination

@@ -2,18 +2,26 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 
 export class RecoveryError extends Error {
-  constructor(message) { super(message); this.name = 'RecoveryError'; }
+  constructor(message, code = 'verification-rejected') { super(message); this.name = 'RecoveryError'; this.code = code; }
 }
 export const publisherIdentity = 'https://github.com/FastTLS/fastls-ffi/.github/workflows/npm-publish.yml@refs/heads/main';
 const transient = new Set([408, 429, 500, 502, 503, 504]);
 
 // One budget covers all reads in a publication attempt, including propagation.
 export function recovery({ request = fetch, now = Date.now, sleep = ms => new Promise(r => setTimeout(r, ms)),
-    budget = 480000, maxAttempts = 5 } = {}) {
-  const deadline = now() + budget;
+    budget = 480000, maxAttempts = 5, state, checkpoint = () => {} } = {}) {
+  const deadline = state?.deadline ?? now() + budget;
   return async function read(url, { missing = false, waitMissing = false, packageName, packageVersion } = {}) {
     let last = 'no response';
+    const key = JSON.stringify([String(url), packageVersion ?? '', waitMissing ? 'readback' : 'preflight']);
     for (let attempt = 0; attempt < maxAttempts && now() < deadline; attempt++) {
+      if (state) {
+        // At most three publication attempts, each with five reads. Keep the
+        // absolute deadline and counters across jobs and explicit resumes.
+        if ((state.read_counts[key] ?? 0) >= 15) break;
+        state.read_counts[key] = (state.read_counts[key] ?? 0) + 1;
+        checkpoint();
+      }
       let response;
       try {
         let target = url;
@@ -64,8 +72,37 @@ export function recovery({ request = fetch, now = Date.now, sleep = ms => new Pr
       const interval = waitMissing ? Math.min(5000 * 2 ** attempt, 30000) : Math.min(1000 * 2 ** attempt, 8000);
       if (attempt + 1 < maxAttempts) await sleep(Math.max(0, Math.min(interval, deadline - now())));
     }
-    throw new RecoveryError(`Registry propagation/network retry budget exhausted (${waitMissing ? 'readback' : 'preflight'}; ${last})`);
+    throw new RecoveryError(`Registry propagation/network retry budget exhausted (${waitMissing ? 'readback' : 'preflight'}; ${last})`,
+      waitMissing ? 'registry-readback-pending' : 'registry-preflight-unavailable');
   };
+}
+
+export function publicationState(items, identity, previous, { now = Date.now, attempt = 'local' } = {}) {
+  const set = items.map(({ name, version, sha256 }) => ({ name, version, sha256 }));
+  if (new Set(set.map(i => i.name)).size !== set.length) throw new RecoveryError('Duplicate publication item');
+  let state;
+  if (previous) {
+    if (previous.schema !== 2 || JSON.stringify(previous.identity) !== JSON.stringify(identity) ||
+        JSON.stringify(previous.items?.map(({ name, version, sha256 }) => ({ name, version, sha256 }))) !== JSON.stringify(set) ||
+        !Number.isSafeInteger(previous.started_at) || !Number.isSafeInteger(previous.deadline) ||
+        previous.deadline !== previous.started_at + 480000 || previous.started_at > now() ||
+        !Array.isArray(previous.attempts) || previous.attempts.length > 3 ||
+        !previous.read_counts || typeof previous.read_counts !== 'object' || Array.isArray(previous.read_counts) ||
+        Object.values(previous.read_counts).some(n => !Number.isSafeInteger(n) || n < 0 || n > 15) ||
+        previous.items.some(i => !['new', 'upload-started', 'uploaded-pending', 'upload-uncertain', 'confirmation-failed', 'verified'].includes(i.state))) {
+      throw new RecoveryError('Publication resume identity or budget rejected');
+    }
+    state = structuredClone(previous);
+  } else {
+    const start = now();
+    state = { schema: 2, identity, started_at: start, deadline: start + 480000, attempts: [], read_counts: {},
+      items: set.map(i => ({ ...i, state: 'new' })), packages: [] };
+  }
+  if (now() >= state.deadline) throw new RecoveryError('Publication absolute deadline exhausted', 'deadline-exhausted');
+  // A job cannot restart its counters by reusing an old attempt identifier.
+  if (state.attempts.includes(attempt) || state.attempts.length >= 3) throw new RecoveryError('Publication attempt budget exhausted');
+  state.attempts.push(attempt);
+  return state;
 }
 
 export async function verifyRegistryProvenance(item, metadata, bytes, read, certifyRevision, verify) {
@@ -110,19 +147,41 @@ export async function verifyRegistryProvenance(item, metadata, bytes, read, cert
   return { integrity, publisher_revision: revision, workflow: publisherIdentity, verified: true };
 }
 
-export async function publishSet(items, { read, verify, publish, record = () => {} }) {
+export async function publishSet(items, { read, verify, publish, record = () => {}, state, checkpoint = () => {}, confirmOnly = false, now = Date.now }) {
+  const transition = (item, next) => {
+    if (!state) return;
+    const target = state.items.find(i => i.name === item.name);
+    Object.assign(target, next);
+    checkpoint();
+  };
   const pending = [];
   for (const item of items) {
-    const metadata = await read(item.url, { missing: true, packageName: item.name, packageVersion: item.version });
+    const prior = state?.items.find(i => i.name === item.name);
+    const metadata = await read(item.url, { missing: !confirmOnly && (!prior || prior.state === 'new'),
+      waitMissing: confirmOnly || !!prior && prior.state !== 'new', packageName: item.name, packageVersion: item.version });
     if (metadata === null) pending.push(item);
-    else record({ name: item.name, state: 'verified-existing', proof: await verify(item, metadata) });
+    else {
+      const proof = await verify(item, metadata);
+      transition(item, { state: 'verified' });
+      record({ name: item.name, state: 'verified-existing', proof });
+    }
   }
   for (const item of pending) {
+    if (confirmOnly) throw new RecoveryError('Read-only confirmation cannot upload a missing package');
+    if (state && now() >= state.deadline) throw new RecoveryError('Publication absolute deadline exhausted before upload', 'deadline-exhausted');
+    transition(item, { state: 'upload-started' });
     const result = await publish(item);
+    transition(item, { state: result.status === 0 ? 'uploaded-pending' : 'upload-uncertain', upload_status: result.status });
     // A conflict/network failure needs proof of exact bytes and trusted source;
     // never blindly retry a mutation or treat 409 as success.
-    const metadata = await read(item.url, { waitMissing: true, packageName: item.name, packageVersion: item.version });
-    const proof = await verify(item, metadata);
-    record({ name: item.name, state: 'verified-published', upload_status: result.status, proof });
+    try {
+      const metadata = await read(item.url, { waitMissing: true, packageName: item.name, packageVersion: item.version });
+      const proof = await verify(item, metadata);
+      transition(item, { state: 'verified' });
+      record({ name: item.name, state: 'verified-published', upload_status: result.status, proof });
+    } catch (error) {
+      if (error.code !== 'registry-readback-pending') transition(item, { state: 'confirmation-failed' });
+      throw error;
+    }
   }
 }

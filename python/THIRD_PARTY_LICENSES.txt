@@ -28,7 +28,7 @@ THE SOFTWARE.
 
 ==============================================================================
 Module: github.com/FastTLS/fastls
-Version: v0.2.0
+Version: v0.2.1
 File: LICENSE
 ------------------------------------------------------------------------------
 
@@ -247,7 +247,7 @@ third-party works or assert ownership of their contributions.
 
 ==============================================================================
 Module: github.com/FastTLS/fastls/profile
-Version: v0.1.1-0.20261030130219-e9e40f15c9ac
+Version: v0.1.1
 File: LICENSE
 ------------------------------------------------------------------------------
 
@@ -466,7 +466,7 @@ third-party works or assert ownership of their contributions.
 
 ==============================================================================
 Module: github.com/FastTLS/ftransport
-Version: v0.1.2-0.20261030131050-d9812320808e
+Version: v0.1.2
 File: LICENSE
 ------------------------------------------------------------------------------
                                  Apache License
@@ -743,7 +743,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ==============================================================================
 Module: github.com/FastTLS/imitate
-Version: v0.1.2-0.20261030131552-ebd18547d28a
+Version: v0.1.2
 File: LICENSE
 ------------------------------------------------------------------------------
 
@@ -1636,7 +1636,7 @@ Additional reviewed development-source license materials.
 The native build-info identifies the actual artifact inputs; these records preserve the reviewed source bytes.
 
 ==============================================================================
-Reviewed source: fastls@9f38b088e6616a1af3e43fb3a2171969811afab6
+Reviewed source: fastls@a298ca7a2ae73b441c7b089f3cd1d009082c6471
 File: LICENSE
 ------------------------------------------------------------------------------
 
@@ -2072,7 +2072,7 @@ This product's test suite uses uTLS, also distributed under a BSD-style
 license. See third_party/utls.LICENSE.
 
 ==============================================================================
-Reviewed source: imitate@ebd18547d28a8a86c739816b5e7f45086e2b5449
+Reviewed source: imitate@c56dcd142667dffce5d23d6404ecfaf859a6f880
 File: LICENSE
 ------------------------------------------------------------------------------
 

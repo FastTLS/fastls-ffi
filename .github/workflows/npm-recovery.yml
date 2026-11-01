@@ -1,4 +1,4 @@
-name: Recover transient npm signing failure
+name: Recover bounded npm confirmation or signing failure
 on:
   workflow_dispatch:
     inputs:

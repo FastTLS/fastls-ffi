@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { platforms } from './npm-platforms.mjs';
 import { checkTrust } from './check-npm-oidc.mjs';
-import { recovery, verifyRegistryProvenance, publishSet } from './npm-recovery.mjs';
+import { recovery, verifyRegistryProvenance, publishSet, publicationState } from './npm-recovery.mjs';
 
 const directory = resolve(process.argv[2] ?? resolve(import.meta.dirname, '../../npm-release'));
 const report = JSON.parse(readFileSync(resolve(directory, 'npm-release-manifest.json'), 'utf8'));
@@ -33,16 +33,21 @@ const items = report.publish_order.map(item => {
   return { ...item, file, bytes, url: `https://registry.npmjs.org/${encodeURIComponent(item.name)}` };
 });
 await checkTrust();
-const read = recovery();
-const progress = { schema: 1, run_id: process.env.GITHUB_RUN_ID, attempt: process.env.GITHUB_RUN_ATTEMPT,
-  producer_revision: report.revision, publisher_revision: process.env.GITHUB_SHA, packages: [] };
+const resumeFile = resolve(directory, 'resume-state.json');
+const progress = publicationState(items, { producer: report.revision, publisher: process.env.GITHUB_SHA,
+  manifest_sha256: createHash('sha256').update(readFileSync(resolve(directory, 'npm-release-manifest.json'))).digest('hex') },
+  existsSync(resumeFile) ? JSON.parse(readFileSync(resumeFile, 'utf8')) : undefined,
+  { attempt: `${process.env.GITHUB_RUN_ID}/${process.env.GITHUB_RUN_ATTEMPT}` });
+Object.assign(progress, { run_id: process.env.GITHUB_RUN_ID, attempt: process.env.GITHUB_RUN_ATTEMPT,
+  producer_revision: report.revision, publisher_revision: process.env.GITHUB_SHA });
 const progressFile = resolve(directory, `publication-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}.json`);
 const save = () => writeFileSync(progressFile, JSON.stringify(progress, null, 2) + '\n');
+const read = recovery({ state: progress, checkpoint: save });
 save();
 try {
-  await publishSet(items, { read,
+  await publishSet(items, { read, state: progress, checkpoint: save, confirmOnly: process.env.CONFIRM_ONLY === 'true',
     verify: (item, metadata) => verifyRegistryProvenance(item, metadata, item.bytes, read, certifyRevision),
-    record: record => { progress.packages.push(record); save(); },
+    record: record => { progress.packages = progress.packages.filter(p => p.name !== record.name); progress.packages.push(record); save(); },
     publish: item => {
       const result = spawnSync(process.execPath, [npmCLI, 'publish', item.file, '--access', 'public', '--tag',
         report.version.includes('-') ? 'next' : 'latest', '--registry', 'https://registry.npmjs.org/',
@@ -55,10 +60,10 @@ try {
         throw Error(`Package upload rejected: ${item.name} (${code.at(-1) ?? result.status})`);
       }
       if (result.error && result.error.code !== 'ETIMEDOUT') throw result.error;
-      progress.packages.push({ name: item.name, state: 'upload-result', status: result.status, codes: code }); save();
       return result;
     } });
   progress.status = 'success';
 } catch (error) {
-  progress.status = 'failure'; progress.error = error.name; throw error;
+  progress.status = error.code === 'registry-readback-pending' ? 'pending-confirmation' : 'failure';
+  progress.error = { name: error.name, code: error.code ?? 'upload-or-verification-failed' }; throw error;
 } finally { save(); }

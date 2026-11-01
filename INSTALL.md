@@ -9,7 +9,7 @@ Python 0.7.0 新增 H3 七项受控配置，详见 [配置契约](H3_CONFIG.zh-C
 发行包名和 Python 导入名都是 `fastls`。推荐从 [PyPI](https://pypi.org/project/fastls/0.7.0/) 安装：
 
 ```shell
-python -m pip install --only-binary=:all: fastls==0.7.0
+python -m pip install --only-binary=:all: fastls==0.7.1
 ```
 
 `--only-binary=:all:` 防止没有匹配平台时安装缺少原生库的 SDK-only sdist。

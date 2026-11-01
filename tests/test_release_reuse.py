@@ -31,6 +31,14 @@ class ReleaseReuse(unittest.TestCase):
     def test_exact_success_is_reusable(self):
         self.assertEqual(self.verify()['run_id'], 12)
 
+    def test_narrow_coverage_requires_every_selected_class_and_rejects_unknown_scope(self):
+        jobs=[j for j in self.jobs if not j['name'].startswith('Resource recovery /') or j['name'].endswith(('generic','sse'))]
+        release_reuse.verify(self.run,jobs,'FastTLS/fastls-ffi','a'*40,resource_kinds=['generic','sse'])
+        with self.assertRaises(ValueError):release_reuse.verify(self.run,jobs,'FastTLS/fastls-ffi','a'*40)
+        for scope in [[],['unknown'],['generic','generic'],['generic','ws']]:
+            with self.subTest(scope=scope),self.assertRaises(ValueError):
+                release_reuse.verify(self.run,jobs,'FastTLS/fastls-ffi','a'*40,resource_kinds=scope)
+
     def test_source_workflow_and_overall_failure_rejected(self):
         for key, value in dict(head_sha='b' * 40, head_branch='other', event='workflow_dispatch',
                 path='.github/workflows/other.yml', conclusion='failure', status='in_progress',

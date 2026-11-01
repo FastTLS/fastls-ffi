@@ -148,6 +148,8 @@ def artifact_inputs():
              ROOT / "dist" / "native-audit.json",
              ROOT / "dist" / "module-inputs.json" if dependency_mode(os.environ) == 'formal' else ROOT / "go.work",
              ROOT / "build" / ("ffi-fixture.exe" if os.name == "nt" else "ffi-fixture")]
+    if (ROOT / 'dist/package-info.json').is_file():
+        paths.append(ROOT / 'dist/package-info.json')
     wheels = list((ROOT / "dist").glob("*.whl"))
     if len(wheels) != 1:
         raise RuntimeError("expected exactly one candidate wheel")
@@ -226,11 +228,25 @@ def run(stage="all"):
             for sdist in (ROOT / "dist").glob("*.tar.gz"):
                 sdist.unlink()
             mode = dependency_mode(env)
-            execute("build", [sys.executable, "scripts/build.py"] + (['--local'] if mode == 'local' else []))
+            if mode == 'formal':
+                env['GOWORK'] = 'off'
+            promoted = False
+            if env.get('FASTLS_SOURCE_RUN_ID') and mode == 'formal':
+                from promote_native import promote
+                try:
+                    promote(ROOT, ROOT / 'build/producer-inputs', ROOT / 'build/source-receipt/receipt.json', sources, env)
+                    promoted = True
+                    summary('Promoted original certified native bytes; producer metadata preserved')
+                except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+                    summary('Native promotion unavailable; building and checking fresh bytes: ' + str(error))
+            if not promoted:
+                (ROOT / 'dist/package-info.json').unlink(missing_ok=True)
+                execute("build", [sys.executable, "scripts/build.py"] + (['--local'] if mode == 'local' else []))
             env["GOWORK"] = 'off' if mode == 'formal' else str(ROOT / "go.work")
             execute("release-materials", [sys.executable, "scripts/release_materials.py", "materials"], command_env=env)
-            execute("fixture-build", ["go", "build", "-o", "build/ffi-fixture.exe" if os.name == "nt" else "build/ffi-fixture", "./cmd/ffi-fixture"])
-            execute("native-audit", [sys.executable, "scripts/native_audit.py", str(ROOT / "dist" / library_name())])
+            if not promoted:
+                execute("fixture-build", ["go", "build", "-o", "build/ffi-fixture.exe" if os.name == "nt" else "build/ffi-fixture", "./cmd/ffi-fixture"])
+                execute("native-audit", [sys.executable, "scripts/native_audit.py", str(ROOT / "dist" / library_name())])
             wheel_env = dict(env, FASTLS_BUNDLE_LIBRARY=str(ROOT / "dist" / library_name()))
             execute("wheel-build", [sys.executable, "-m", "pip", "wheel", "./python", "--no-deps", "-w", "dist"], command_env=wheel_env)
             if sys.platform == "linux":

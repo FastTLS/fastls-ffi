@@ -33,6 +33,19 @@ class Selection(unittest.TestCase):
         self.assertEqual(plan['tier'], 'docs')
         self.assertFalse(any(plan[k] for k in ('native', 'node', 'pypi', 'candidates', 'node_soak')))
 
+    def test_resource_selection_narrows_only_proved_isolated_adapters(self):
+        plan = test_plan.choose(['python/fastls/sse.py', 'tests/test_sse.py'])
+        self.assertEqual(plan['tier'], 'minor')
+        self.assertEqual(plan['resource_scope']['kinds'], ['generic', 'sse'])
+        plan = test_plan.choose(['node/src/websocket.ts'])
+        self.assertEqual(plan['resource_scope']['kinds'], ['generic', 'ws'])
+        for extra in ['go.mod', 'ci/dependencies.json', 'scripts/ci.py', 'python/fastls/client.py', 'unknown']:
+            with self.subTest(extra=extra):
+                plan = test_plan.choose(['node/src/websocket.ts', extra])
+                self.assertEqual(plan['resource_scope']['kinds'], list(test_plan.RESOURCE_KINDS))
+        for flags in [{'uncertain':True}, {'override':True}, {'requested':'major'}]:
+            self.assertEqual(test_plan.choose(['node/src/websocket.ts'], **flags)['resource_scope']['kinds'], list(test_plan.RESOURCE_KINDS))
+
     def test_python_patch_uses_two_platforms_without_resource_or_performance_campaign(self):
         plan = test_plan.choose(['python/fastls/api.py'])
         self.assertEqual(plan['tier'], 'patch')

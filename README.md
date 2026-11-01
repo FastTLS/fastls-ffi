@@ -1,5 +1,7 @@
 # Fastls Python / Node.js SDK
 
+Python **0.7.1** / Node **0.16.1**：固定 Go **v0.2.1**，修复 H3 长正文期间错误连接回收；发布确认保持原预算，正式包装可复用认证原生字节。见[交付与回收说明](DELIVERY_LIFECYCLE.zh-CN.md)。
+
 Python 0.7.0 / Node 0.16.0 新增 [H3 七项受控配置与有效快照](H3_CONFIG.zh-CN.md)，固定 Go v0.2.0；创建时选择显式 H3，原生能力为 http3_config_v1。
 
 Python 0.6.0 / Node 0.15.0 支持显式 H3 与可信 Session 地址策略组合，需原生 `http3_address_policy_v1`；默认校验证书，旧库在分配资源前拒绝。详见 [组合契约](H3_POLICY.zh-CN.md)。
@@ -16,10 +18,10 @@ Python 0.3.0 / Node 0.12.0 新增认证与请求 Cookie 接口、可选重试和
 
 ## Python：安装与使用
 
-需要 Python 3.10+；本版本为 `fastls==0.7.0`，发行名和导入名均为 `fastls`。
+需要 Python 3.10+；本版本为 `fastls==0.7.1`，发行名和导入名均为 `fastls`。
 
 ```sh
-python -m pip install --only-binary=:all: fastls==0.7.0
+python -m pip install --only-binary=:all: fastls==0.7.1
 ```
 
 ```python
@@ -36,10 +38,10 @@ print(response.status_code, response.text)
 
 ## Node.js：安装与使用
 
-需要 Node.js 22+。以下命令安装正式版 `@fastls/fastls@0.16.0`。
+需要 Node.js 22+。以下命令安装正式版 `@fastls/fastls@0.16.1`。
 
 ```sh
-npm install @fastls/fastls@0.16.0
+npm install @fastls/fastls@0.16.1
 ```
 
 ```js
