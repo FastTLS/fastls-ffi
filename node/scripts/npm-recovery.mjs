@@ -6,11 +6,12 @@ export class RecoveryError extends Error {
 }
 export const publisherIdentity = 'https://github.com/FastTLS/fastls-ffi/.github/workflows/npm-publish.yml@refs/heads/main';
 const transient = new Set([408, 429, 500, 502, 503, 504]);
+export const publicationDeadline = state => state.continuation_window?.deadline ?? state.deadline;
 
 // One budget covers all reads in a publication attempt, including propagation.
 export function recovery({ request = fetch, now = Date.now, sleep = ms => new Promise(r => setTimeout(r, ms)),
     budget = 480000, maxAttempts = 5, state, checkpoint = () => {} } = {}) {
-  const deadline = state?.deadline ?? now() + budget;
+  const deadline = state ? publicationDeadline(state) : now() + budget;
   return async function read(url, { missing = false, waitMissing = false, packageName, packageVersion } = {}) {
     let last = 'no response';
     const key = JSON.stringify([String(url), packageVersion ?? '', waitMissing ? 'readback' : 'preflight']);
@@ -77,7 +78,7 @@ export function recovery({ request = fetch, now = Date.now, sleep = ms => new Pr
   };
 }
 
-export function publicationState(items, identity, previous, { now = Date.now, attempt = 'local' } = {}) {
+export function publicationState(items, identity, previous, { now = Date.now, attempt = 'local', continueAfterDeadline = false } = {}) {
   const set = items.map(({ name, version, sha256 }) => ({ name, version, sha256 }));
   if (new Set(set.map(i => i.name)).size !== set.length) throw new RecoveryError('Duplicate publication item');
   let state;
@@ -93,14 +94,27 @@ export function publicationState(items, identity, previous, { now = Date.now, at
       throw new RecoveryError('Publication resume identity or budget rejected');
     }
     state = structuredClone(previous);
+    const window = state.continuation_window;
+    if (window && (!Number.isSafeInteger(window.started_at) || !Number.isSafeInteger(window.deadline) ||
+        window.started_at < state.deadline || window.started_at > now() ||
+        window.deadline !== window.started_at + 480000 ||
+        typeof window.authorized_by !== 'string' || !state.attempts.includes(window.authorized_by))) {
+      throw new RecoveryError('Publication continuation window rejected');
+    }
   } else {
+    if (continueAfterDeadline) throw new RecoveryError('Continuation requires previous publication progress');
     const start = now();
     state = { schema: 2, identity, started_at: start, deadline: start + 480000, attempts: [], read_counts: {},
       items: set.map(i => ({ ...i, state: 'new' })), packages: [] };
   }
-  if (now() >= state.deadline) throw new RecoveryError('Publication absolute deadline exhausted', 'deadline-exhausted');
   // A job cannot restart its counters by reusing an old attempt identifier.
   if (state.attempts.includes(attempt) || state.attempts.length >= 3) throw new RecoveryError('Publication attempt budget exhausted');
+  if (continueAfterDeadline) {
+    if (state.continuation_window || now() < state.deadline) throw new RecoveryError('Continuation is allowed once, after the original deadline');
+    const start = now();
+    state.continuation_window = { started_at: start, deadline: start + 480000, authorized_by: attempt };
+  }
+  if (now() >= publicationDeadline(state)) throw new RecoveryError('Publication absolute deadline exhausted', 'deadline-exhausted');
   state.attempts.push(attempt);
   return state;
 }
@@ -155,33 +169,57 @@ export async function publishSet(items, { read, verify, publish, record = () => 
     checkpoint();
   };
   const pending = [];
+  const confirmations = [];
   for (const item of items) {
     const prior = state?.items.find(i => i.name === item.name);
-    const metadata = await read(item.url, { missing: !confirmOnly && (!prior || prior.state === 'new'),
-      waitMissing: confirmOnly || !!prior && prior.state !== 'new', packageName: item.name, packageVersion: item.version });
-    if (metadata === null) pending.push(item);
+    // Inspect every package before any mutation. A pending upload is never a
+    // new upload, even if registry metadata is still propagating.
+    const metadata = await read(item.url, { missing: true, packageName: item.name, packageVersion: item.version });
+    if (metadata === null) {
+      if (confirmOnly || prior && prior.state !== 'new') confirmations.push(item);
+      else pending.push(item);
+    }
     else {
       const proof = await verify(item, metadata);
       transition(item, { state: 'verified' });
       record({ name: item.name, state: 'verified-existing', proof });
     }
   }
-  for (const item of pending) {
+  const upload = async item => {
     if (confirmOnly) throw new RecoveryError('Read-only confirmation cannot upload a missing package');
-    if (state && now() >= state.deadline) throw new RecoveryError('Publication absolute deadline exhausted before upload', 'deadline-exhausted');
+    if (state && now() >= publicationDeadline(state)) throw new RecoveryError('Publication absolute deadline exhausted before upload', 'deadline-exhausted');
     transition(item, { state: 'upload-started' });
     const result = await publish(item);
     transition(item, { state: result.status === 0 ? 'uploaded-pending' : 'upload-uncertain', upload_status: result.status });
+    confirmations.push(item);
+  };
+  const confirm = async group => {
+    // Parallelize propagation waits. Crypto verification stays sequential to
+    // avoid sharing mutable Sigstore/TUF caches across verification calls.
+    const results = await Promise.allSettled(group.map(item => read(item.url,
+      { waitMissing: true, packageName: item.name, packageVersion: item.version })));
+    const failures = [];
+    for (let index = 0; index < group.length; index++) {
+      const item = group[index], result = results[index];
     // A conflict/network failure needs proof of exact bytes and trusted source;
     // never blindly retry a mutation or treat 409 as success.
     try {
-      const metadata = await read(item.url, { waitMissing: true, packageName: item.name, packageVersion: item.version });
-      const proof = await verify(item, metadata);
+      if (result.status === 'rejected') throw result.reason;
+      const proof = await verify(item, result.value);
       transition(item, { state: 'verified' });
-      record({ name: item.name, state: 'verified-published', upload_status: result.status, proof });
+      record({ name: item.name, state: 'verified-published', proof });
     } catch (error) {
       if (error.code !== 'registry-readback-pending') transition(item, { state: 'confirmation-failed' });
-      throw error;
+      failures.push(error);
     }
-  }
+    }
+    // Identity failures take precedence over a simultaneous propagation delay.
+    if (failures.length) throw failures.find(e => e.code !== 'registry-readback-pending') ?? failures[0];
+  };
+  const main = items.at(-1);
+  for (const item of pending.filter(i => i !== main)) await upload(item);
+  await confirm(confirmations.filter(i => i !== main));
+  // The main package becomes visible only after all five native proofs pass.
+  if (pending.includes(main)) await upload(main);
+  await confirm(confirmations.filter(i => i === main));
 }

@@ -33,6 +33,18 @@ class Selection(unittest.TestCase):
         self.assertEqual(plan['tier'], 'docs')
         self.assertFalse(any(plan[k] for k in ('native', 'node', 'pypi', 'candidates', 'node_soak')))
 
+    def test_packaging_and_h3_adapters_keep_required_risk_coverage(self):
+        for path in ('scripts/promote_native.py', 'python/setup.py', 'python/pyproject.toml',
+                     'python/fastls/http3.py', 'node/src/http3.ts'):
+            with self.subTest(path=path):
+                plan=test_plan.choose([path],requested='patch')
+                self.assertEqual(plan['tier'],'minor')
+                self.assertEqual(len(plan['matrix']),5)
+                self.assertEqual(plan['extended'],['race','soak'])
+                self.assertEqual(plan['resource_scope']['kinds'],list(test_plan.RESOURCE_KINDS))
+        plan=test_plan.choose(['scripts/test_plan.py','tests/test_ci_plan.py'])
+        self.assertFalse(plan['native'] or plan['node'] or plan['node_soak'])
+
     def test_resource_selection_narrows_only_proved_isolated_adapters(self):
         plan = test_plan.choose(['python/fastls/sse.py', 'tests/test_sse.py'])
         self.assertEqual(plan['tier'], 'minor')

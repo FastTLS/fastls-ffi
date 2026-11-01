@@ -18,6 +18,10 @@ on:
         description: Read-only registry confirmation using prior publication progress
         type: boolean
         default: false
+      continue_after_deadline:
+        description: Explicit operator exception; one additional 8-minute window, cumulative attempts and reads unchanged
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -127,10 +131,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
           CONFIRM_ONLY: ${{ inputs.confirm_only }}
+          CONTINUE_AFTER_DEADLINE: ${{ inputs.continue_after_deadline }}
         run: python node/scripts/restore-publication.py
       - name: Publish native packages first and main package last
         env:
           CONFIRM_ONLY: ${{ inputs.confirm_only }}
+          CONTINUE_AFTER_DEADLINE: ${{ inputs.continue_after_deadline }}
         run: npm run publish:npm --prefix node
       - name: Bind exact archives and producer metadata
         run: |

@@ -37,7 +37,8 @@ const resumeFile = resolve(directory, 'resume-state.json');
 const progress = publicationState(items, { producer: report.revision, publisher: process.env.GITHUB_SHA,
   manifest_sha256: createHash('sha256').update(readFileSync(resolve(directory, 'npm-release-manifest.json'))).digest('hex') },
   existsSync(resumeFile) ? JSON.parse(readFileSync(resumeFile, 'utf8')) : undefined,
-  { attempt: `${process.env.GITHUB_RUN_ID}/${process.env.GITHUB_RUN_ATTEMPT}` });
+  { attempt: `${process.env.GITHUB_RUN_ID}/${process.env.GITHUB_RUN_ATTEMPT}`,
+    continueAfterDeadline: process.env.CONTINUE_AFTER_DEADLINE === 'true' });
 Object.assign(progress, { run_id: process.env.GITHUB_RUN_ID, attempt: process.env.GITHUB_RUN_ATTEMPT,
   producer_revision: report.revision, publisher_revision: process.env.GITHUB_SHA });
 const progressFile = resolve(directory, `publication-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}.json`);

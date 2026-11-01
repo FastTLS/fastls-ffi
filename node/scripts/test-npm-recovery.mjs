@@ -6,6 +6,73 @@ import { recovery, publishSet, verifyRegistryProvenance, publisherIdentity, publ
 
 const reply = (status, body = {}) => new Response(JSON.stringify(body), { status });
 const noWait = async () => {};
+test('native uploads precede parallel confirmation and every native proof gates main', async () => {
+  const items = ['native-a', 'native-b', 'main'].map(name => ({ name, url: name }));
+  for (const bad of [false, true]) {
+    const uploaded = [], verified = [], started = [];
+    let release;
+    const barrier = new Promise(resolve => { release = resolve; });
+    const operation = publishSet(items, {
+      read: async (url, options) => {
+        if (options.missing) return null;
+        if (url !== 'main') {
+          assert.deepEqual(uploaded, ['native-a', 'native-b']);
+          started.push(url);
+          if (started.length === 2) release();
+          await barrier;
+        }
+        return {};
+      },
+      publish: async item => {
+        if (item.name === 'main') assert.deepEqual(verified, ['native-a', 'native-b']);
+        uploaded.push(item.name); return { status: 0 };
+      },
+      verify: async item => {
+        if (bad && item.name === 'native-a') throw Error('signature rejected');
+        verified.push(item.name); return { verified: true };
+      },
+    });
+    if (bad) {
+      await assert.rejects(operation, /signature rejected/);
+      assert.deepEqual(uploaded, ['native-a', 'native-b']);
+      assert.deepEqual(verified, ['native-b']);
+    } else {
+      await operation;
+      assert.deepEqual(uploaded, ['native-a', 'native-b', 'main']);
+    }
+  }
+});
+
+test('one explicit expired-window continuation preserves original history and every cumulative cap', () => {
+  const items = [{ name: 'native', version: '1.0.0', sha256: 'a'.repeat(64) }];
+  const identity = { producer: 'a'.repeat(40), publisher: 'b'.repeat(40) };
+  const original = publicationState(items, identity, undefined, { now: () => 0, attempt: '1/1' });
+  original.read_counts.endpoint = 15;
+  const second = publicationState(items, identity, original, { now: () => 1, attempt: '1/2' });
+  assert.throws(() => publicationState(items, identity, second, { now: () => 480001, attempt: '2/1' }), /deadline/);
+  assert.throws(() => publicationState(items, identity, second,
+    { now: () => 2, attempt: '2/1', continueAfterDeadline: true }), /after the original/);
+  const continued = publicationState(items, identity, second,
+    { now: () => 480001, attempt: '2/1', continueAfterDeadline: true });
+  assert.equal(continued.started_at, 0);
+  assert.equal(continued.deadline, 480000);
+  assert.deepEqual(continued.read_counts, original.read_counts);
+  assert.deepEqual(continued.attempts, ['1/1', '1/2', '2/1']);
+  assert.equal(continued.continuation_window.deadline, 960001);
+  assert.throws(() => publicationState(items, identity, continued,
+    { now: () => 960002, attempt: '3/1', continueAfterDeadline: true }), /attempt/);
+  const single = publicationState(items, identity, original,
+    { now: () => 480001, attempt: '2/1', continueAfterDeadline: true });
+  assert.throws(() => publicationState(items, identity, single,
+    { now: () => 960002, attempt: '3/1', continueAfterDeadline: true }), /once/);
+  assert.throws(() => publicationState(items, identity, single,
+    { now: () => 960002, attempt: '3/1' }), /deadline/);
+  assert.throws(() => publicationState(items, identity, undefined,
+    { now: () => 480001, attempt: '2/1', continueAfterDeadline: true }), /previous/);
+  assert.throws(() => publicationState(items, identity,
+    { ...single, continuation_window: { ...single.continuation_window, deadline: 999999 } },
+    { now: () => 480002, attempt: '3/1' }), /window rejected/);
+});
 test('pending uploads resume read-only without resetting absolute time or republishing', async () => {
   const items = [{ name: 'native', version: '1.0.0', sha256: 'a'.repeat(64), url: 'native' }];
   const identity = { producer: 'a'.repeat(40), publisher: 'b'.repeat(40) };

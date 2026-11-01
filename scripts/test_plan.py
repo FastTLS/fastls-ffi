@@ -61,14 +61,15 @@ def choose(files, *, requested='auto', release=None, previous=None, uncertain=Fa
     reasons = ['documentation only' if docs else 'ordinary change']
     fixture = any(p.startswith('cmd/ffi-fixture/') for p in files)
     sdk_state = {'python/fastls/client.py', 'python/fastls/auth.py', 'python/fastls/cookies.py',
-                 'python/fastls/sse.py', 'node/src/sse.ts',
+                 'python/fastls/sse.py', 'node/src/sse.ts', 'python/fastls/http3.py', 'node/src/http3.ts',
                  'python/fastls/profiles.py', 'node/src/profiles.ts',
                  'python/fastls/redirects.py', 'python/fastls/retry.py', 'python/fastls/profile_store.py',
                  'node/src/session.ts', 'node/src/retry.ts', 'node/src/cookies.ts', 'node/src/profile-store.ts'}
     resource = any(p.endswith('.go') and not p.startswith('cmd/ffi-fixture/') or p in ('go.mod', 'go.sum', 'ci/dependencies.json') or
                    p in sdk_state or any(word in p.lower() for word in ('pool', 'duplex', 'timeout', 'proxy', 'decode', 'websocket')) for p in files)
     packaging = any(p.startswith(('scripts/build', 'scripts/package', 'scripts/repair', 'scripts/native', 'scripts/module', 'scripts/release', 'scripts/prepare_pypi')) or
-                    p in ('pyproject.toml', 'setup.py', 'setup.cfg', 'MANIFEST.in', 'LICENSE') or p.startswith('ci/') for p in files)
+                    p in ('scripts/promote_native.py', 'python/setup.py', 'python/pyproject.toml',
+                          'pyproject.toml', 'setup.py', 'setup.cfg', 'MANIFEST.in', 'LICENSE') or p.startswith('ci/') for p in files)
     unknown = any(not (p.endswith(('.md', '.go')) or p.startswith(('docs/', 'python/', 'node/', 'tests/', 'scripts/', 'benchmarks/', '.github/', 'ci/')) or
                       p in ('go.mod', 'go.sum', 'pyproject.toml', 'setup.py', 'setup.cfg', 'MANIFEST.in', 'LICENSE', '.gitignore')) for p in files)
     if resource or packaging or uncertain or override or unknown:
@@ -84,7 +85,7 @@ def choose(files, *, requested='auto', release=None, previous=None, uncertain=Fa
     from ci import TARGETS
     pypi_tools = {'scripts/promote_tag.py', 'tests/publish_promotion_checks.py'}
     publishing_only = bool(files) and set(files) <= PUBLISHING_TOOLS | pypi_tools and any(
-        p.startswith('node/scripts/') or p == 'scripts/promote_tag.py' for p in files)
+        p.startswith('node/scripts/') or p in ('scripts/promote_tag.py', 'scripts/test_plan.py', 'tests/test_ci_plan.py') for p in files)
     if publishing_only and not (release or uncertain or override or requested != 'auto'):
         return dict(tier='patch', reasons=['publication tools only; original certified archives are unchanged; publishing workflow runs rejection/source-identity tests'],
             files=files, native=False, node=False, matrix=TARGETS[:2],

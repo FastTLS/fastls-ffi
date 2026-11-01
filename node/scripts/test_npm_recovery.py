@@ -30,6 +30,34 @@ class Recover(unittest.TestCase):
                           ('repository',{'full_name':'other/repo'})]:
             with self.subTest(key=key),self.assertRaises(ValueError):validate(dict(self.run,**{key:value}),{'GITHUB_SHA':self.sha})
 
+    def test_changed_publisher_requires_verified_ancestry_and_preserves_immutable_progress(self):
+        helpers=runpy.run_path(str(Path(__file__).with_name('restore-publication.py')))
+        validate,rebind=helpers['validate_run'],helpers['rebind_progress']
+        calls=[]
+        certify=lambda old,new:calls.append((old,new))
+        newer='b'*40
+        validate(self.run,{'GITHUB_SHA':newer},certify)
+        self.assertEqual(calls,[(self.sha,newer)])
+        old=dict(revision=self.sha,publisher_revision=self.sha,version='1.0.0',publish_order=[
+            dict(name='native',version='1.0.0',sha256='c'*64)])
+        new=dict(old,publisher_revision=newer)
+        before=json.dumps(old).encode();after=json.dumps(new).encode()
+        state=dict(identity=dict(producer=self.sha,publisher=self.sha,manifest_sha256=hashlib.sha256(before).hexdigest()),
+            run_id='1',attempt='2',started_at=100,deadline=480100,attempts=['1/1','1/2'],
+            read_counts={'endpoint':15},items=[dict(old['publish_order'][0],state='uploaded-pending')])
+        result=rebind(state,before,after,certify)
+        for key in ('started_at','deadline','attempts','read_counts','items'):
+            self.assertEqual(result[key],state[key])
+        self.assertEqual(result['publisher_history'][0]['identity'],state['identity'])
+        self.assertEqual(result['identity']['publisher'],newer)
+        self.assertEqual(state['identity']['publisher'],self.sha)
+        for altered in [dict(new,revision='d'*40),dict(new,version='2.0.0'),
+                dict(new,publish_order=[dict(new['publish_order'][0],sha256='e'*64)])]:
+            with self.assertRaises(ValueError):rebind(state,before,json.dumps(altered).encode(),certify)
+        with self.assertRaises(ValueError):rebind(dict(state,identity={}),before,after,certify)
+        def reject(*args):raise ValueError('runtime changed')
+        with self.assertRaises(ValueError):rebind(state,before,after,reject)
+
     def test_structured_pending_confirmation_preserves_deadline_and_rejects_other_failures(self):
         jobs=copy.deepcopy(self.jobs)
         jobs[0]['steps'][0]['conclusion']='failure'
