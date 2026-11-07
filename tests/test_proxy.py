@@ -30,6 +30,30 @@ class Proxies(FixtureCase):
         super().setUpClass()
         cls.metrics["label"] = "proxy-"+cls.metrics["label"]
 
+    def test_schemeless_http_proxy_defaults_and_overrides(self):
+        for auth in (False, True):
+            with self.subTest(auth=auth), self.proxy(auth=auth) as p:
+                bare = p.url.removeprefix("http://")
+                url = self.fixture["https2"] + "/inspect"
+                ws_url = self.fixture["https1"].replace("http", "ws", 1) + "/ws"
+                with self.session(proxy=bare) as s:
+                    first = s.get(url)
+                    self.assertEqual(first.status_code, 200)
+                    self.assertNotIn("Proxy-Authorization", first.json()["headers"])
+                    self.assertEqual(first.headers["X-Test-Connection"], s.get(url, proxy=p.url).headers["X-Test-Connection"])
+                    for options in ({}, {"proxy": bare}):
+                        with s.websocket(ws_url, **options) as ws:
+                            ws.send("schemeless")
+                            self.assertEqual(ws.recv(), "schemeless")
+                async def run():
+                    async with self.session(async_=True) as s:
+                        self.assertEqual((await s.get(url, proxy=bare)).status_code, 200)
+                        async with s.websocket(ws_url, proxy=bare) as ws:
+                            await ws.send("async-schemeless")
+                            self.assertEqual(await ws.recv(), "async-schemeless")
+                asyncio.run(run())
+                p.wait_idle()
+
     def test_protocols_authentication_and_target_header_isolation(self):
         for scheme in ("http", "https", "socks5", "socks5h"):
             for auth in (False, True):
@@ -71,7 +95,7 @@ class Proxies(FixtureCase):
                     with self.assertRaises(FastlsError):s.get(self.fixture["http"].replace("127.0.0.1","proxy-only.invalid")+"/bytes?n=4")
 
     def test_invalid_urls_and_credentials_are_not_exposed(self):
-        urls=["socks4://proxy-user:secret@127.0.0.1:1","http://proxy-user:secret@host:bad", "http://proxy-user:secret@host:0", "http://proxy-user:secret@host/path", "http://proxy-user:secret@host?query=secret", "http://proxy-user:sec%ZZret@host", "http://:secret@host"]
+        urls=["socks4://proxy-user:secret@127.0.0.1:1","http://proxy-user:secret@host:bad", "http://proxy-user:secret@host:0", "http://proxy-user:secret@host/path", "http://proxy-user:secret@host?query=secret", "http://proxy-user:sec%ZZret@host", "http://:secret@host", "proxy-user:secret@host:bad", "proxy-user:secret@host/path", "proxy-user:sec%ZZret@host"]
         with self.session() as s:
             for proxy in urls:
                 with self.subTest(proxy=proxy), self.assertRaises(FastlsError) as caught:s.get(self.fixture["http"],proxy=proxy)

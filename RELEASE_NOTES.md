@@ -1,3 +1,7 @@
+# Python 0.7.2 / Node 0.16.2
+
+Python and Node.js now default schemeless proxy addresses to `http://`, including authenticated `user:password@host:port` addresses and bracketed IPv6 hosts. The same normalization applies to session defaults, request overrides and WebSocket connections. Explicit schemes, direct-connection overrides and native credential-safe validation remain unchanged. Regression coverage exercises authenticated HTTP CONNECT, connection reuse and synchronous/asynchronous HTTP and WebSocket requests. Native dependencies and ABI remain unchanged.
+
 # Python 0.7.1 / Node 0.16.1
 
 Pins Go v0.2.1 with independent H3 connection-generation retirement, profile v0.1.1 and ftransport/imitate v0.1.2. Preserves ABI v1 and existing public H3 fields. Promotes certified same-source native bytes into formal Python packaging with separate outer-package/producer identity; missing or unequal inputs retain fresh builds and checks. npm publication records pending confirmation and restores the original absolute budget, verifies all native packages before uploading main, and keeps progress outside the signed Release asset set. Resource selection records exact scope and retains full checks for shared/dependency/build/unknown inputs.

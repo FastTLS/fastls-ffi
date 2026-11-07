@@ -14,6 +14,33 @@ function redacted(error) {
   return true;
 }
 
+p('test_schemeless_http_proxy_defaults_and_overrides', async t => {
+  for (const auth of [false, true]) {
+    const proxy = await lab(t, 'http', {auth}), bare = proxy.url.slice('http://'.length);
+    const url = fixture.https2 + '/inspect', wsURL = fixture.https1.replace(/^http/, 'ws') + '/ws';
+    const s = session(t, {proxy: bare});
+    try {
+      const first = await s.get(url);
+      assert.equal(first.status, 200);
+      assert.ok(!('Proxy-Authorization' in first.json().headers));
+      assert.equal(first.headers.get('x-test-connection'), (await s.get(url, {proxy: proxy.url})).headers.get('x-test-connection'));
+      for (const options of [{}, {proxy: bare}]) {
+        const ws = await s.websocket(wsURL, options);
+        try { await ws.send('schemeless'); assert.equal(await ws.recv(), 'schemeless'); }
+        finally { await ws.closeAsync(); }
+      }
+    } finally { await s.closeAsync(); }
+    const direct = session(t);
+    try {
+      assert.equal((await direct.get(url, {proxy: bare})).status, 200);
+      const ws = await direct.websocket(wsURL, {proxy: bare});
+      try { await ws.send('async-schemeless'); assert.equal(await ws.recv(), 'async-schemeless'); }
+      finally { await ws.closeAsync(); }
+    } finally { await direct.closeAsync(); }
+    await proxy.waitIdle();
+  }
+});
+
 p('test_protocols_authentication_and_target_header_isolation', async t => {
   for (const scheme of schemes) for (const auth of [false,true]) {
     const proxy = await lab(t,scheme,{auth}), s = session(t,{proxy:proxy.url});
@@ -65,7 +92,7 @@ p('test_socks_dns_modes', async t => {
 });
 
 p('test_invalid_urls_and_credentials_are_not_exposed', async t => {
-  const urls=['socks4://proxy-user:secret@127.0.0.1:1','http://proxy-user:secret@host:bad','http://proxy-user:secret@host:0','http://proxy-user:secret@host/path','http://proxy-user:secret@host?query=secret','http://proxy-user:sec%ZZret@host','http://:secret@host'];
+  const urls=['socks4://proxy-user:secret@127.0.0.1:1','http://proxy-user:secret@host:bad','http://proxy-user:secret@host:0','http://proxy-user:secret@host/path','http://proxy-user:secret@host?query=secret','http://proxy-user:sec%ZZret@host','http://:secret@host','proxy-user:secret@host:bad','proxy-user:secret@host/path','proxy-user:sec%ZZret@host'];
   const s=session(t);
   for (const proxy of urls) await assert.rejects(s.get(fixture.http,{proxy}),redacted);
   for (const name of ['Proxy-Authorization','proxy-connection']) await assert.rejects(s.get(fixture.http,{headers:{[name]:'secret'}}),redacted);

@@ -19,6 +19,7 @@ with Session(profile="chrome/156/windows",
 
 ## 明确的行为
 
+- Python 和 Node.js 的 `proxy` 支持省略协议头：`host:port`、`user:password@host:port` 和 `[IPv6]:port` 自动补为 `http://`。已有 `http://`、`https://`、`socks5://`、`socks5h://` 保持原样，不根据端口推测协议。会话默认值、请求覆盖和 WebSocket 使用相同行为；凭据仍须按 URL 规则转义，无效地址仍由原生层拒绝。
 - `http://` 使用 HTTP/1.1 CONNECT 隧道，默认代理端口 80。HTTP 与 HTTPS 目标均使用 CONNECT；代理必须允许目标端口，不使用普通正向代理的 absolute-form 请求，也不在拒绝后降级或重试。
 - `https://` 先验证代理的 TLS 证书与代理主机名，再发送 HTTP/1.1 CONNECT，默认端口 443，最低 TLS 1.2。没有跳过验证选项，也不会在 TLS 失败后回退到明文。外层代理使用标准 Go TLS 与 HTTP/1.1 ALPN，内层目标连接仍使用所选 Chrome 等配置，允许目标 HTTP/2 多路复用与双工。
 - `proxy_ca_file` 只控制代理 TLS 信任，`ca_file` 只控制目标信任；两者互不代替。代理 CA 未设置时使用系统根；设置后使用文件中的证书替代系统根。会话构造时读取默认文件一次；请求显式传文件时重新读取，省略参数继承默认，显式 `proxy_ca_file=None` 恢复系统根。直连、HTTP 或 SOCKS 代理忽略代理 CA 默认值。
