@@ -9,7 +9,7 @@ import threading
 import time
 
 from ._native import FastlsError, raise_response_error
-from .client import _INHERIT_PROXY, POLL_INTERVAL
+from .client import _INHERIT_PROXY, POLL_INTERVAL, _proxy_value
 from .headers import Headers
 from .request_options import prepare
 
@@ -59,9 +59,7 @@ def _start(owner, url, *, params=None, headers=None, profile=None, subprotocols=
         cookie_header = owner.cookies.header(url)
         if cookie_header:
             request["headers"]["Cookie"] = cookie_header
-    selected = owner.proxy if proxy is _INHERIT_PROXY else proxy
-    if selected is not None and not isinstance(selected, str):
-        raise TypeError("proxy must be a URL string or None")
+    selected = _proxy_value(owner.proxy if proxy is _INHERIT_PROXY else proxy)
     if selected:
         request["proxy"] = selected
     if owner._ca_pem is not None:

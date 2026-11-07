@@ -11,7 +11,7 @@
     "test_duplex.py": "570df447c0b73acc62875263b9538430e28d2fec91d0e3555ffec2f84ccf6e8d",
     "test_sse.py": "d50638d18da1c22ae9795595c94e0081fbe996849d51f8fc1e8e99d9e21ae09b",
     "test_notifications.py": "1b35c407a5037bacf00391f0ee94b8d6da4daae8cd29f090535d0e3fed184a4e",
-    "test_proxy.py": "4278318c2c360edf38a6c80995cd1286a99f627b130fdb97a8e7c3f2a4917212",
+    "test_proxy.py": "0b31997b5d334793f505610523dd3fc7d6200c1bb72772897f83b8d3230c3d85",
     "test_request_options.py": "99223609deb9ff8156b055978e3029c46754bd54f66e122cc4b13804c269d47b",
     "test_websocket.py": "d4b840308fcf62ae659cc95137c6cfe7364c17f39e2b884963da51a144debf28",
     "test_websocket_cookies.py": "f88adbf0e134795ecc183a008461fbe581e453f8ecb13c1d52f9db086f08995c",

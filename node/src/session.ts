@@ -53,7 +53,7 @@ export interface SessionOptions {
   addressPolicy?: AddressPolicy;
   profileSpec?: ProfileSpec;
   httpVersion?: "auto" | "h3";
-  /** HTTP/HTTPS CONNECT, socks5 (local DNS), or socks5h (proxy DNS) URL. */
+  /** HTTP/HTTPS CONNECT, socks5 (local DNS), or socks5h (proxy DNS) URL. Missing scheme defaults to http://. */
   proxy?: string | null;
   /** Private roots for proxy TLS, independent of the target's caFile. */
   proxyCaFile?: string | null;
@@ -90,9 +90,8 @@ function decoding(decode: boolean, maximum: number): void {
 
 function proxyValue(value: unknown): string | null | undefined {
   if (value !== undefined && value !== null && typeof value !== "string") throw new TypeError("proxy must be a URL string or null");
-  // The native validator owns URL parsing and redacted errors. Do not include
-  // credentials in JavaScript URL parser errors or normalize invalid input.
-  return value as string | null | undefined;
+  // Leave URL validation and credential-safe errors to the native layer.
+  return typeof value === "string" && value && !value.includes("://") ? `http://${value}` : value as string | null | undefined;
 }
 
 function proxyTrust(path: string | null | undefined): string | undefined {

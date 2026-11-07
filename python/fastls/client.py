@@ -41,6 +41,13 @@ MAX_BUFFERED_BODY = 32 * 1024 * 1024
 _INHERIT_PROXY = object()
 
 
+def _proxy_value(value):
+    if value is not None and not isinstance(value, str):
+        raise TypeError("proxy must be a URL string or None")
+    # Leave URL validation and credential-safe errors to the native layer.
+    return "http://" + value if value and "://" not in value else value
+
+
 def _cancel_task(task):
     if task.done() or getattr(task, "_fastls_cancel_requested", False):
         return
@@ -196,9 +203,7 @@ class Session:
         self._profile_spec = profile_spec
         self._http_version = http_version
         self._has_address_policy = address_policy is not None
-        if proxy is not None and not isinstance(proxy, str):
-            raise TypeError("proxy must be a URL string or None")
-        self.proxy = proxy
+        self.proxy = _proxy_value(proxy)
         self._proxy_ca_pem = Path(proxy_ca_file).read_text(encoding="utf-8") if proxy_ca_file is not None else None
         if self._proxy_ca_pem is not None and not self._proxy_ca_pem.strip():
             raise ValueError("proxy_ca_file is empty")
@@ -320,9 +325,7 @@ class Session:
                 required.add("http3_address_policy_v1")
         if required:
             self._require_capabilities(required)
-        selected_proxy = self.proxy if proxy is _INHERIT_PROXY else proxy
-        if selected_proxy is not None and not isinstance(selected_proxy, str):
-            raise TypeError("proxy must be a URL string or None")
+        selected_proxy = _proxy_value(self.proxy if proxy is _INHERIT_PROXY else proxy)
         if selected_proxy and "proxy_tunnels" not in self._native.call("fastls_features"):
             raise FastlsError("proxy support requires a newer Fastls native library")
         https_proxy = bool(selected_proxy and selected_proxy.lower().startswith("https://"))
