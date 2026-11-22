@@ -42,7 +42,7 @@ python -m fastls profile adapt base-spec.json candidate.json --h2 '2:0;4:131072|
 
 验证范围仅为 Windows x64 冷导航：Chrome 为 en-US 有界面最小化；Edge 为 en-US 窗口移至屏幕外并使用软件图形模式；Firefox 为 zh-CN 无头。Chromium 扩展成员和参数的比较不证明随机顺序分布等价；恢复连接、ECH、其它系统、H3 和整个浏览器行为未获认证，ML-DSA 仍仅为声明能力。浏览器签名、完整版本及适用的官方摘要均在采集阶段核验；Chrome 本地 SHA256 不冒充厂商摘要。
 
-**源库采用与用户升级是两步。** 每日任务不会自动发布新的 Go 模块、Python／npm 包或服务二进制，也不会在导入、创建会话或请求时下载更新。Python **0.7.3**、Node **0.16.3**、Fetch **v0.3.2**、RPC **v0.3.3**、MITM **v0.1.4** 和 fcurl **v0.2.2** 固定本批模块；旧安装须升级或使用已有 `ProfileStore` 显式导入、核对摘要、固定及回滚 Bundle。原始采集报告和离线快照见 [Actions 记录](https://github.com/FastTLS/imitate/actions/workflows/browser-maintenance.yml)；固定模块来源见 [v0.1.3](https://github.com/FastTLS/imitate/releases/tag/v0.1.3)。Bundle 对应固定版本，不代表未来数据自动更新。
+**源库采用与用户升级是两步。** 每日任务不会自动发布新的 Go 模块、Python／npm 包或服务二进制，也不会在导入、创建会话或请求时下载更新。Python **0.7.3**、Node **0.16.3**、Fetch **v0.3.2**、RPC **v0.3.3**、MITM **v0.1.4** 和 fcurl **v0.2.3** 固定本批模块；旧安装须升级或使用已有 `ProfileStore` 显式导入、核对摘要、固定及回滚 Bundle。原始采集报告和离线快照见 [Actions 记录](https://github.com/FastTLS/imitate/actions/workflows/browser-maintenance.yml)；固定模块来源见 [v0.1.3](https://github.com/FastTLS/imitate/releases/tag/v0.1.3)。Bundle 对应固定版本，不代表未来数据自动更新。
 
 ```sh
 go get github.com/FastTLS/fastls@v0.2.1

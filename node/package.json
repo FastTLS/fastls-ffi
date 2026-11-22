@@ -23,7 +23,7 @@
     "build": "tsc && node -e \"require('node:fs').copyFileSync('src/index.mjs', 'dist/index.mjs')\"",
     "test": "npm run build && npm run test:types && npm run test:parity && node --expose-gc --test --test-concurrency=1 tests/*.test.mjs",
     "test:parity": "node scripts/check-parity.mjs",
-    "test:soak": "node --expose-gc --test --test-name-pattern=test_soak_and_resource_recovery tests/parity.test.mjs",
+    "test:soak": "node --expose-gc --max-semi-space-size=16 --test --test-name-pattern=test_soak_and_resource_recovery tests/parity.test.mjs",
     "test:duplex:soak": "node --expose-gc --test tests/duplex-recovery.mjs",
     "test:sse:soak": "node --expose-gc --max-semi-space-size=16 --test tests/sse-recovery.mjs",
     "test:proxy:soak": "node --expose-gc --max-semi-space-size=16 --test tests/proxy-recovery.mjs",
