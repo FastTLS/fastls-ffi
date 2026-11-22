@@ -117,42 +117,22 @@ The Python CLI can produce an ordinary pinned bundle:
 python -m fastls profile adapt base-spec.json candidate.json --h2 '2:0;4:131072|100000|0|m,a,s,p' --source 'reviewed local parameters'
 ```
 
-Browser collection is an explicit external maintenance operation, documented in
-[imitate's manual Firefox updater](https://github.com/FastTLS/imitate/blob/v2/tools/firefox/README.md).
-It discovers/downloads an official stable Windows x64 zh-CN browser, verifies the
-official HTTPS archive checksum, collects 15 fresh cold samples with an independent
-peer, compares full TLS/header/H2 observations, and replays supported Spec fields.
-Its read-only manual workflow outputs a semantic diff, provenance, restrictions
-and ProfileBundle v1 candidate. Review the producer/source and digest before
-installing with ProfileStore; import, session creation and requests do not fetch
-updates. Known unsupported H2 stream details stay explicit in the report. Other
-platforms, ESR, browser H3 fingerprints, schedules and automatic PRs or
-publishing remain outside this batch.
+## Daily maintenance and released data (2026-11-22)
 
-The subsequent [Chrome/Edge maintenance tools](https://github.com/FastTLS/imitate/blob/v2/tools/chromium/README.md)
-share `python tools/browser_update.py --browser chrome` or `--browser edge`,
-followed by explicit source paths and a new output directory. They cover Windows
-x64 en-US minimized headed cold navigation, five independent samples in each of
-three TLS/H1/H2 scenarios per product. Chrome uses the current pinned stable
-official signed enterprise MSI; Edge additionally binds the official MSI hash.
-Both verify installer/browser signatures and full versions, extract without
-installing, and reject unsigned replacements. Chrome's recorded archive SHA256
-is local evidence, not a vendor-published checksum. New maintenance tools do not
-replace the data bundled in Python 0.4.0 / Node 0.13.0; candidates require explicit
-review, import and pin. Randomized extension orders remain raw evidence alongside
-membership/parameter comparison, not a distributional-equivalence claim.
+`imitate v0.1.3` includes Windows profiles based on Chrome **158.0.8127.37**, Edge **158.0.4370.33** and Firefox **160.0.1**, at data revision `browser-8ee4c22c6b779cbb`. Select `chrome/158/windows`, `edge/158/windows` or `firefox/160/windows` explicitly. Existing default selectors remain compatible and do not necessarily select these measured versions. The three services accept explicit `chrome158`, `edge158` and `firefox160` names.
 
-Protocol references: [JA3 definition](https://github.com/salesforce/ja3#readme),
-[HTTP/2 settings](https://www.rfc-editor.org/rfc/rfc9113.html#section-6.5.2),
-[priority parameters](https://www.rfc-editor.org/rfc/rfc7540.html#section-6.3).
+The [daily maintenance workflow](https://github.com/FastTLS/imitate/blob/v2/.github/workflows/browser-maintenance.yml) checks official stable versions at **02:17 UTC / 10:17 China time**. Each product collects five fresh cold processes in each of three TLS/H1/H2 scenarios. An independent adoption job checks raw observations, complete Specs and six online/offline replays before a normal fast-forward data commit to the default branch. Collection is read-only; adoption has limited contents-write permission. Failures retain evidence; tags are not moved and branch protections are respected. Adoption can recover from a completed trusted run. Unchanged versions and inputs reuse verified evidence while still exporting a snapshot.
 
-Go consumers must pin the core version containing this API; the older stable
-v0.1.2 does not export `AdaptProfile`. The Firefox data update is also pinned:
+Evidence covers only Windows x64 cold navigation: Chrome en-US headed/minimized, Edge en-US with its window offscreen and software graphics, and Firefox zh-CN headless. Chromium extension membership/parameters do not establish randomized-order distribution equivalence. Resumption, ECH, other systems, H3 and whole-browser behavior remain unverified; ML-DSA remains advertised-only. Capture verifies browser signatures, full versions and applicable official checksums. Chrome's local SHA256 is not a vendor-published checksum.
+
+**Source adoption and consumer upgrades are separate.** Daily maintenance does not publish Go modules, Python/npm packages or service binaries, and import/session/request operations never download updates. Python **0.7.3**, Node **0.16.3**, Fetch **v0.3.2**, RPC **v0.3.3**, MITM **v0.1.4** and fcurl **v0.2.2** pin this module. Older installations need an upgrade or an explicit, digest-reviewed Bundle import/pin/rollback through the existing `ProfileStore`. Raw collection reports and offline snapshots are available in [Actions](https://github.com/FastTLS/imitate/actions/workflows/browser-maintenance.yml); the fixed module source is [v0.1.3](https://github.com/FastTLS/imitate/releases/tag/v0.1.3). A Bundle is a fixed snapshot, not an automatic future-data subscription.
 
 ```sh
-go get github.com/FastTLS/fastls@v0.1.3-0.20261030065220-4c07fe9e4059
-go get github.com/FastTLS/imitate@v0.1.2-0.20261030065723-c75c3bf7679f
+go get github.com/FastTLS/fastls@v0.2.1
+go get github.com/FastTLS/imitate@v0.1.3
+go run github.com/FastTLS/imitate/cmd/imitate-export@v0.1.3 -output fingerprints.json
 ```
 
-Python/Node distributions already include their native library and fixed data;
-ordinary SDK installation does not require Go.
+The complete Go catalog export is loaded by a Go offline Provider. Python/Node ProfileStore accepts the per-product ProfileBundle v1 candidate from Actions, rather than the complete catalog snapshot.
+
+Python/Node distributions include their native library and fixed data; normal installation does not require Go. Manual capture remains available for [Firefox](https://github.com/FastTLS/imitate/blob/v2/tools/firefox/README.md), [Chrome/Edge](https://github.com/FastTLS/imitate/blob/v2/tools/chromium/README.md), with [maintenance and recovery instructions](https://github.com/FastTLS/imitate/blob/v2/tools/maintenance/README.md).

@@ -34,17 +34,22 @@ H2 格式为 `settings|连接窗口增量|优先级帧|伪头顺序`。例如 `2
 python -m fastls profile adapt base-spec.json candidate.json --h2 '2:0;4:131072|100000|0|m,a,s,p' --source 'reviewed local parameters'
 ```
 
-浏览器更新通过 [imitate 手动工具](https://github.com/FastTLS/imitate/blob/v2/tools/firefox/README.md) 单独执行。当前覆盖 Firefox 普通稳定版、Windows x64、zh-CN、无头冷连接，每次三个场景各五个新进程，共 15 个样本；官方 HTTPS 下载及 SHA512SUMS 校验后，由独立服务端采集并执行在线/离线回放。
+## 每日维护与已发布数据（2026-11-22）
 
-后续[Chrome／Edge 维护工具](https://github.com/FastTLS/imitate/blob/v2/tools/chromium/README.md)共用 `python tools/browser_update.py --browser chrome` 或 `--browser edge` 入口，再传入源码路径与新输出目录。仅 Windows x64、en-US、有界面最小化冷导航，每产品三个场景各五个独立样本。Chrome 使用当前固定稳定版的官方签名企业 MSI；Edge 核对官方 MSI 摘要。两者都核验 MSI/浏览器签名与完整版本，仅解包，不安装；不接受无签名文件替代。Chrome 的本地归档 SHA256 不代表厂商提供的摘要。
+`imitate v0.1.3` 包含 Chrome **158.0.8127.37**、Edge **158.0.4370.33** 和 Firefox **160.0.1** 的 Windows 配置，数据修订为 `browser-8ee4c22c6b779cbb`。使用规范 ID `chrome/158/windows`、`edge/158/windows`、`firefox/160/windows`；既有默认 selector 保持兼容，不保证默认别名选中这批实测版本。三个服务也支持显式的 `chrome158`、`edge158`、`firefox160` 名称。
 
-工作流只有读取权限，生成来源、语义差异、兼容性限制与 ProfileBundle v1 候选；不会修改活动配置、创建 PR 或自动发布。调用方审核来源与摘要后使用已有 ProfileStore 导入、固定、回滚。导入、会话创建和请求均不隐式联网。已知 H2 初始流编号及流级窗口等差异保留，不能写成完整等价。新增维护工具不改变 Python 0.4.0 / Node 0.13.0 内置的固定配置；本次候选需显式采用。其它平台、ESR、H3 指纹和定时更新继续保留后续。
+[每日维护工作流](https://github.com/FastTLS/imitate/blob/v2/.github/workflows/browser-maintenance.yml)于北京时间 **10:17**（02:17 UTC）检查官方稳定版。每产品采集三个 TLS/H1/H2 场景、各五个独立冷进程；验证原始观察、完整 Spec 和六项在线/离线回放后，独立采用任务正常快进提交至默认分支。采集任务只读；采用任务具有受限的内容写权限。失败保留证据，不移动标签、不强制覆盖分支；可从已完成的可信运行恢复采用。版本与输入未变时复用已验证证据，仍导出快照。
 
-Go 用户需固定含 `AdaptProfile` 的核心版本；旧稳定版 v0.1.2 没有该接口。Firefox 实测数据也使用固定生成器版本：
+验证范围仅为 Windows x64 冷导航：Chrome 为 en-US 有界面最小化；Edge 为 en-US 窗口移至屏幕外并使用软件图形模式；Firefox 为 zh-CN 无头。Chromium 扩展成员和参数的比较不证明随机顺序分布等价；恢复连接、ECH、其它系统、H3 和整个浏览器行为未获认证，ML-DSA 仍仅为声明能力。浏览器签名、完整版本及适用的官方摘要均在采集阶段核验；Chrome 本地 SHA256 不冒充厂商摘要。
+
+**源库采用与用户升级是两步。** 每日任务不会自动发布新的 Go 模块、Python／npm 包或服务二进制，也不会在导入、创建会话或请求时下载更新。Python **0.7.3**、Node **0.16.3**、Fetch **v0.3.2**、RPC **v0.3.3**、MITM **v0.1.4** 和 fcurl **v0.2.2** 固定本批模块；旧安装须升级或使用已有 `ProfileStore` 显式导入、核对摘要、固定及回滚 Bundle。原始采集报告和离线快照见 [Actions 记录](https://github.com/FastTLS/imitate/actions/workflows/browser-maintenance.yml)；固定模块来源见 [v0.1.3](https://github.com/FastTLS/imitate/releases/tag/v0.1.3)。Bundle 对应固定版本，不代表未来数据自动更新。
 
 ```sh
-go get github.com/FastTLS/fastls@v0.1.3-0.20261030065220-4c07fe9e4059
-go get github.com/FastTLS/imitate@v0.1.2-0.20261030065723-c75c3bf7679f
+go get github.com/FastTLS/fastls@v0.2.1
+go get github.com/FastTLS/imitate@v0.1.3
+go run github.com/FastTLS/imitate/cmd/imitate-export@v0.1.3 -output fingerprints.json
 ```
 
-Python/Node 正式包已经包含原生库和固定配置，普通安装无需 Go。
+Go 导出的完整目录由 Go 的离线 Provider 加载；Python／Node 的 ProfileStore 使用 Actions 单产品候选中的 ProfileBundle v1，不直接导入完整目录快照。
+
+Python／Node 的正式包自带原生库和固定数据，普通安装无需 Go。手动采集入口仍保留：[Firefox](https://github.com/FastTLS/imitate/blob/v2/tools/firefox/README.md)、[Chrome／Edge](https://github.com/FastTLS/imitate/blob/v2/tools/chromium/README.md)、[维护及恢复说明](https://github.com/FastTLS/imitate/blob/v2/tools/maintenance/README.md)。

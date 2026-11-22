@@ -39,7 +39,10 @@ p('test_soak_and_resource_recovery',async t=>{
   const s=session(t);const batch=async()=>{const all=await Promise.all(Array.from({length:32},()=>s.get(fixture.https2+'/bytes?n=4096')));assert.ok(all.every(r=>r.content.equals(SLAB.subarray(0,4096))));assert.equal((await h3.get(fixture.https3+'/status?code=204')).status,204);await assert.rejects(configured.get(fixture.https3+'/h3-config-headers'));assert.equal((await configured.get(fixture.https3+'/status?code=204')).status,204);};
   for(let i=0;i<3;i++)await batch();global.gc?.();await eventually(()=>monitor.stats().workers===0);const baseline=resources(),samples=[];const started=performance.now();let requests=0;
   while(performance.now()-started<seconds*1000){await batch();requests+=35;for(let i=0;i<32;i++)assert.ok(s.listProfiles().includes('chrome/156/windows'));await eventually(()=>monitor.stats().workers===0);samples.push(resources());await delay(100);}
-  evidence.measurements.soak={seconds:(performance.now()-started)/1000,requests,concurrency:32,baseline,samples};
-  const last=samples.at(-1);assert.ok(last.goroutines<=baseline.goroutines+16);assert.ok(Math.max(...samples.map(s=>s.heap_inuse_bytes))<=baseline.heap_inuse_bytes+96*1024*1024);
+  // Baseline is sampled after a full JS collection. Apply the same collection
+  // boundary to retained-memory recovery; keep every active sample for peaks.
+  const activeLast=samples.at(-1);global.gc?.();await eventually(()=>monitor.stats().workers===0);const last=resources();
+  evidence.measurements.soak={seconds:(performance.now()-started)/1000,requests,concurrency:32,baseline,samples,activeLast,recovered:last,recovery_gc:typeof global.gc==='function'};
+  assert.ok(last.goroutines<=baseline.goroutines+16);assert.ok(Math.max(...samples.map(s=>s.heap_inuse_bytes))<=baseline.heap_inuse_bytes+96*1024*1024);
   assert.ok(Math.max(...samples.map(s=>s.rss_bytes))<=baseline.rss_bytes+128*1024*1024);assert.ok(last.rss_bytes<=baseline.rss_bytes+96*1024*1024);assert.ok(last.descriptors_or_handles<=baseline.descriptors_or_handles+64);
 },'Node retains its ordinary 30/300-second resource observations and unchanged limits. The optional longer Python certification workload is separate, with its own recorded duration and cadence; this mapping does not claim a one-hour Node run.');

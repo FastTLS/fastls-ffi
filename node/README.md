@@ -1,5 +1,7 @@
 # Fastls Node.js SDK
 
+Python **0.7.3** / Node **0.16.3** include imitate **v0.1.3** browser data. Explicit Windows selectors: `chrome/158/windows`, `edge/158/windows`, `firefox/160/windows`. See [browser maintenance](https://github.com/FastTLS/fastls-ffi/blob/main/FINGERPRINTS.md) for evidence and upgrade boundaries.
+
 Python **0.7.1** / Node **0.16.1** pin Go **v0.2.1** with bounded H3 error-connection retirement and immutable native-byte promotion. See [the delivery contract](https://github.com/FastTLS/fastls-ffi/blob/v0.7.1/DELIVERY_LIFECYCLE.md).
 
 Python 0.7.0 / Node 0.16.0 add immutable H3 configuration and effective owner snapshots: see [the shared contract](https://github.com/FastTLS/fastls-ffi/blob/node-v0.16.0/H3_CONFIG.md). Native capability: http3_config_v1; core: Go v0.2.0.
@@ -29,7 +31,7 @@ const h3 = new Session({ httpVersion: 'h3' });
 try { await h3.get('https://example.com'); } finally { await h3.closeAsync(); }
 ```
 
-Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应 **0.16.1**。
+Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明、ESM 和 CommonJS 入口。本文对应 **0.16.3**。
 
 支持 HTTP/1.1、HTTP/2、流式上传下载、双工、SSE、WebSocket、会话 Cookie 和 HTTP/HTTPS/SOCKS 代理。网络请求由 Go 执行，通过 Koffi 在当前 Node 进程中调用；使用者无需 Python 或 RPC 服务。
 
@@ -45,7 +47,7 @@ Node.js 22+ 的 Fastls C ABI v1 绑定，提供 Promise API、TypeScript 声明�
 安装指定版本：
 
 ```sh
-npm install @fastls/fastls@0.16.1
+npm install @fastls/fastls@0.16.3
 ```
 
 主包通过同版本的可选依赖自动安装当前平台的 Fastls 原生库。保留 optional dependencies；支持 Windows x64、Linux glibc x64/arm64、macOS x64/arm64。Linux musl 和其它架构没有内置包。具体系统最低版本见原生包的 `native/manifest.json`。
