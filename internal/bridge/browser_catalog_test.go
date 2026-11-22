@@ -22,6 +22,9 @@ func TestDeliveredBrowserCatalog(t *testing.T) {
 			if result.Match.BaselineID != version || result.Match.ProviderVersion != "0.1.3" || result.Match.DataRevision != "browser-8ee4c22c6b779cbb" {
 				t.Fatalf("stale delivered profile: %+v / %+v", result.Spec.Metadata, result.Match)
 			}
+			if len(result.Match.VerifiedFields) != 3 || len(result.Match.CompatibilityNotes) == 0 || result.Match.Method != "compatible" {
+				t.Fatalf("bounded verification evidence was lost or overstated: %+v", result.Match)
+			}
 		})
 	}
 }
