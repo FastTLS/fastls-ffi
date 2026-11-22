@@ -1,72 +1,71 @@
-name: Published Python client baseline
-
+name: Isolated Node resource diagnosis
 on:
   workflow_dispatch:
     inputs:
       profile:
-        description: smoke checks all cases; full measures the eight 64MiB transfer cases five times
         type: choice
         options: [smoke, full]
         default: smoke
-
 permissions:
   contents: read
-
+  actions: read
 jobs:
-  baseline:
-    name: ${{ matrix.runner }} / published wheels / ${{ inputs.profile }}
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-24.04, windows-2022]
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
-    env:
-      GOWORK: 'off'
-      CGO_ENABLED: '0'
-      PYTHONUTF8: '1'
-      PYTHONIOENCODING: utf-8
-      BENCH_PROFILE: ${{ inputs.profile }}
+        library: [old, new]
+        heap: [default, bounded]
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
-          python-version: '3.11'
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+          node-version: '24.22.3'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          go-version: '1.26.10'
-          cache: false
-      - name: Install fixed binary wheels and preserve their digests
-        shell: bash
+          name: inputs-linux-amd64-go1.26.10-py3.11
+          run-id: 45000183207
+          github-token: ${{ github.token }}
+          path: .
+      - name: Verify frozen candidate and fetch fixed previous release control
         run: |
-          mkdir -p build/published-baseline
-          python -m pip install --only-binary=:all: --report build/published-baseline/install-report.json -r benchmarks/requirements.lock fastls==0.1.4
-          python -m pip check
-      - name: Check the measurement tools and independent fixture
-        shell: bash
+          python - <<'PY'
+          import json,hashlib,urllib.request,zipfile,io,pathlib
+          info=json.load(open('dist/ci-inputs.json'))
+          for name,digest in info['artifacts'].items():
+              p=pathlib.Path(name)
+              assert not p.is_absolute() and '..' not in p.parts
+              assert hashlib.sha256(p.read_bytes()).hexdigest()==digest
+          with urllib.request.urlopen('https://pypi.org/pypi/fastls/0.7.2/json') as r:meta=json.load(r)
+          item=next(x for x in meta['urls'] if x['filename'].endswith('manylinux_2_39_x86_64.whl'))
+          with urllib.request.urlopen(item['url']) as r:data=r.read()
+          assert hashlib.sha256(data).hexdigest()==item['digests']['sha256']
+          with zipfile.ZipFile(io.BytesIO(data)) as z:
+              name=next(n for n in z.namelist() if n.endswith('/libfastls.so'))
+              pathlib.Path('dist/old-libfastls.so').write_bytes(z.read(name))
+          pathlib.Path('build/control-identity.json').write_text(json.dumps({'old_wheel':item['filename'],'sha256':item['digests']['sha256'],'new_source':info['sources'],'node':'24.22.3','duration_seconds':300,'limits_unchanged':True},indent=2))
+          PY
+          chmod +x build/ffi-fixture
+          npm ci --prefix node --ignore-scripts
+          npm run build --prefix node
+      - name: Run one diagnostic per fixed library and VM configuration
+        env:
+          LIBRARY: ${{ matrix.library }}
+          HEAP: ${{ matrix.heap }}
+          FASTLS_NODE_SOAK_SECONDS: '300'
         run: |
-          python tests/test_benchmarks.py
-          go test ./cmd/ffi-fixture -count=1
-          python scripts/build_benchmark_fixture.py --output build/ffi-fixture-benchmark.exe
-          python tests/probe_h2_settings_ack.py --fixture build/ffi-fixture-benchmark.exe --output build/published-baseline/settings-ack.json
-          go version -m build/ffi-fixture-benchmark.exe > build/published-baseline/fixture-build.txt
-          cp build/ffi-fixture-benchmark.build.json build/published-baseline/fixture-build.json
-      - name: Record client behavior and explicit differences
-        run: python tests/client_conformance.py --fastls-source installed --fixture build/ffi-fixture-benchmark.exe --output build/published-baseline/conformance
-      - name: Measure installed packages; never substitute the checkout SDK
-        shell: bash
-        run: |
-          if [ "$BENCH_PROFILE" = full ]; then
-            python benchmarks/run.py --fastls-source installed --fixture build/ffi-fixture-benchmark.exe --profile full --case download-h1-c1 --case download-h2-c1 --case upload-h1 --case upload-h2 --case gzip-h1 --case gzip-h2 --case slow-h1 --case slow-h2 --output build/published-baseline/measurements
-          else
-            python benchmarks/run.py --fastls-source installed --fixture build/ffi-fixture-benchmark.exe --profile smoke --output build/published-baseline/measurements
-          fi
-      - name: Preserve failed rounds as well as successful measurements
+          export FASTLS_LIBRARY="$PWD/dist/libfastls.so"
+          if [[ "$LIBRARY" == old ]]; then export FASTLS_LIBRARY="$PWD/dist/old-libfastls.so"; fi
+          args=()
+          if [[ "$HEAP" == bounded ]]; then args+=(--max-semi-space-size=16); fi
+          node "${args[@]}" --expose-gc --test --test-name-pattern=test_soak_and_resource_recovery node/tests/parity.test.mjs
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: published-baseline-${{ matrix.runner }}-${{ inputs.profile }}
-          path: build/published-baseline/
-          retention-days: 14
+          name: diagnosis-${{ matrix.library }}-${{ matrix.heap }}
+          path: build/*.json
+          if-no-files-found: error
