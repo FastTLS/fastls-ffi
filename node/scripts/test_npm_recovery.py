@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
-from release_assets import verify as verify_assets
+from release_assets import verify as verify_assets, finalize
 import runpy
 from recover_npm_run import recovery_plan,NoCredentialRedirect
 
@@ -85,6 +85,46 @@ class Recover(unittest.TestCase):
             with self.assertRaises(ValueError):verify_assets(root,assets[:-1])
             assets[0]['digest']='sha256:'+'0'*64
             with self.assertRaises(ValueError):verify_assets(root,assets)
+
+    def test_draft_finalization_uses_verified_id_and_is_idempotent(self):
+        for draft in (True, False):
+            with self.subTest(draft=draft), tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary)
+                names=[f'package-{i}.tgz' for i in range(6)]
+                for name in names+['RELEASE_NOTES.md','SHA256SUMS','provenance.sigstore.json']:
+                    (root/name).write_bytes(b'fixture')
+                (root/'npm-release-manifest.json').write_text(json.dumps(dict(revision=self.sha,version='1.0.0',publish_order=[{'file':n} for n in names])))
+                release=dict(id=7,tag_name='node-v1.0.0',draft=draft,assets=[{'name':p.name,'digest':'sha256:'+hashlib.sha256(p.read_bytes()).hexdigest()} for p in root.iterdir()])
+                calls=[]
+                def api(route,method='GET',body=None):
+                    calls.append((route,method,body))
+                    if route.startswith('git/ref/'):return {'object':{'type':'commit','sha':self.sha}}
+                    if route.startswith('releases?'):return [release]
+                    if route=='releases/7':
+                        if method=='PATCH':release.update(body)
+                        return release
+                    raise AssertionError('Unexpected endpoint: '+route)
+                self.assertEqual(finalize(root,'node-v1.0.0',self.sha,api)['id'],7)
+                self.assertEqual(sum(method=='PATCH' for _,method,_ in calls),int(draft))
+                self.assertFalse(any('releases/tags/' in route for route,_,_ in calls))
+
+    def test_draft_finalization_rejects_wrong_source_inventory_and_duplicate_release(self):
+        for mode in ('source','digest','extra','duplicate','missing'):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);names=[f'package-{i}.tgz' for i in range(6)]
+                for name in names+['RELEASE_NOTES.md','SHA256SUMS','provenance.sigstore.json']:(root/name).write_bytes(b'fixture')
+                (root/'npm-release-manifest.json').write_text(json.dumps(dict(revision=self.sha,version='1.0.0',publish_order=[{'file':n} for n in names])))
+                assets=[{'name':p.name,'digest':'sha256:'+hashlib.sha256(p.read_bytes()).hexdigest()} for p in root.iterdir()]
+                if mode=='digest':assets[0]['digest']='sha256:'+'0'*64
+                if mode=='extra':assets.append({'name':'unsigned.json'})
+                release=dict(id=7,tag_name='node-v1.0.0',draft=True,assets=assets)
+                def api(route,method='GET',body=None):
+                    self.assertEqual(method,'GET','Unverified release must never be published')
+                    if route.startswith('git/ref/'):return {'object':{'type':'commit','sha':'b'*40 if mode=='source' else self.sha}}
+                    if route.startswith('releases?'):return [] if mode=='missing' else [release,release] if mode=='duplicate' else [release]
+                    if route=='releases/7':return release
+                    raise AssertionError(route)
+                with self.assertRaises(ValueError):finalize(root,'node-v1.0.0',self.sha,api)
 
     def test_signed_log_redirect_cannot_forward_credentials_or_downgrade_https(self):
         request=urllib.request.Request('https://api.github.com/logs',headers={'Authorization':'Bearer fixture','Cookie':'fixture'})

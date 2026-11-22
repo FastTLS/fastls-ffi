@@ -158,8 +158,7 @@ jobs:
         run: |
           cp "$BUNDLE_PATH" npm-release/provenance.sigstore.json
           gh release create "node-v${VERSION}" npm-release/*.tgz npm-release/npm-release-manifest.json npm-release/RELEASE_NOTES.md npm-release/SHA256SUMS npm-release/provenance.sigstore.json --draft --verify-tag --title "@fastls/fastls ${VERSION}" --notes-file npm-release/RELEASE_NOTES.md
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/node-v${VERSION}" | python node/scripts/release_assets.py npm-release
-          gh release edit "node-v${VERSION}" --draft=false
+          python node/scripts/release_assets.py finalize npm-release "node-v${VERSION}" "${SOURCE_REVISION}"
       - name: Preserve per-attempt publication progress
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
