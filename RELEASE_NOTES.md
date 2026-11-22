@@ -1,3 +1,7 @@
+# Python 0.7.3 / Node 0.16.3
+
+Pins imitate v0.1.3 with verified Chrome 158.0.8127.37, Edge 158.0.4370.33 and Firefox 160.0.1 Windows profiles. The evidence covers Windows x64 cold H1/H2 navigation, with explicit product/version selectors. ABI v1 and existing default selectors are preserved. Daily source adoption and explicit offline Bundle import are separate from SDK release delivery; installed packages do not silently download updates.
+
 # Python 0.7.2 / Node 0.16.2
 
 Python and Node.js now default schemeless proxy addresses to `http://`, including authenticated `user:password@host:port` addresses and bracketed IPv6 hosts. The same normalization applies to session defaults, request overrides and WebSocket connections. Explicit schemes, direct-connection overrides and native credential-safe validation remain unchanged. Regression coverage exercises authenticated HTTP CONNECT, connection reuse and synchronous/asynchronous HTTP and WebSocket requests. Native dependencies and ABI remain unchanged.

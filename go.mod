@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/FastTLS/fastls v0.2.1
 	github.com/FastTLS/fastls/profile v0.1.1
-	github.com/FastTLS/imitate v0.1.2
+	github.com/FastTLS/imitate v0.1.3
 	github.com/gorilla/websocket v1.5.3
 	github.com/quic-go/quic-go v0.57.1
 	golang.org/x/net v0.61.0
